@@ -1,0 +1,13 @@
+[project]
+name = "ai-trading-bot"
+version = "1.0.0"
+description = "AI-powered automated trading bot for Forex (MT5) and Crypto (Binance)"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
