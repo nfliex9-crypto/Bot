@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trading_bot_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trading_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-trader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trader}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: trading_bot_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  trading_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading_bot_core
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-trader}:${POSTGRES_PASSWORD:-securepassword}@postgres:5432/${POSTGRES_DB:-trading_bot}
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./data/models:/app/data/models
+    command: python -m src.main
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading_bot_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-trader}:${POSTGRES_PASSWORD:-securepassword}@postgres:5432/${POSTGRES_DB:-trading_bot}
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading_bot_worker
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-trader}:${POSTGRES_PASSWORD:-securepassword}@postgres:5432/${POSTGRES_DB:-trading_bot}
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: celery -A src.worker worker --loglevel=info --concurrency=4
+
+volumes:
+  postgres_data:
+  redis_data:
