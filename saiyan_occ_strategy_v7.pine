@@ -1,0 +1,778 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © traderschatroom88 — Refactored by Quantitative Engineering Audit
+
+//@version=5
+// ════════════════════════════════════════════════════════════════════════════
+// SAIYAN OCC STRATEGY — Professional Refactored Version
+// ════════════════════════════════════════════════════════════════════════════
+//
+// CORE CONCEPT (unchanged):
+//   MA crossover (ALMA default) of close-series vs open-series,
+//   with optional higher-timeframe confirmation and supply/demand zones.
+//   Multi-target exits (TP1/TP2/TP3) with configurable stop loss.
+//
+// AUDIT FIXES APPLIED:
+//   1. CRITICAL — reso() used lookahead_on WITHOUT [1] offset → lookahead
+//      bias on all entry signals. Fixed with standard non-repaint pattern.
+//   2. BUG — Short entry alert_message used i_leMsg (long msg) instead of
+//      i_seMsg. Fixed.
+//   3. BUG — process_orders_on_close=true inflates backtests (fills at
+//      close price, impossible in live). Changed to false.
+//   4. FRAGILE — Condition state machine used float comparisons
+//      (1.0, 1.1, 1.2…) prone to precision errors. Replaced with integers.
+//   5. DEAD CODE — ~60 % of script was commented-out or calculated but
+//      unused (Keltner Channels, linear regression, RSI, fractals,
+//      wavetrend, multiple security calls). Removed.
+//   6. PERF — S/D zones used extend.right AND f_extend_box_endpoint every
+//      bar → redundant. Removed per-bar extension loop.
+//   7. PERF — f_sd_to_bos iterated forward while deleting → skip risk.
+//      Changed to backward iteration with na-guards.
+//   8. LOGIC — Swing high/low used else-if → if both fire on same bar
+//      only high was processed. Separated into independent checks.
+//   9. LOGIC — Heikin Ashi input existed but was never wired into the MA
+//      calculations. Now properly feeds srcClose/srcOpen.
+//  10. ADDED — Trend filter, volatility filter, session filter, drawdown
+//      protection, max trades per day, break-even, ATR/structure-based SL,
+//      risk-based position sizing, trade statistics table.
+//
+// ════════════════════════════════════════════════════════════════════════════
+
+VERSION = 'v7.0.0'
+
+strategy(
+  title                   = 'Saiyan OCC',
+  shorttitle              = 'SOCC ' + VERSION,
+  overlay                 = true,
+  explicit_plot_zorder    = true,
+  pyramiding              = 0,
+  default_qty_type        = strategy.percent_of_equity,
+  default_qty_value       = 10,
+  calc_on_every_tick      = false,
+  process_orders_on_close = false,
+  max_bars_back           = 500)
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 1 — INPUT PARAMETERS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ──── 1A: Core Signal ────
+G_SIG = '═══ Signal Settings ═══'
+
+i_maType       = input.string('ALMA', 'MA Type',
+                   options = ['SMA','EMA','DEMA','TEMA','WMA','VWMA','SMMA',
+                              'HullMA','LSMA','ALMA','TMA','SSMA'],
+                   group = G_SIG)
+i_maLen        = input.int   (2,    'MA Period',       minval = 1,  group = G_SIG)
+i_offsetSigma  = input.int   (5,    'Offset (LSMA) / Sigma (ALMA)', minval = 0, group = G_SIG)
+i_offsetALMA   = input.float (0.85, 'Offset (ALMA)',   minval = 0, step = 0.01, group = G_SIG)
+i_delayOffset  = input.int   (0,    'Delay Open/Close MA (anti-repaint)', minval = 0, step = 1, group = G_SIG,
+                   tooltip = 'Shifts source by N bars before MA calc — forces non-repainting on current TF')
+i_useAltTF     = input.bool  (true, 'Use Alternate Timeframe', group = G_SIG)
+i_altTFMult    = input.int   (8,    'Alternate TF Multiplier', minval = 2, group = G_SIG)
+i_useHA        = input.bool  (false,'Use Heikin Ashi Source',  group = G_SIG)
+i_tradeDir     = input.string('BOTH','Trade Direction',
+                   options = ['LONG','SHORT','BOTH'], group = G_SIG)
+
+// ──── 1B: Trend Filter ────
+G_TREND = '═══ Trend Filter ═══'
+
+i_useTrendFilter = input.bool(true,  'Enable Trend Filter',  group = G_TREND)
+i_trendEmaLen    = input.int (144,   'Trend EMA Length', minval = 10, maxval = 500, group = G_TREND)
+
+// ──── 1C: Volatility Filter ────
+G_VOL = '═══ Volatility Filter ═══'
+
+i_useVolFilter  = input.bool (false, 'Enable Volatility Filter', group = G_VOL)
+i_atrFiltLen    = input.int  (14,    'ATR Length',  minval = 5, maxval = 50, group = G_VOL)
+i_atrFiltMult   = input.float(0.5,   'Min ATR Threshold (× avg)', minval = 0.1, step = 0.1,
+                   group = G_VOL,
+                   tooltip = 'Rejects signals when ATR < threshold × 50-bar average ATR')
+
+// ──── 1D: Session Filter ────
+G_SESS = '═══ Session Filter ═══'
+
+i_useSessFilter = input.bool   (false,           'Enable Session Filter', group = G_SESS)
+i_sessLondon    = input.bool   (true,            'London',               group = G_SESS)
+i_sessNY        = input.bool   (true,            'New York',             group = G_SESS)
+i_sessAsia      = input.bool   (false,           'Asia',                 group = G_SESS)
+i_sessLondonHrs = input.session('0800-1200',     'London  (UTC)',        group = G_SESS)
+i_sessNYHrs     = input.session('1300-1700',     'New York (UTC)',       group = G_SESS)
+i_sessAsiaHrs   = input.session('0000-0400',     'Asia     (UTC)',       group = G_SESS)
+
+// ──── 1E: Risk Management ────
+G_RISK = '═══ Risk Management ═══'
+
+i_slMode   = input.string('Percentage', 'Stop-Loss Mode',
+               options = ['Percentage','ATR-Based','Structure-Based'], group = G_RISK)
+i_slPerc   = input.float(0.5, 'SL Percentage (%)',    minval = 0.1, step = 0.1, group = G_RISK)
+i_slAtrLen = input.int  (14,  'SL ATR Length',         minval = 5,              group = G_RISK)
+i_slAtrMul = input.float(1.5, 'SL ATR Multiplier',    minval = 0.5, step = 0.1, group = G_RISK)
+i_slStrLen = input.int  (20,  'SL Structure Lookback', minval = 5,  maxval = 100, group = G_RISK,
+               tooltip = 'For Structure-Based: uses recent swing low (long) or swing high (short)')
+
+i_tp1Perc  = input.float(1.0, 'TP1 Level (%)',  minval = 0.1, step = 0.1, group = G_RISK)
+i_tp1Qty   = input.float(50,  'TP1 Exit Qty (%)', minval = 1, maxval = 100, group = G_RISK)
+i_tp2Perc  = input.float(1.5, 'TP2 Level (%)',  minval = 0.1, step = 0.1, group = G_RISK)
+i_tp2Qty   = input.float(30,  'TP2 Exit Qty (%)', minval = 1, maxval = 100, group = G_RISK)
+i_tp3Perc  = input.float(2.0, 'TP3 Level (%)',  minval = 0.1, step = 0.1, group = G_RISK)
+i_tp3Qty   = input.float(20,  'TP3 Exit Qty (%)', minval = 1, maxval = 100, group = G_RISK,
+               tooltip = 'TP1 + TP2 + TP3 qty should equal 100 %')
+
+i_useBE     = input.bool (true, 'Break-Even after TP1', group = G_RISK)
+i_bePadPerc = input.float(0.05, 'BE Padding (%)',      minval = 0, step = 0.01, group = G_RISK,
+               tooltip = 'Moves SL to entry + padding once TP1 fills')
+
+// ──── 1F: Trade Management ────
+G_MGMT = '═══ Trade Management ═══'
+
+i_maxDayTrades  = input.int  (0,   'Max Trades / Day (0 = unlimited)', minval = 0, group = G_MGMT)
+i_useDrawdownPr = input.bool (false,'Enable Drawdown Protection',       group = G_MGMT)
+i_maxDDPerc     = input.float(5.0, 'Max Drawdown % (pauses trading)',  minval = 1, step = 0.5, group = G_MGMT)
+i_closeOnOpp    = input.bool (true, 'Close Position on Opposite Signal', group = G_MGMT)
+
+// ──── 1G: Position Sizing ────
+G_SIZE = '═══ Position Sizing ═══'
+
+i_sizeMode = input.string('Percent of Equity', 'Sizing Mode',
+               options = ['Percent of Equity','Risk-Based'], group = G_SIZE)
+i_sizePerc = input.float(10,  'Equity % per Trade', minval = 1, maxval = 100, group = G_SIZE)
+i_riskPerc = input.float(1.0, 'Risk % of Equity',   minval = 0.1, step = 0.1, group = G_SIZE,
+               tooltip = 'Calculates position so that SL loss ≈ this % of equity')
+
+// ──── 1H: Supply / Demand Zones ────
+G_SD = '═══ Supply / Demand Zones ═══'
+
+i_showSD       = input.bool (true, 'Show Supply/Demand Zones',        group = G_SD)
+i_sdSwingLen   = input.int  (10,   'Swing Length',   minval = 1, maxval = 50, group = G_SD)
+i_sdHistory    = input.int  (20,   'Zones to Keep',  minval = 5, maxval = 50, group = G_SD)
+i_sdBoxW       = input.float(2.5,  'Box Width (ATR ×)', minval = 1, maxval = 10, step = 0.5, group = G_SD)
+i_useSDFilt    = input.bool (false, 'Use Zones as Entry Filter',      group = G_SD,
+                   tooltip = 'Long only near demand / Short only near supply')
+i_sdFiltDist   = input.float(1.0,  'Max Distance to Zone (ATR)',     minval = 0.1, step = 0.1, group = G_SD)
+i_supplyCol    = input.color(color.new(color.red,   80), 'Supply',   group = G_SD, inline = 'sup')
+i_supplyOL     = input.color(color.new(color.red,   60), 'Outline',  group = G_SD, inline = 'sup')
+i_demandCol    = input.color(color.new(color.green, 80), 'Demand',   group = G_SD, inline = 'dem')
+i_demandOL     = input.color(color.new(color.green, 60), 'Outline',  group = G_SD, inline = 'dem')
+i_showPALabels = input.bool (false, 'Show HH/HL/LH/LL Labels',      group = G_SD)
+
+// ──── 1I: Display ────
+G_DISP = '═══ Display ═══'
+
+i_showLabels  = input.bool(true, 'Alert Labels',       group = G_DISP)
+i_showBarCol  = input.bool(true, 'Bar Colouring',      group = G_DISP)
+i_showLevels  = input.bool(true, 'TP / SL Lines',      group = G_DISP)
+i_showStats   = input.bool(true, 'Statistics Table',    group = G_DISP)
+
+// ──── 1J: Webhook Messages ────
+G_WH = '═══ Webhook Messages ═══'
+
+i_leMsg   = input.string('Long Entry',  'Long Entry',  group = G_WH, tooltip = 'Paste JSON for your bot')
+i_lxSLMsg = input.string('Long SL',     'Long SL',     group = G_WH)
+i_lxTP1   = input.string('Long TP1',    'Long TP1',    group = G_WH)
+i_lxTP2   = input.string('Long TP2',    'Long TP2',    group = G_WH)
+i_lxTP3   = input.string('Long TP3',    'Long TP3',    group = G_WH)
+i_lxMsg   = input.string('Long Exit',   'Long Exit',   group = G_WH)
+i_seMsg   = input.string('Short Entry', 'Short Entry',  group = G_WH)
+i_sxSLMsg = input.string('Short SL',    'Short SL',     group = G_WH)
+i_sxTP1   = input.string('Short TP1',   'Short TP1',    group = G_WH)
+i_sxTP2   = input.string('Short TP2',   'Short TP2',    group = G_WH)
+i_sxTP3   = input.string('Short TP3',   'Short TP3',    group = G_WH)
+i_sxMsg   = input.string('Short Exit',  'Short Exit',   group = G_WH)
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 2 — FUNCTIONS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ──── MA variant selector ────
+f_variant(string typ, float src, int len, int offSig, float offALMA) =>
+    v1  = ta.sma(src, len)
+    v2  = ta.ema(src, len)
+    v3  = 2 * v2 - ta.ema(v2, len)                                          // DEMA
+    v4  = 3 * (v2 - ta.ema(v2, len)) + ta.ema(ta.ema(v2, len), len)         // TEMA
+    v5  = ta.wma(src, len)
+    v6  = ta.vwma(src, len)
+    v7  = 0.0                                                                // SMMA
+    v7 := na(v7[1]) ? v1 : (v7[1] * (len - 1) + src) / len
+    v8  = ta.wma(2 * ta.wma(src, len / 2) - ta.wma(src, len),
+          math.round(math.sqrt(len)))                                        // Hull
+    v9  = ta.linreg(src, len, offSig)                                        // LSMA
+    v10 = ta.alma(src, len, offALMA, offSig)                                 // ALMA
+    v11 = ta.sma(v1, len)                                                    // TMA
+    a1  = math.exp(-1.414 * 3.14159 / len)                                  // SSMA (Ehlers)
+    b1  = 2 * a1 * math.cos(1.414 * 3.14159 / len)
+    c2  = b1
+    c3  = -a1 * a1
+    c1  = 1 - c2 - c3
+    v12 = 0.0
+    v12:= c1 * (src + nz(src[1])) / 2 + c2 * nz(v12[1]) + c3 * nz(v12[2])
+    typ=='EMA'?v2 : typ=='DEMA'?v3 : typ=='TEMA'?v4 : typ=='WMA'?v5 :
+    typ=='VWMA'?v6: typ=='SMMA'?v7 : typ=='HullMA'?v8: typ=='LSMA'?v9:
+    typ=='ALMA'?v10: typ=='TMA'?v11: typ=='SSMA'?v12: v1
+
+// ──── Non-repainting security wrapper ────
+// Standard pattern: [1] offset + lookahead_on gives confirmed previous-HTF-bar value
+f_secNRP(simple string sym, simple string res, float src) =>
+    request.security(sym, res, src[1],
+      gaps      = barmerge.gaps_off,
+      lookahead = barmerge.lookahead_on)
+
+// ──── Alternate-timeframe resolution string ────
+f_altRes(int mult) =>
+    int m = timeframe.multiplier * mult
+    timeframe.ismonthly  ? str.tostring(m) + 'M' :
+    timeframe.isweekly   ? str.tostring(m) + 'W' :
+    timeframe.isdaily    ? str.tostring(m) + 'D' :
+    timeframe.isseconds  ? str.tostring(m) + 'S' :
+    str.tostring(m)
+
+// ──── Array queue: push front, pop back ────
+f_addPop(array<float> arr, float val) =>
+    array.unshift(arr, val)
+    array.pop(arr)
+
+f_addPopInt(array<int> arr, int val) =>
+    array.unshift(arr, val)
+    array.pop(arr)
+
+f_addPopBox(array<box> arr, box val) =>
+    array.unshift(arr, val)
+    array.pop(arr)
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 3 — CORE SIGNAL COMPUTATION
+// ════════════════════════════════════════════════════════════════════════════
+
+// ──── Source data (Heikin Ashi support wired to actual MA inputs) ────
+[haC, haO] = request.security(
+  ticker.heikinashi(syminfo.tickerid), timeframe.period, [close, open],
+  lookahead = barmerge.lookahead_off)
+
+srcClose = i_useHA ? haC : close
+srcOpen  = i_useHA ? haO : open
+
+// ──── MA series on current timeframe ────
+closeSeries = f_variant(i_maType, srcClose[i_delayOffset], i_maLen, i_offsetSigma, i_offsetALMA)
+openSeries  = f_variant(i_maType, srcOpen[i_delayOffset],  i_maLen, i_offsetSigma, i_offsetALMA)
+
+// ──── Map to alternate timeframe (non-repainting) ────
+altRes         = f_altRes(i_altTFMult)
+closeSeriesAlt = i_useAltTF ? f_secNRP(syminfo.tickerid, altRes, closeSeries) : closeSeries
+openSeriesAlt  = i_useAltTF ? f_secNRP(syminfo.tickerid, altRes, openSeries)  : openSeries
+
+// ──── Raw crossover signals ────
+rawLong  = ta.crossover (closeSeriesAlt, openSeriesAlt)
+rawShort = ta.crossunder(closeSeriesAlt, openSeriesAlt)
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 4 — SUPPLY / DEMAND ZONES
+// ════════════════════════════════════════════════════════════════════════════
+
+atrSD = ta.atr(50)
+
+// Swing detection
+sdSwingHi = ta.pivothigh(high, i_sdSwingLen, i_sdSwingLen)
+sdSwingLo = ta.pivotlow (low,  i_sdSwingLen, i_sdSwingLen)
+
+// Persistent arrays for swing tracking
+var float[] shVals = array.new_float(5, 0.0)
+var float[] slVals = array.new_float(5, 0.0)
+var int[]   shBNs  = array.new_int(5, 0)
+var int[]   slBNs  = array.new_int(5, 0)
+
+// Persistent arrays for zone boxes
+var box[] supBoxes = array.new_box(i_sdHistory, na)
+var box[] demBoxes = array.new_box(i_sdHistory, na)
+var box[] supPOI   = array.new_box(i_sdHistory, na)
+var box[] demPOI   = array.new_box(i_sdHistory, na)
+var box[] supBOS   = array.new_box(5, na)
+var box[] demBOS   = array.new_box(5, na)
+
+// Check whether a new zone would overlap an existing one
+f_noOverlap(float newMid, box[] arr, float atrVal) =>
+    threshold = atrVal * 2
+    ok = true
+    for i = 0 to array.size(arr) - 1
+        b = array.get(arr, i)
+        if not na(b)
+            mid = (box.get_top(b) + box.get_bottom(b)) / 2
+            if newMid >= mid - threshold and newMid <= mid + threshold
+                ok := false
+                break
+    ok
+
+// Draw a supply or demand zone
+f_drawZone(float[] vArr, int[] bnArr, box[] bArr, box[] pArr, int zType, float atrVal) =>
+    buf    = atrVal * (i_sdBoxW / 10)
+    bLeft  = array.get(bnArr, 0)
+    bRight = bar_index
+    float bTop = 0.0
+    float bBot = 0.0
+    if zType == 1
+        bTop := array.get(vArr, 0)
+        bBot := bTop - buf
+    else
+        bBot := array.get(vArr, 0)
+        bTop := bBot + buf
+    mid  = (bTop + bBot) / 2
+    bgC  = zType == 1 ? i_supplyCol  : i_demandCol
+    olC  = zType == 1 ? i_supplyOL   : i_demandOL
+    txt  = zType == 1 ? 'SUPPLY'     : 'DEMAND'
+    if f_noOverlap(mid, bArr, atrVal)
+        old = array.get(bArr, array.size(bArr) - 1)
+        if not na(old)
+            box.delete(old)
+        f_addPopBox(bArr, box.new(bLeft, bTop, bRight, bBot, olC,
+          bgcolor = bgC, extend = extend.right,
+          text = txt, text_halign = text.align_center,
+          text_valign = text.align_center,
+          text_color = color.new(color.white, 50), text_size = size.small))
+        oldP = array.get(pArr, array.size(pArr) - 1)
+        if not na(oldP)
+            box.delete(oldP)
+        f_addPopBox(pArr, box.new(bLeft, mid, bRight, mid,
+          color.new(color.gray, 50), bgcolor = color.new(color.gray, 90),
+          extend = extend.right,
+          text = 'POI', text_halign = text.align_left,
+          text_valign = text.align_center,
+          text_color = color.new(color.white, 50), text_size = size.small))
+
+// Convert broken zone → BOS marker (backward iteration to avoid index issues)
+f_zoneToBOS(box[] bArr, box[] bosArr, box[] pArr, int zType) =>
+    for i = array.size(bArr) - 1 to 0
+        b = array.get(bArr, i)
+        if na(b)
+            continue
+        lvl    = zType == 1 ? box.get_top(b) : box.get_bottom(b)
+        broken = zType == 1 ? (close >= lvl)  : (close <= lvl)
+        if broken
+            mid = (box.get_top(b) + box.get_bottom(b)) / 2
+            cp  = box.copy(b)
+            oldBOS = array.get(bosArr, array.size(bosArr) - 1)
+            if not na(oldBOS)
+                box.delete(oldBOS)
+            f_addPopBox(bosArr, cp)
+            box.set_top   (array.get(bosArr, 0), mid)
+            box.set_bottom(array.get(bosArr, 0), mid)
+            box.set_extend(array.get(bosArr, 0), extend.none)
+            box.set_right (array.get(bosArr, 0), bar_index)
+            box.set_text  (array.get(bosArr, 0), 'BOS')
+            box.set_text_color (array.get(bosArr, 0), color.new(color.white, 30))
+            box.set_text_size  (array.get(bosArr, 0), size.small)
+            box.set_text_halign(array.get(bosArr, 0), text.align_center)
+            box.set_text_valign(array.get(bosArr, 0), text.align_center)
+            box.delete(b)
+            p = array.get(pArr, i)
+            if not na(p)
+                box.delete(p)
+
+// Swing-high label helper
+f_paLabel(float[] arr, int swType) =>
+    if i_showPALabels
+        string lt = na
+        if swType == 1
+            lt := array.get(arr, 0) >= array.get(arr, 1) ? 'HH' : 'LH'
+            label.new(bar_index - i_sdSwingLen, array.get(arr, 0),
+              text = lt, style = label.style_label_down,
+              textcolor = color.gray, color = color.gray, size = size.tiny)
+        else
+            lt := array.get(arr, 0) >= array.get(arr, 1) ? 'HL' : 'LL'
+            label.new(bar_index - i_sdSwingLen, array.get(arr, 0),
+              text = lt, style = label.style_label_up,
+              textcolor = color.gray, color = color.gray, size = size.tiny)
+
+// ──── Process new swings (independent checks — both can fire on same bar) ────
+if not na(sdSwingHi) and i_showSD
+    f_addPop(shVals, sdSwingHi)
+    f_addPopInt(shBNs, bar_index[i_sdSwingLen])
+    f_paLabel(shVals, 1)
+    f_drawZone(shVals, shBNs, supBoxes, supPOI, 1, atrSD)
+
+if not na(sdSwingLo) and i_showSD
+    f_addPop(slVals, sdSwingLo)
+    f_addPopInt(slBNs, bar_index[i_sdSwingLen])
+    f_paLabel(slVals, -1)
+    f_drawZone(slVals, slBNs, demBoxes, demPOI, -1, atrSD)
+
+if i_showSD
+    f_zoneToBOS(supBoxes, supBOS, supPOI,  1)
+    f_zoneToBOS(demBoxes, demBOS, demPOI, -1)
+
+// ──── S/D zone proximity for entry filter ────
+f_nearDemand() =>
+    if not i_useSDFilt
+        true
+    else
+        near = false
+        thr  = atrSD * i_sdFiltDist
+        for i = 0 to array.size(demBoxes) - 1
+            b = array.get(demBoxes, i)
+            if not na(b)
+                if close <= box.get_top(b) + thr and close >= box.get_bottom(b) - thr
+                    near := true
+                    break
+        near
+
+f_nearSupply() =>
+    if not i_useSDFilt
+        true
+    else
+        near = false
+        thr  = atrSD * i_sdFiltDist
+        for i = 0 to array.size(supBoxes) - 1
+            b = array.get(supBoxes, i)
+            if not na(b)
+                if close >= box.get_bottom(b) - thr and close <= box.get_top(b) + thr
+                    near := true
+                    break
+        near
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 5 — FILTERS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ──── Trend filter (EMA) ────
+trendEma        = ta.ema(close, i_trendEmaLen)
+trendLongOK     = not i_useTrendFilter or close > trendEma
+trendShortOK    = not i_useTrendFilter or close < trendEma
+
+// ──── Volatility filter (ATR) ────
+atrFilt         = ta.atr(i_atrFiltLen)
+atrAvg          = ta.sma(atrFilt, 50)
+volOK           = not i_useVolFilter or (atrFilt > atrAvg * i_atrFiltMult)
+
+// ──── Session filter ────
+inLondon        = not na(time(timeframe.period, i_sessLondonHrs, 'UTC'))
+inNY            = not na(time(timeframe.period, i_sessNYHrs,     'UTC'))
+inAsia          = not na(time(timeframe.period, i_sessAsiaHrs,   'UTC'))
+sessOK          = not i_useSessFilter or
+                  (i_sessLondon and inLondon) or
+                  (i_sessNY     and inNY)     or
+                  (i_sessAsia   and inAsia)
+
+// ──── Drawdown protection ────
+var float peakEq = strategy.equity
+peakEq          := math.max(peakEq, strategy.equity)
+curDD           = peakEq > 0 ? (peakEq - strategy.equity) / peakEq * 100 : 0.0
+ddOK            = not i_useDrawdownPr or curDD < i_maxDDPerc
+
+// ──── Max trades per day ────
+var int dayTrades = 0
+if ta.change(time('D')) != 0
+    dayTrades := 0
+maxTrOK         = i_maxDayTrades == 0 or dayTrades < i_maxDayTrades
+
+// ──── S/D zone filter ────
+sdLongOK        = f_nearDemand()
+sdShortOK       = f_nearSupply()
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 6 — ENTRY CONDITIONS
+// ════════════════════════════════════════════════════════════════════════════
+
+longAllowed  = i_tradeDir == 'LONG' or i_tradeDir == 'BOTH'
+shortAllowed = i_tradeDir == 'SHORT' or i_tradeDir == 'BOTH'
+
+leTrigger = rawLong  and longAllowed  and trendLongOK  and volOK and sessOK and ddOK and maxTrOK and sdLongOK  and barstate.isconfirmed
+seTrigger = rawShort and shortAllowed and trendShortOK and volOK and sessOK and ddOK and maxTrOK and sdShortOK and barstate.isconfirmed
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 7 — RISK MANAGEMENT (SL / TP / Break-Even)
+// ════════════════════════════════════════════════════════════════════════════
+
+atrSL = ta.atr(i_slAtrLen)
+
+// Cached structure levels (recalculated every bar, captured on entry)
+structLow  = ta.lowest (low,  i_slStrLen)
+structHigh = ta.highest(high, i_slStrLen)
+
+// ──── Persistent trade-state variables ────
+var int   tState  = 0       // 0 = flat, 1 = long, -1 = short
+var int   tpStage = 0       // 0 = waiting TP1, 1 = TP1 hit, 2 = TP2 hit
+var float entryPx = na
+var float slPx    = na
+var float tp1Px   = na
+var float tp2Px   = na
+var float tp3Px   = na
+
+// ──── SL calculator ────
+f_sl(float px, bool isLong) =>
+    if i_slMode == 'ATR-Based'
+        isLong ? px - atrSL * i_slAtrMul : px + atrSL * i_slAtrMul
+    else if i_slMode == 'Structure-Based'
+        minDist = atrSL * 0.5
+        if isLong
+            math.min(structLow, px - minDist)
+        else
+            math.max(structHigh, px + minDist)
+    else
+        d = px * (i_slPerc / 100)
+        isLong ? px - d : px + d
+
+// ──── Position-size calculator (returns % of equity) ────
+f_qty(float px, float sl) =>
+    if i_sizeMode == 'Risk-Based' and px > 0 and sl > 0
+        dist = math.abs(px - sl)
+        dist > 0 ? math.min(i_riskPerc * px / dist, 95.0) : i_sizePerc
+    else
+        i_sizePerc
+
+// ──── Detect position going flat ────
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    tState  := 0
+    tpStage := 0
+
+// ──── Close on opposite signal (before new entry) ────
+if i_closeOnOpp
+    if seTrigger and tState == 1
+        strategy.close('Long',  alert_message = i_lxMsg, comment = 'LX←opp')
+        tState  := 0
+        tpStage := 0
+    if leTrigger and tState == -1
+        strategy.close('Short', alert_message = i_sxMsg, comment = 'SX←opp')
+        tState  := 0
+        tpStage := 0
+
+// ──── New entries ────
+longEntry  = leTrigger and tState <= 0
+shortEntry = seTrigger and tState >= 0
+
+if longEntry
+    entryPx := close
+    slPx    := f_sl(close, true)
+    tp1Px   := close * (1 + i_tp1Perc / 100)
+    tp2Px   := close * (1 + i_tp2Perc / 100)
+    tp3Px   := close * (1 + i_tp3Perc / 100)
+    tState  := 1
+    tpStage := 0
+    dayTrades += 1
+
+if shortEntry
+    entryPx := close
+    slPx    := f_sl(close, false)
+    tp1Px   := close * (1 - i_tp1Perc / 100)
+    tp2Px   := close * (1 - i_tp2Perc / 100)
+    tp3Px   := close * (1 - i_tp3Perc / 100)
+    tState  := -1
+    tpStage := 0
+    dayTrades += 1
+
+// ──── Break-even: move SL to entry after TP1 hit ────
+if i_useBE and tpStage == 0
+    if tState == 1  and high >= tp1Px
+        tpStage := 1
+        slPx    := entryPx + entryPx * (i_bePadPerc / 100)
+    if tState == -1 and low  <= tp1Px
+        tpStage := 1
+        slPx    := entryPx - entryPx * (i_bePadPerc / 100)
+
+if tpStage == 1
+    if tState == 1  and high >= tp2Px
+        tpStage := 2
+    if tState == -1 and low  <= tp2Px
+        tpStage := 2
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 8 — STRATEGY EXECUTION
+// ════════════════════════════════════════════════════════════════════════════
+
+qtyPct = f_qty(entryPx, slPx)
+
+// ──── Long ────
+if longEntry
+    strategy.entry('Long', strategy.long, qty = qtyPct,
+      alert_message = i_leMsg, comment = 'LE')
+
+if strategy.position_size > 0
+    strategy.exit('LTP1', 'Long',
+      qty_percent     = i_tp1Qty,
+      limit           = tp1Px,
+      stop            = slPx,
+      comment_profit  = 'TP1',
+      comment_loss    = 'SL',
+      alert_profit    = i_lxTP1,
+      alert_loss      = i_lxSLMsg)
+    strategy.exit('LTP2', 'Long',
+      qty_percent     = i_tp2Qty,
+      limit           = tp2Px,
+      stop            = slPx,
+      comment_profit  = 'TP2',
+      comment_loss    = 'SL',
+      alert_profit    = i_lxTP2,
+      alert_loss      = i_lxSLMsg)
+    strategy.exit('LTP3', 'Long',
+      qty_percent     = i_tp3Qty,
+      limit           = tp3Px,
+      stop            = slPx,
+      comment_profit  = 'TP3',
+      comment_loss    = 'SL',
+      alert_profit    = i_lxTP3,
+      alert_loss      = i_lxSLMsg)
+
+// ──── Short ────
+if shortEntry
+    strategy.entry('Short', strategy.short, qty = qtyPct,
+      alert_message = i_seMsg, comment = 'SE')
+
+if strategy.position_size < 0
+    strategy.exit('STP1', 'Short',
+      qty_percent     = i_tp1Qty,
+      limit           = tp1Px,
+      stop            = slPx,
+      comment_profit  = 'TP1',
+      comment_loss    = 'SL',
+      alert_profit    = i_sxTP1,
+      alert_loss      = i_sxSLMsg)
+    strategy.exit('STP2', 'Short',
+      qty_percent     = i_tp2Qty,
+      limit           = tp2Px,
+      stop            = slPx,
+      comment_profit  = 'TP2',
+      comment_loss    = 'SL',
+      alert_profit    = i_sxTP2,
+      alert_loss      = i_sxSLMsg)
+    strategy.exit('STP3', 'Short',
+      qty_percent     = i_tp3Qty,
+      limit           = tp3Px,
+      stop            = slPx,
+      comment_profit  = 'TP3',
+      comment_loss    = 'SL',
+      alert_profit    = i_sxTP3,
+      alert_loss      = i_sxSLMsg)
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 9 — VISUALIZATION
+// ════════════════════════════════════════════════════════════════════════════
+
+inTrade = tState != 0
+
+// ──── TP / SL / Entry lines ────
+cTP    = inTrade ? color.green : na
+cEntry = inTrade ? color.blue  : na
+cSL    = inTrade ? color.red   : na
+
+pTP1 = plot(i_showLevels and inTrade and tpStage < 1 ? tp1Px : na,
+  'TP1', cTP, 1, plot.style_linebr)
+pTP2 = plot(i_showLevels and inTrade and tpStage < 2 ? tp2Px : na,
+  'TP2', cTP, 1, plot.style_linebr)
+pTP3 = plot(i_showLevels and inTrade ? tp3Px : na,
+  'TP3', cTP, 1, plot.style_linebr)
+pEnt = plot(i_showLevels and inTrade ? entryPx : na,
+  'Entry', cEntry, 1, plot.style_linebr)
+pSL  = plot(i_showLevels and inTrade ? slPx : na,
+  'SL', cSL, 1, plot.style_linebr)
+
+fill(pTP3, pEnt, i_showLevels and inTrade ? color.new(color.green, 90) : na)
+fill(pEnt, pSL,  i_showLevels and inTrade ? color.new(color.red,   90) : na)
+
+// ──── Trend EMA ────
+plot(i_useTrendFilter ? trendEma : na, 'Trend EMA',
+  color.new(color.orange, 30), 2)
+
+// ──── Alert labels ────
+plotshape(i_showLabels and longEntry,  'Long',  text = 'Long',
+  textcolor = color.white, color = color.green,
+  style = shape.labelup,   size = size.tiny, location = location.belowbar)
+plotshape(i_showLabels and shortEntry, 'Short', text = 'Short',
+  textcolor = color.white, color = color.red,
+  style = shape.labeldown, size = size.tiny, location = location.abovebar)
+
+// ──── Level labels on last bar (var + delete/recreate to prevent accumulation) ────
+var label lbl_tp1   = na
+var label lbl_tp2   = na
+var label lbl_tp3   = na
+var label lbl_entry = na
+var label lbl_sl    = na
+
+if barstate.islast
+    label.delete(lbl_tp1)
+    label.delete(lbl_tp2)
+    label.delete(lbl_tp3)
+    label.delete(lbl_entry)
+    label.delete(lbl_sl)
+    if inTrade and i_showLevels
+        lOff = 10
+        if tpStage < 1
+            lbl_tp1 := label.new(bar_index + lOff, tp1Px,
+              'TP1: ' + str.tostring(tp1Px, format.mintick),
+              style = label.style_label_left, textcolor = color.white,
+              color = color.green, size = size.small)
+        if tpStage < 2
+            lbl_tp2 := label.new(bar_index + lOff, tp2Px,
+              'TP2: ' + str.tostring(tp2Px, format.mintick),
+              style = label.style_label_left, textcolor = color.white,
+              color = color.green, size = size.small)
+        lbl_tp3 := label.new(bar_index + lOff, tp3Px,
+          'TP3: ' + str.tostring(tp3Px, format.mintick),
+          style = label.style_label_left, textcolor = color.white,
+          color = color.green, size = size.small)
+        lbl_entry := label.new(bar_index + lOff, entryPx,
+          'Entry: ' + str.tostring(entryPx, format.mintick),
+          style = label.style_label_left, textcolor = color.white,
+          color = color.blue, size = size.small)
+        lbl_sl := label.new(bar_index + lOff, slPx,
+          'SL: ' + str.tostring(slPx, format.mintick),
+          style = label.style_label_left, textcolor = color.white,
+          color = color.red, size = size.small)
+
+// ──── Bar colouring ────
+barcolor(i_showBarCol ?
+  (close > open ? color.rgb(120, 9, 139) : color.rgb(69, 155, 225)) : na)
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 10 — TRADE STATISTICS TABLE
+// ════════════════════════════════════════════════════════════════════════════
+
+if i_showStats and barstate.islastconfirmedhistory
+    var table st = table.new(position.top_right, 2, 9,
+      bgcolor = color.new(color.black, 80), border_width = 1)
+    table.cell(st, 0, 0, 'Metric',         text_color = color.white, text_size = size.small)
+    table.cell(st, 1, 0, 'Value',          text_color = color.white, text_size = size.small)
+    table.cell(st, 0, 1, 'Total Trades',   text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 1, str.tostring(strategy.closedtrades),
+      text_color = color.white, text_size = size.small)
+    wr = strategy.closedtrades > 0 ?
+      strategy.wintrades / strategy.closedtrades * 100 : 0.0
+    table.cell(st, 0, 2, 'Win Rate',       text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 2, str.tostring(wr, '#.#') + '%',
+      text_color = wr > 50 ? color.green : color.red, text_size = size.small)
+    table.cell(st, 0, 3, 'Net Profit',     text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 3, str.tostring(strategy.netprofit, '#.##'),
+      text_color = strategy.netprofit > 0 ? color.green : color.red,
+      text_size = size.small)
+    pf = strategy.grossloss != 0 ?
+      math.abs(strategy.grossprofit / strategy.grossloss) : 0.0
+    table.cell(st, 0, 4, 'Profit Factor',  text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 4, str.tostring(pf, '#.##'),
+      text_color = pf > 1 ? color.green : color.red, text_size = size.small)
+    table.cell(st, 0, 5, 'Max Drawdown',   text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 5, str.tostring(strategy.max_drawdown, '#.##'),
+      text_color = color.red, text_size = size.small)
+    table.cell(st, 0, 6, 'Avg Win',        text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 6, str.tostring(strategy.avg_winning_trade, '#.##'),
+      text_color = color.green, text_size = size.small)
+    table.cell(st, 0, 7, 'Avg Loss',       text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 7, str.tostring(strategy.avg_losing_trade, '#.##'),
+      text_color = color.red, text_size = size.small)
+    table.cell(st, 0, 8, 'Cur Drawdown',   text_color = color.gray,  text_size = size.small)
+    table.cell(st, 1, 8, str.tostring(curDD, '#.#') + '%',
+      text_color = curDD > 3 ? color.red : color.green, text_size = size.small)
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 11 — ALERTS & DEBUG
+// ════════════════════════════════════════════════════════════════════════════
+
+if longEntry or shortEntry
+    alert('Any Alert',   alert.freq_once_per_bar_close)
+if longEntry
+    alert('Long Entry',  alert.freq_once_per_bar_close)
+if shortEntry
+    alert('Short Entry', alert.freq_once_per_bar_close)
+
+// Debug series (visible in Data Window only)
+plot(na,      '─── Debug ───', editable = false, display = display.data_window)
+plot(tState,  'Trade State',   editable = false, display = display.data_window)
+plot(tpStage, 'TP Stage',      editable = false, display = display.data_window)
+plot(strategy.position_size, 'Position Size', editable = false, display = display.data_window)
+plot(curDD,   'Drawdown %',    editable = false, display = display.data_window)
+plot(dayTrades, 'Day Trades',  editable = false, display = display.data_window)
+// ════════════════════════════════════════════════════════════════════════════
