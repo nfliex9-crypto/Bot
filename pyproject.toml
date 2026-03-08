@@ -1,0 +1,44 @@
+[project]
+name = "ai-trading-bot"
+version = "0.1.0"
+description = "Automated multi-market AI trading bot for MT5 and Binance."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn[standard]>=0.35.0",
+  "pandas>=2.3.0",
+  "numpy>=2.2.0",
+  "pydantic>=2.11.0",
+  "pydantic-settings>=2.10.0",
+  "sqlalchemy>=2.0.40",
+  "asyncpg>=0.30.0",
+  "psycopg2-binary>=2.9.10",
+  "httpx>=0.28.1",
+  "python-binance>=1.0.29",
+  "scikit-learn>=1.7.0",
+  "joblib>=1.5.0",
+  "python-dateutil>=2.9.0.post0",
+  "pytz>=2025.2",
+]
+
+[project.optional-dependencies]
+mt5 = [
+  "MetaTrader5>=5.0.5120",
+]
+
+dev = [
+  "pytest>=8.3.5",
+  "pytest-asyncio>=1.0.0",
+  "ruff>=0.11.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
