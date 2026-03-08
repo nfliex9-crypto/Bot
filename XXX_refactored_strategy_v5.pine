@@ -1,0 +1,318 @@
+//@version=5
+strategy(
+     title                   = "XXX Refactored Quant v7",
+     shorttitle              = "XXX-RQ v7",
+     overlay                 = true,
+     pyramiding              = 0,
+     calc_on_every_tick      = false,
+     process_orders_on_close = true,
+     default_qty_type        = strategy.percent_of_equity,
+     default_qty_value       = 10,
+     initial_capital         = 10000)
+
+//==============================================================================
+// INPUTS
+//==============================================================================
+groupSignal  = "1) Signal Engine"
+groupFilter  = "2) Filters"
+groupRisk    = "3) Risk Management"
+groupExec    = "4) Execution Controls"
+groupVisual  = "5) Visualization"
+
+tradeType        = input.string("BOTH", "Trade Direction", options = ["LONG", "SHORT", "BOTH", "NONE"], group = groupExec)
+confirmOnClose   = input.bool(true, "Confirm signals on bar close", group = groupExec)
+
+// Core concept preserved: crossover of smoothed close/open series.
+maType           = input.string("ALMA", "MA Type", options = ["SMA", "EMA", "TEMA", "HullMA", "ALMA", "LSMA"], group = groupSignal)
+maLength         = input.int(2, "MA Length", minval = 1, group = groupSignal)
+almaOffset       = input.float(0.85, "ALMA Offset", minval = 0.0, maxval = 1.0, step = 0.01, group = groupSignal)
+almaSigma        = input.float(6.0, "ALMA Sigma", minval = 0.1, step = 0.1, group = groupSignal)
+lsmaOffset       = input.int(0, "LSMA Offset", minval = 0, group = groupSignal)
+delayBars        = input.int(0, "Open/Close source delay", minval = 0, group = groupSignal, tooltip = "Delay source by N bars for conservative testing.")
+
+useAltSignals    = input.bool(true, "Use alternate signal timeframe", group = groupSignal)
+signalTf         = input.timeframe("15", "Signal timeframe", group = groupSignal)
+useClosedHtfBar  = input.bool(true, "Use only closed HTF bar", group = groupSignal, tooltip = "Prevents intrabar HTF drift.")
+
+// Optional quality filters.
+enableTrend      = input.bool(true, "Trend filter", group = groupFilter)
+trendLen         = input.int(144, "Trend EMA length", minval = 2, group = groupFilter)
+
+enableVolatility = input.bool(true, "Volatility filter", group = groupFilter)
+atrLen           = input.int(14, "ATR length", minval = 1, group = groupFilter)
+minAtrPct        = input.float(0.20, "Min ATR % of price", minval = 0.0, step = 0.01, group = groupFilter)
+
+enableVolume     = input.bool(false, "Volume filter", group = groupFilter)
+volLen           = input.int(20, "Volume SMA length", minval = 1, group = groupFilter)
+volMultiplier    = input.float(1.0, "Volume multiplier", minval = 0.1, step = 0.1, group = groupFilter)
+
+enableStructure  = input.bool(false, "Market structure (BOS) filter", group = groupFilter)
+swingLen         = input.int(10, "Swing length", minval = 2, maxval = 100, group = groupFilter)
+
+enableSweep      = input.bool(false, "Liquidity sweep confirmation", group = groupFilter)
+
+sessionPreset    = input.string("Off", "Session filter", options = ["Off", "London", "New York", "Custom"], group = groupFilter)
+sessionCustom    = input.session("0000-2359", "Custom session", group = groupFilter)
+sessionTz        = input.string("Etc/UTC", "Session timezone", group = groupFilter)
+
+// Risk model.
+stopMode         = input.string("ATR", "Stop model", options = ["ATR", "Structure"], group = groupRisk)
+atrStopMult      = input.float(1.5, "ATR stop multiplier", minval = 0.1, step = 0.1, group = groupRisk)
+structureBuffer  = input.float(0.2, "Structure stop ATR buffer", minval = 0.0, step = 0.1, group = groupRisk)
+
+tp1RR            = input.float(1.0, "TP1 Reward:Risk", minval = 0.1, step = 0.1, group = groupRisk)
+tp2RR            = input.float(1.5, "TP2 Reward:Risk", minval = 0.1, step = 0.1, group = groupRisk)
+tp3RR            = input.float(2.0, "TP3 Reward:Risk", minval = 0.1, step = 0.1, group = groupRisk)
+tp1Qty           = input.float(50, "TP1 qty %", minval = 0, maxval = 100, step = 1, group = groupRisk)
+tp2Qty           = input.float(30, "TP2 qty %", minval = 0, maxval = 100, step = 1, group = groupRisk)
+tp3Qty           = input.float(20, "TP3 qty %", minval = 0, maxval = 100, step = 1, group = groupRisk)
+
+enableBreakEven  = input.bool(true, "Enable break-even", group = groupRisk)
+breakEvenAfter   = input.string("TP1", "Move stop to BE after", options = ["TP1", "1R"], group = groupRisk)
+
+useRiskSizing    = input.bool(false, "Use risk-based position sizing", group = groupRisk, tooltip = "Approximate units = risk capital / (stop distance * point value).")
+riskPctPerTrade  = input.float(1.0, "Risk % per trade", minval = 0.1, maxval = 10, step = 0.1, group = groupRisk)
+
+maxTradesSession = input.int(3, "Max trades per session (0 = unlimited)", minval = 0, group = groupExec)
+enableDdLock     = input.bool(true, "Drawdown lockout", group = groupExec)
+maxDdPct         = input.float(20, "Max drawdown % from equity peak", minval = 1, maxval = 95, step = 0.5, group = groupExec)
+
+showSignalMAs    = input.bool(true, "Plot signal MA lines", group = groupVisual)
+showLevels       = input.bool(true, "Plot entry/SL/TP levels", group = groupVisual)
+showStatsTable   = input.bool(true, "Show stats table", group = groupVisual)
+colorBars        = input.bool(true, "Color bars by trend", group = groupVisual)
+
+//==============================================================================
+// HELPER FUNCTIONS
+//==============================================================================
+f_ma(_type, _src, _len, _almaOffset, _almaSigma, _lsmaOffset) =>
+    _type == "EMA"    ? ta.ema(_src, _len) :
+    _type == "TEMA"   ? ta.tema(_src, _len) :
+    _type == "HullMA" ? ta.hma(_src, _len) :
+    _type == "ALMA"   ? ta.alma(_src, _len, _almaOffset, _almaSigma) :
+    _type == "LSMA"   ? ta.linreg(_src, _len, _lsmaOffset) :
+                        ta.sma(_src, _len)
+
+f_mtf(_series, _tf, _useClosedBar) =>
+    request.security(
+         syminfo.tickerid,
+         _tf,
+         _useClosedBar ? _series[1] : _series,
+         barmerge.gaps_off,
+         barmerge.lookahead_off)
+
+f_sessionString(_preset, _custom) =>
+    _preset == "London"   ? "0700-1600" :
+    _preset == "New York" ? "1300-2200" :
+    _preset == "Custom"   ? _custom      : "0000-2359"
+
+f_safeDiv(_num, _den) =>
+    _den == 0.0 ? 0.0 : _num / _den
+
+//==============================================================================
+// INDICATOR CALCULATIONS (CACHED SERIES)
+//==============================================================================
+srcClose          = close[delayBars]
+srcOpen           = open[delayBars]
+maCloseRaw        = f_ma(maType, srcClose, maLength, almaOffset, almaSigma, lsmaOffset)
+maOpenRaw         = f_ma(maType, srcOpen,  maLength, almaOffset, almaSigma, lsmaOffset)
+
+signalClose       = useAltSignals ? f_mtf(maCloseRaw, signalTf, useClosedHtfBar) : maCloseRaw
+signalOpen        = useAltSignals ? f_mtf(maOpenRaw,  signalTf, useClosedHtfBar) : maOpenRaw
+
+atr               = ta.atr(atrLen)
+atrPct            = f_safeDiv(atr, close) * 100.0
+trendEma          = ta.ema(close, trendLen)
+volSma            = ta.sma(volume, volLen)
+
+pivotHigh         = ta.pivothigh(high, swingLen, swingLen)
+pivotLow          = ta.pivotlow(low, swingLen, swingLen)
+lastSwingHigh     = ta.valuewhen(not na(pivotHigh), pivotHigh, 0)
+lastSwingLow      = ta.valuewhen(not na(pivotLow), pivotLow, 0)
+
+bosLong           = close > nz(lastSwingHigh, close)
+bosShort          = close < nz(lastSwingLow, close)
+sweepLong         = low < nz(lastSwingLow, low) and close > nz(lastSwingLow, close)
+sweepShort        = high > nz(lastSwingHigh, high) and close < nz(lastSwingHigh, close)
+
+//==============================================================================
+// MARKET STRUCTURE / FILTER LOGIC
+//==============================================================================
+sessionStr        = f_sessionString(sessionPreset, sessionCustom)
+inSession         = sessionPreset == "Off" ? true : not na(time(timeframe.period, sessionStr, sessionTz))
+
+trendLongOk       = not enableTrend or close > trendEma
+trendShortOk      = not enableTrend or close < trendEma
+volatilityOk      = not enableVolatility or atrPct >= minAtrPct
+volumeOk          = not enableVolume or volume > volSma * volMultiplier
+structureLongOk   = not enableStructure or bosLong
+structureShortOk  = not enableStructure or bosShort
+sweepLongOk       = not enableSweep or sweepLong
+sweepShortOk      = not enableSweep or sweepShort
+
+commonFiltersOk   = inSession and volatilityOk and volumeOk
+longFiltersOk     = commonFiltersOk and trendLongOk and structureLongOk and sweepLongOk
+shortFiltersOk    = commonFiltersOk and trendShortOk and structureShortOk and sweepShortOk
+
+//==============================================================================
+// ENTRY CONDITIONS (CORE IDEA PRESERVED)
+//==============================================================================
+signalConfirmed   = confirmOnClose ? barstate.isconfirmed : true
+rawLongSignal     = ta.crossover(signalClose, signalOpen)
+rawShortSignal    = ta.crossunder(signalClose, signalOpen)
+
+allowLong         = tradeType == "LONG" or tradeType == "BOTH"
+allowShort        = tradeType == "SHORT" or tradeType == "BOTH"
+
+// Optional execution lockouts.
+var float equityPeak = strategy.initial_capital
+equityPeak           := math.max(equityPeak, strategy.equity)
+ddPct                = f_safeDiv(equityPeak - strategy.equity, equityPeak) * 100.0
+ddLocked             = enableDdLock and ddPct >= maxDdPct
+
+if ddLocked and strategy.position_size != 0
+    strategy.close_all(comment = "DD lockout")
+
+var int tradesInSession = 0
+sessionStart            = inSession and (na(inSession[1]) or not inSession[1])
+newDay                  = dayofyear != dayofyear[1]
+if newDay or (sessionPreset != "Off" and sessionStart)
+    tradesInSession := 0
+
+tradesCapOk        = maxTradesSession == 0 or tradesInSession < maxTradesSession
+canOpenNewTrade    = signalConfirmed and not ddLocked and tradesCapOk
+
+longEntrySignal    = canOpenNewTrade and allowLong  and longFiltersOk  and rawLongSignal
+shortEntrySignal   = canOpenNewTrade and allowShort and shortFiltersOk and rawShortSignal
+
+//==============================================================================
+// RISK MANAGEMENT / ORDER PRICES
+//==============================================================================
+// Persistent level state per open position.
+var float entryPrice = na
+var float stopPrice  = na
+var float tp1Price   = na
+var float tp2Price   = na
+var float tp3Price   = na
+var bool  beArmed    = false
+
+longStructStop      = nz(lastSwingLow, close) - atr * structureBuffer
+shortStructStop     = nz(lastSwingHigh, close) + atr * structureBuffer
+
+longInitialStop     = stopMode == "ATR" ? close - atr * atrStopMult : math.min(close - atr * atrStopMult, longStructStop)
+shortInitialStop    = stopMode == "ATR" ? close + atr * atrStopMult : math.max(close + atr * atrStopMult, shortStructStop)
+
+longRiskDist        = math.max(close - longInitialStop, syminfo.mintick)
+shortRiskDist       = math.max(shortInitialStop - close, syminfo.mintick)
+
+longTp1Calc         = close + longRiskDist * tp1RR
+longTp2Calc         = close + longRiskDist * tp2RR
+longTp3Calc         = close + longRiskDist * tp3RR
+shortTp1Calc        = close - shortRiskDist * tp1RR
+shortTp2Calc        = close - shortRiskDist * tp2RR
+shortTp3Calc        = close - shortRiskDist * tp3RR
+
+riskCapital         = strategy.equity * (riskPctPerTrade / 100.0)
+longQtyRisk         = f_safeDiv(riskCapital, longRiskDist * syminfo.pointvalue)
+shortQtyRisk        = f_safeDiv(riskCapital, shortRiskDist * syminfo.pointvalue)
+
+validQtyLong        = longQtyRisk > 0
+validQtyShort       = shortQtyRisk > 0
+
+//==============================================================================
+// ORDER EXECUTION
+//==============================================================================
+if longEntrySignal and strategy.position_size <= 0
+    entryPrice := close
+    stopPrice  := longInitialStop
+    tp1Price   := longTp1Calc
+    tp2Price   := longTp2Calc
+    tp3Price   := longTp3Calc
+    beArmed    := false
+    if useRiskSizing and validQtyLong
+        strategy.entry("Long", strategy.long, qty = longQtyRisk, comment = "LE")
+    else if not useRiskSizing
+        strategy.entry("Long", strategy.long, comment = "LE")
+    tradesInSession += 1
+
+if shortEntrySignal and strategy.position_size >= 0
+    entryPrice := close
+    stopPrice  := shortInitialStop
+    tp1Price   := shortTp1Calc
+    tp2Price   := shortTp2Calc
+    tp3Price   := shortTp3Calc
+    beArmed    := false
+    if useRiskSizing and validQtyShort
+        strategy.entry("Short", strategy.short, qty = shortQtyRisk, comment = "SE")
+    else if not useRiskSizing
+        strategy.entry("Short", strategy.short, comment = "SE")
+    tradesInSession += 1
+
+// Move stop to break-even when chosen trigger is reached.
+if strategy.position_size > 0
+    beTriggerLong = breakEvenAfter == "TP1" ? high >= tp1Price : high >= (entryPrice + (entryPrice - stopPrice))
+    if enableBreakEven and not beArmed and beTriggerLong
+        beArmed := true
+    activeLongStop = beArmed ? entryPrice : stopPrice
+    strategy.exit("L-TP1", "Long", qty_percent = tp1Qty, limit = tp1Price, stop = activeLongStop, comment_profit = "TP1", comment_loss = "SL")
+    strategy.exit("L-TP2", "Long", qty_percent = tp2Qty, limit = tp2Price, stop = activeLongStop, comment_profit = "TP2", comment_loss = "SL")
+    strategy.exit("L-TP3", "Long", qty_percent = tp3Qty, limit = tp3Price, stop = activeLongStop, comment_profit = "TP3", comment_loss = "SL")
+
+if strategy.position_size < 0
+    beTriggerShort = breakEvenAfter == "TP1" ? low <= tp1Price : low <= (entryPrice - (stopPrice - entryPrice))
+    if enableBreakEven and not beArmed and beTriggerShort
+        beArmed := true
+    activeShortStop = beArmed ? entryPrice : stopPrice
+    strategy.exit("S-TP1", "Short", qty_percent = tp1Qty, limit = tp1Price, stop = activeShortStop, comment_profit = "TP1", comment_loss = "SL")
+    strategy.exit("S-TP2", "Short", qty_percent = tp2Qty, limit = tp2Price, stop = activeShortStop, comment_profit = "TP2", comment_loss = "SL")
+    strategy.exit("S-TP3", "Short", qty_percent = tp3Qty, limit = tp3Price, stop = activeShortStop, comment_profit = "TP3", comment_loss = "SL")
+
+// Reset level state when flat.
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    entryPrice := na
+    stopPrice  := na
+    tp1Price   := na
+    tp2Price   := na
+    tp3Price   := na
+    beArmed    := false
+
+//==============================================================================
+// VISUALIZATION / ALERTS
+//==============================================================================
+plot(showSignalMAs ? signalClose : na, "Signal Close MA", color = color.new(color.teal, 0), linewidth = 2)
+plot(showSignalMAs ? signalOpen  : na, "Signal Open MA",  color = color.new(color.orange, 0), linewidth = 2)
+plot(showSignalMAs and enableTrend ? trendEma : na, "Trend EMA", color = color.new(color.gray, 0), linewidth = 1)
+
+plot(showLevels ? entryPrice : na, "Entry", color = color.new(color.blue, 0), style = plot.style_linebr)
+plot(showLevels ? stopPrice  : na, "Stop",  color = color.new(color.red, 0),  style = plot.style_linebr)
+plot(showLevels ? tp1Price   : na, "TP1",   color = color.new(color.green, 20), style = plot.style_linebr)
+plot(showLevels ? tp2Price   : na, "TP2",   color = color.new(color.green, 35), style = plot.style_linebr)
+plot(showLevels ? tp3Price   : na, "TP3",   color = color.new(color.green, 50), style = plot.style_linebr)
+
+barColorValue = close > trendEma ? color.new(color.lime, 80) : color.new(color.red, 80)
+barcolor(colorBars and enableTrend ? barColorValue : na)
+
+plotshape(longEntrySignal,  title = "Long Signal",  style = shape.triangleup,   color = color.new(color.green, 0), location = location.belowbar, size = size.tiny, text = "L")
+plotshape(shortEntrySignal, title = "Short Signal", style = shape.triangledown, color = color.new(color.red, 0),   location = location.abovebar, size = size.tiny, text = "S")
+
+alertcondition(longEntrySignal,  title = "Long Entry",  message = "Long Entry")
+alertcondition(shortEntrySignal, title = "Short Entry", message = "Short Entry")
+
+// Lightweight on-chart stats (updates only on last bar).
+var table stats = table.new(position.top_right, 2, 7, frame_color = color.new(color.gray, 70), border_width = 1)
+if showStatsTable and barstate.islast
+    winRate = strategy.closedtrades > 0 ? (strategy.wintrades / strategy.closedtrades) * 100.0 : 0.0
+    table.cell(stats, 0, 0, "Closed Trades", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 1, 0, str.tostring(strategy.closedtrades), text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 0, 1, "Win Rate %", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 1, 1, str.tostring(winRate, "#.##"), text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 0, 2, "Net Profit", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 1, 2, str.tostring(strategy.netprofit, "#.##"), text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 0, 3, "Max DD %", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 1, 3, str.tostring(ddPct, "#.##"), text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 0, 4, "Trades/Session", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 1, 4, str.tostring(tradesInSession), text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 0, 5, "Filters Pass", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 1, 5, (commonFiltersOk ? "Yes" : "No"), text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 0, 6, "DD Locked", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(stats, 1, 6, (ddLocked ? "Yes" : "No"), text_color = color.white, bgcolor = color.new(color.black, 0))
