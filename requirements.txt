@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+scikit-learn
+joblib
+SQLAlchemy
+psycopg2-binary
+pydantic
+pydantic-settings
+python-dotenv
+httpx
+tenacity
+python-binance
+python-dateutil
