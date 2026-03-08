@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+postgres_data/
+build/
+.dart_tool/
+.idea/
+.vscode/

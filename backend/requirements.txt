@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+scikit-learn
+sqlalchemy
+psycopg2-binary
+python-binance
+MetaTrader5
+pydantic-settings
+python-dotenv
+httpx
