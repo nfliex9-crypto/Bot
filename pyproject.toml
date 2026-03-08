@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-trading-bot"
+version = "0.1.0"
+description = "Professional AI-assisted multi-market automated trading bot"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "Apache-2.0"}
+authors = [
+  {name = "OpenAI"}
+]
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic",
+  "pydantic-settings",
+  "sqlalchemy",
+  "psycopg[binary]",
+  "pandas",
+  "numpy",
+  "scikit-learn",
+  "joblib",
+  "httpx",
+  "ccxt",
+  "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+mt5 = [
+  "MetaTrader5",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
