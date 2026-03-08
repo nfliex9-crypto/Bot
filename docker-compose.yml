@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: trading_bot
+      POSTGRES_USER: trader
+      POSTGRES_PASSWORD: trader_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader -d trading_bot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models
+    restart: unless-stopped
+
+volumes:
+  pgdata:
