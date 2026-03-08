@@ -1,0 +1,486 @@
+//@version=5
+strategy(
+     "XXX - Quant Refactor",
+     shorttitle = "XXX Quant",
+     overlay = true,
+     explicit_plot_zorder = true,
+     pyramiding = 0,
+     calc_on_every_tick = false,
+     process_orders_on_close = true,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 10)
+
+///////////////////////////////////////////////////////////////////////////////
+// Inputs
+///////////////////////////////////////////////////////////////////////////////
+groupCore = "Core Signals"
+tradeDirection = input.string("BOTH", "Trade Direction", options = ["LONG", "SHORT", "BOTH", "NONE"], group = groupCore)
+useAlternateSignals = input.bool(true, "Use Alternate Signal Timeframe", group = groupCore)
+manualSignalTf = input.timeframe("15", "Manual Signal Timeframe", group = groupCore)
+useMultiplierTf = input.bool(false, "Derive Signal TF From Chart Multiplier", group = groupCore)
+signalTfMultiplier = input.int(8, "Signal TF Multiplier", minval = 1, group = groupCore)
+useHeikinAshi = input.bool(false, "Use Heikin Ashi Source", group = groupCore)
+maType = input.string("ALMA", "MA Type", options = ["SMA", "EMA", "DEMA", "TEMA", "WMA", "VWMA", "SMMA", "HullMA", "LSMA", "ALMA", "TMA", "SSMA"], group = groupCore)
+maLength = input.int(2, "MA Length", minval = 1, group = groupCore)
+lsmaOffset = input.int(5, "LSMA Offset / ALMA Sigma", minval = 0, group = groupCore)
+almaOffset = input.float(0.85, "ALMA Offset", minval = 0, maxval = 1, step = 0.01, group = groupCore)
+confirmOnClose = input.bool(true, "Validate Signals On Closed Bars", group = groupCore)
+minSignalAtrSpread = input.float(0.0, "Minimum Signal Spread (ATR x)", minval = 0.0, step = 0.05, group = groupCore)
+closeOnOppositeSignal = input.bool(true, "Close On Opposite Cross", group = groupCore)
+
+groupFilters = "Filters"
+useTrendFilter = input.bool(true, "Use Trend Filter", group = groupFilters)
+trendEmaLength = input.int(144, "Trend EMA Length", minval = 1, group = groupFilters)
+useVolatilityFilter = input.bool(false, "Use ATR Volatility Filter", group = groupFilters)
+minAtrPct = input.float(0.20, "Minimum ATR % Of Price", minval = 0.0, step = 0.05, group = groupFilters)
+useAdxFilter = input.bool(false, "Use ADX Filter", group = groupFilters)
+adxLength = input.int(14, "ADX Length", minval = 1, group = groupFilters)
+minAdx = input.float(18.0, "Minimum ADX", minval = 0.0, step = 0.5, group = groupFilters)
+useSessionFilter = input.bool(false, "Use Session Filter", group = groupFilters)
+sessionChoice = input.string("London + New York", "Session Preset", options = ["London", "New York", "London + New York", "Custom"], group = groupFilters)
+customSession = input.session("0000-2359", "Custom Session", group = groupFilters)
+sessionTimezone = input.string("Etc/UTC", "Session Timezone", group = groupFilters)
+maxTradesPerWindow = input.int(3, "Max Trades Per Session/Day", minval = 1, group = groupFilters)
+useStructureFilter = input.bool(true, "Use Market Structure Filter", group = groupFilters)
+useLiquiditySweepFilter = input.bool(false, "Require Liquidity Sweep Confirmation", group = groupFilters)
+swingLength = input.int(10, "Swing Length", minval = 2, maxval = 50, group = groupFilters)
+structureLookbackBars = input.int(60, "Structure Confirmation Lookback", minval = 1, group = groupFilters)
+zoneAtrWidth = input.float(0.50, "Supply/Demand Zone Width (ATR)", minval = 0.1, step = 0.1, group = groupFilters)
+
+groupRisk = "Risk Management"
+stopMode = input.string("Wider of ATR/Swing", "Stop Mode", options = ["ATR", "Swing", "Wider of ATR/Swing", "Tighter of ATR/Swing"], group = groupRisk)
+atrLength = input.int(14, "ATR Length", minval = 1, group = groupRisk)
+atrStopMultiplier = input.float(1.5, "ATR Stop Multiplier", minval = 0.1, step = 0.1, group = groupRisk)
+swingStopBufferAtr = input.float(0.25, "Swing Stop Buffer (ATR)", minval = 0.0, step = 0.05, group = groupRisk)
+targetMode = input.string("R-Multiple", "Take Profit Mode", options = ["R-Multiple", "Percent"], group = groupRisk)
+tp1ValueInput = input.float(1.0, "TP1 Value", minval = 0.1, step = 0.1, group = groupRisk)
+tp1QtyInput = input.float(50.0, "TP1 Qty %", minval = 0.0, step = 1.0, group = groupRisk)
+tp2ValueInput = input.float(1.5, "TP2 Value", minval = 0.1, step = 0.1, group = groupRisk)
+tp2QtyInput = input.float(30.0, "TP2 Qty %", minval = 0.0, step = 1.0, group = groupRisk)
+tp3ValueInput = input.float(2.0, "TP3 Value", minval = 0.1, step = 0.1, group = groupRisk)
+tp3QtyInput = input.float(20.0, "TP3 Qty %", minval = 0.0, step = 1.0, group = groupRisk)
+enableBreakEven = input.bool(true, "Move Stop To Break-Even After TP1", group = groupRisk)
+positionSizingMode = input.string("Risk-Based", "Position Sizing", options = ["Risk-Based", "Notional % Equity"], group = groupRisk)
+riskPerTradePct = input.float(1.0, "Risk Per Trade %", minval = 0.1, step = 0.1, group = groupRisk)
+notionalOrderPct = input.float(10.0, "Notional % Equity", minval = 0.1, step = 0.1, group = groupRisk)
+useDrawdownProtection = input.bool(false, "Use Drawdown Protection", group = groupRisk)
+maxDrawdownPct = input.float(15.0, "Max Strategy Drawdown %", minval = 0.1, step = 0.5, group = groupRisk)
+
+groupAlerts = "Alert Messages"
+longEntryMsg = input.string("Long Entry", "Long Entry Message", group = groupAlerts)
+shortEntryMsg = input.string("Short Entry", "Short Entry Message", group = groupAlerts)
+longStopMsg = input.string("Long Stop", "Long Stop Message", group = groupAlerts)
+shortStopMsg = input.string("Short Stop", "Short Stop Message", group = groupAlerts)
+longTp1Msg = input.string("Long TP1", "Long TP1 Message", group = groupAlerts)
+longTp2Msg = input.string("Long TP2", "Long TP2 Message", group = groupAlerts)
+longTp3Msg = input.string("Long TP3", "Long TP3 Message", group = groupAlerts)
+shortTp1Msg = input.string("Short TP1", "Short TP1 Message", group = groupAlerts)
+shortTp2Msg = input.string("Short TP2", "Short TP2 Message", group = groupAlerts)
+shortTp3Msg = input.string("Short TP3", "Short TP3 Message", group = groupAlerts)
+longCloseMsg = input.string("Long Exit", "Long Close Message", group = groupAlerts)
+shortCloseMsg = input.string("Short Exit", "Short Close Message", group = groupAlerts)
+
+groupVisuals = "Visualization"
+showSignalMAs = input.bool(true, "Show Signal MAs", group = groupVisuals)
+showTrendEma = input.bool(true, "Show Trend EMA", group = groupVisuals)
+showStructureZones = input.bool(true, "Show Supply/Demand Zones", group = groupVisuals)
+showTradeLevels = input.bool(true, "Show Active Trade Levels", group = groupVisuals)
+showStatsTable = input.bool(true, "Show Stats Table", group = groupVisuals)
+showBarColors = input.bool(true, "Color Bars By Signal Bias", group = groupVisuals)
+
+///////////////////////////////////////////////////////////////////////////////
+// Helper functions
+///////////////////////////////////////////////////////////////////////////////
+f_resolutionFromMultiplier(_multiplier) =>
+    timeframe.isseconds ? str.tostring(timeframe.multiplier * _multiplier) + "S" :
+     timeframe.isminutes ? str.tostring(timeframe.multiplier * _multiplier) :
+     timeframe.isdaily ? str.tostring(timeframe.multiplier * _multiplier) + "D" :
+     timeframe.isweekly ? str.tostring(timeframe.multiplier * _multiplier) + "W" :
+     timeframe.ismonthly ? str.tostring(timeframe.multiplier * _multiplier) + "M" :
+     timeframe.period
+
+f_maVariant(_src, _type, _length, _lsmaOffset, _almaOffset) =>
+    ema1 = ta.ema(_src, _length)
+    dema = 2.0 * ema1 - ta.ema(ema1, _length)
+    tema = 3.0 * (ema1 - ta.ema(ema1, _length)) + ta.ema(ta.ema(ema1, _length), _length)
+    halfLength = math.max(1, int(math.floor(_length / 2.0)))
+    sqrtLength = math.max(1, int(math.round(math.sqrt(_length))))
+    hull = ta.wma(2.0 * ta.wma(_src, halfLength) - ta.wma(_src, _length), sqrtLength)
+    smma = 0.0
+    smma := na(smma[1]) ? ta.sma(_src, _length) : (smma[1] * (_length - 1) + _src) / _length
+    ssA1 = math.exp(-1.414 * math.pi / _length)
+    ssB1 = 2.0 * ssA1 * math.cos(1.414 * math.pi / _length)
+    ssC2 = ssB1
+    ssC3 = -ssA1 * ssA1
+    ssC1 = 1.0 - ssC2 - ssC3
+    ssma = 0.0
+    ssma := ssC1 * (_src + nz(_src[1])) / 2.0 + ssC2 * nz(ssma[1]) + ssC3 * nz(ssma[2])
+    switch _type
+        "EMA" => ema1
+        "DEMA" => dema
+        "TEMA" => tema
+        "WMA" => ta.wma(_src, _length)
+        "VWMA" => ta.vwma(_src, _length)
+        "SMMA" => smma
+        "HullMA" => hull
+        "LSMA" => ta.linreg(_src, _length, _lsmaOffset)
+        "ALMA" => ta.alma(_src, _length, _almaOffset, _lsmaOffset)
+        "TMA" => ta.sma(ta.sma(_src, _length), _length)
+        "SSMA" => ssma
+        => ta.sma(_src, _length)
+
+f_sessionPreset(_choice, _custom) =>
+    switch _choice
+        "London" => "0700-1100"
+        "New York" => "1300-1700"
+        "London + New York" => "0700-1100,1300-1700"
+        => _custom
+
+f_stopFromMode(_isLong, _atrStop, _swingStop, _mode) =>
+    if _mode == "ATR"
+        _atrStop
+    else if _mode == "Swing"
+        _swingStop
+    else if _mode == "Wider of ATR/Swing"
+        _isLong ? math.min(_atrStop, _swingStop) : math.max(_atrStop, _swingStop)
+    else
+        _isLong ? math.max(_atrStop, _swingStop) : math.min(_atrStop, _swingStop)
+
+f_targetPrice(_entry, _risk, _value, _mode, _isLong) =>
+    if _mode == "R-Multiple"
+        _isLong ? _entry + _risk * _value : _entry - _risk * _value
+    else
+        _isLong ? _entry * (1.0 + _value / 100.0) : _entry * (1.0 - _value / 100.0)
+
+f_positionQty(_entry, _stop, _mode, _notionalPct, _riskPct) =>
+    stopDistance = math.abs(_entry - _stop)
+    notionalQty = _entry > 0 ? (strategy.equity * (_notionalPct / 100.0)) / _entry : na
+    riskQty = stopDistance > syminfo.mintick ? (strategy.equity * (_riskPct / 100.0)) / stopDistance : na
+    _mode == "Risk-Based" ? riskQty : notionalQty
+
+///////////////////////////////////////////////////////////////////////////////
+// Indicator calculations
+///////////////////////////////////////////////////////////////////////////////
+signalTf = useAlternateSignals ? (useMultiplierTf ? f_resolutionFromMultiplier(signalTfMultiplier) : manualSignalTf) : timeframe.period
+signalTicker = useHeikinAshi ? ticker.heikinashi(syminfo.tickerid) : syminfo.tickerid
+chartOpenSource = useHeikinAshi ? request.security(signalTicker, timeframe.period, open, gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off) : open
+chartCloseSource = useHeikinAshi ? request.security(signalTicker, timeframe.period, close, gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off) : close
+
+// Confirmed HTF requests intentionally use the prior completed HTF bar to avoid repainting.
+signalOpen = useAlternateSignals ?
+     request.security(signalTicker, signalTf, f_maVariant(open, maType, maLength, lsmaOffset, almaOffset)[1], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off) :
+     f_maVariant(chartOpenSource, maType, maLength, lsmaOffset, almaOffset)
+signalClose = useAlternateSignals ?
+     request.security(signalTicker, signalTf, f_maVariant(close, maType, maLength, lsmaOffset, almaOffset)[1], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off) :
+     f_maVariant(chartCloseSource, maType, maLength, lsmaOffset, almaOffset)
+
+atrValue = ta.atr(atrLength)
+atrPctOfPrice = close != 0 ? (atrValue / close) * 100.0 : 0.0
+adxValue = ta.adx(adxLength)
+trendEma = ta.ema(close, trendEmaLength)
+
+///////////////////////////////////////////////////////////////////////////////
+// Market structure logic
+///////////////////////////////////////////////////////////////////////////////
+pivotHigh = ta.pivothigh(high, swingLength, swingLength)
+pivotLow = ta.pivotlow(low, swingLength, swingLength)
+
+var float lastSwingHigh = na
+var float lastSwingLow = na
+var int lastSwingHighBar = na
+var int lastSwingLowBar = na
+var int structureBias = 0
+var int lastBullBosBar = na
+var int lastBearBosBar = na
+
+if not na(pivotHigh)
+    lastSwingHigh := pivotHigh
+    lastSwingHighBar := bar_index - swingLength
+
+if not na(pivotLow)
+    lastSwingLow := pivotLow
+    lastSwingLowBar := bar_index - swingLength
+
+bullishBos = not na(lastSwingHigh) and close > lastSwingHigh and close[1] <= lastSwingHigh
+bearishBos = not na(lastSwingLow) and close < lastSwingLow and close[1] >= lastSwingLow
+
+if bullishBos
+    structureBias := 1
+    lastBullBosBar := bar_index
+
+if bearishBos
+    structureBias := -1
+    lastBearBosBar := bar_index
+
+recentBullBos = not na(lastBullBosBar) and bar_index - lastBullBosBar <= structureLookbackBars
+recentBearBos = not na(lastBearBosBar) and bar_index - lastBearBosBar <= structureLookbackBars
+
+zoneHalfWidth = atrValue * zoneAtrWidth
+supplyTop = not na(lastSwingHigh) ? lastSwingHigh + zoneHalfWidth : na
+supplyBottom = not na(lastSwingHigh) ? lastSwingHigh - zoneHalfWidth : na
+demandTop = not na(lastSwingLow) ? lastSwingLow + zoneHalfWidth : na
+demandBottom = not na(lastSwingLow) ? lastSwingLow - zoneHalfWidth : na
+
+bullishSweep = not na(lastSwingLow) and low < lastSwingLow and close > lastSwingLow
+bearishSweep = not na(lastSwingHigh) and high > lastSwingHigh and close < lastSwingHigh
+
+///////////////////////////////////////////////////////////////////////////////
+// Filter logic
+///////////////////////////////////////////////////////////////////////////////
+sessionWindow = f_sessionPreset(sessionChoice, customSession)
+inSession = not useSessionFilter or not na(time(timeframe.period, sessionWindow, sessionTimezone))
+priorInSession = bar_index > 0 ? inSession[1] : false
+newTradeWindow = useSessionFilter ? (inSession and not priorInSession) : ta.change(time("D")) != 0
+
+var int tradesThisWindow = 0
+if newTradeWindow
+    tradesThisWindow := 0
+
+trendLongOk = not useTrendFilter or (close > trendEma and trendEma > trendEma[1])
+trendShortOk = not useTrendFilter or (close < trendEma and trendEma < trendEma[1])
+volatilityOk = not useVolatilityFilter or atrPctOfPrice >= minAtrPct
+adxOk = not useAdxFilter or adxValue >= minAdx
+signalSpreadOk = math.abs(signalClose - signalOpen) >= atrValue * minSignalAtrSpread
+longStructureOk = not useStructureFilter or (structureBias >= 0 and (recentBullBos or (not na(demandTop) and close > demandTop)))
+shortStructureOk = not useStructureFilter or (structureBias <= 0 and (recentBearBos or (not na(supplyBottom) and close < supplyBottom)))
+longSweepOk = not useLiquiditySweepFilter or bullishSweep
+shortSweepOk = not useLiquiditySweepFilter or bearishSweep
+priceConfirmLong = close > signalClose and close > open
+priceConfirmShort = close < signalClose and close < open
+confirmedBarOk = not confirmOnClose or barstate.isconfirmed
+allowLong = tradeDirection == "LONG" or tradeDirection == "BOTH"
+allowShort = tradeDirection == "SHORT" or tradeDirection == "BOTH"
+
+///////////////////////////////////////////////////////////////////////////////
+// Drawdown protection
+///////////////////////////////////////////////////////////////////////////////
+var float peakEquity = na
+peakEquity := na(peakEquity) ? strategy.equity : math.max(peakEquity, strategy.equity)
+currentDrawdownPct = peakEquity > 0 ? (peakEquity - strategy.equity) / peakEquity * 100.0 : 0.0
+drawdownLocked = useDrawdownProtection and currentDrawdownPct >= maxDrawdownPct
+
+///////////////////////////////////////////////////////////////////////////////
+// Entry conditions
+///////////////////////////////////////////////////////////////////////////////
+bullishCross = ta.crossover(signalClose, signalOpen)
+bearishCross = ta.crossunder(signalClose, signalOpen)
+
+longFiltersOk = confirmedBarOk and allowLong and inSession and not drawdownLocked and tradesThisWindow < maxTradesPerWindow and trendLongOk and volatilityOk and adxOk and signalSpreadOk and priceConfirmLong and longStructureOk and longSweepOk
+shortFiltersOk = confirmedBarOk and allowShort and inSession and not drawdownLocked and tradesThisWindow < maxTradesPerWindow and trendShortOk and volatilityOk and adxOk and signalSpreadOk and priceConfirmShort and shortStructureOk and shortSweepOk
+
+longAtrStop = close - atrValue * atrStopMultiplier
+shortAtrStop = close + atrValue * atrStopMultiplier
+longSwingStop = na(lastSwingLow) ? longAtrStop : lastSwingLow - atrValue * swingStopBufferAtr
+shortSwingStop = na(lastSwingHigh) ? shortAtrStop : lastSwingHigh + atrValue * swingStopBufferAtr
+selectedLongStopRaw = f_stopFromMode(true, longAtrStop, longSwingStop, stopMode)
+selectedShortStopRaw = f_stopFromMode(false, shortAtrStop, shortSwingStop, stopMode)
+selectedLongStop = math.min(selectedLongStopRaw, close - syminfo.mintick)
+selectedShortStop = math.max(selectedShortStopRaw, close + syminfo.mintick)
+longRisk = close - selectedLongStop
+shortRisk = selectedShortStop - close
+longQty = f_positionQty(close, selectedLongStop, positionSizingMode, notionalOrderPct, riskPerTradePct)
+shortQty = f_positionQty(close, selectedShortStop, positionSizingMode, notionalOrderPct, riskPerTradePct)
+
+longSetupValid = bullishCross and longFiltersOk and longRisk > syminfo.mintick and not na(longQty) and longQty > 0
+shortSetupValid = bearishCross and shortFiltersOk and shortRisk > syminfo.mintick and not na(shortQty) and shortQty > 0
+
+///////////////////////////////////////////////////////////////////////////////
+// Trade management state
+///////////////////////////////////////////////////////////////////////////////
+tpQtySum = tp1QtyInput + tp2QtyInput + tp3QtyInput
+tp1Qty = tpQtySum > 0 ? tp1QtyInput / tpQtySum * 100.0 : 0.0
+tp2Qty = tpQtySum > 0 ? tp2QtyInput / tpQtySum * 100.0 : 0.0
+tp3Qty = tpQtySum > 0 ? tp3QtyInput / tpQtySum * 100.0 : 0.0
+
+var float activeEntry = na
+var float activeInitialStop = na
+var float activeStop = na
+var float activeRisk = na
+var float activeTp1 = na
+var float activeTp2 = na
+var float activeTp3 = na
+var int activeDirection = 0
+var bool tp1Reached = false
+var bool tp2Reached = false
+var bool tp3Reached = false
+
+longEntryPlaced = false
+shortEntryPlaced = false
+longExitPlaced = false
+shortExitPlaced = false
+
+if longSetupValid and strategy.position_size <= 0
+    if strategy.position_size < 0
+        strategy.close("Short", alert_message = shortCloseMsg, comment = "SX")
+        shortExitPlaced := true
+    activeDirection := 1
+    activeEntry := close
+    activeInitialStop := selectedLongStop
+    activeRisk := longRisk
+    activeTp1 := f_targetPrice(activeEntry, activeRisk, tp1ValueInput, targetMode, true)
+    activeTp2 := f_targetPrice(activeEntry, activeRisk, tp2ValueInput, targetMode, true)
+    activeTp3 := f_targetPrice(activeEntry, activeRisk, tp3ValueInput, targetMode, true)
+    activeStop := activeInitialStop
+    tp1Reached := false
+    tp2Reached := false
+    tp3Reached := false
+    tradesThisWindow += 1
+    strategy.entry("Long", strategy.long, qty = longQty, alert_message = longEntryMsg, comment = "LE")
+    longEntryPlaced := true
+
+if shortSetupValid and strategy.position_size >= 0
+    if strategy.position_size > 0
+        strategy.close("Long", alert_message = longCloseMsg, comment = "LX")
+        longExitPlaced := true
+    activeDirection := -1
+    activeEntry := close
+    activeInitialStop := selectedShortStop
+    activeRisk := shortRisk
+    activeTp1 := f_targetPrice(activeEntry, activeRisk, tp1ValueInput, targetMode, false)
+    activeTp2 := f_targetPrice(activeEntry, activeRisk, tp2ValueInput, targetMode, false)
+    activeTp3 := f_targetPrice(activeEntry, activeRisk, tp3ValueInput, targetMode, false)
+    activeStop := activeInitialStop
+    tp1Reached := false
+    tp2Reached := false
+    tp3Reached := false
+    tradesThisWindow += 1
+    strategy.entry("Short", strategy.short, qty = shortQty, alert_message = shortEntryMsg, comment = "SE")
+    shortEntryPlaced := true
+
+///////////////////////////////////////////////////////////////////////////////
+// Exit conditions and order management
+///////////////////////////////////////////////////////////////////////////////
+if strategy.position_size > 0 and activeDirection == 1
+    if not tp1Reached and high >= activeTp1
+        tp1Reached := true
+    if not tp2Reached and high >= activeTp2
+        tp2Reached := true
+    if not tp3Reached and high >= activeTp3
+        tp3Reached := true
+
+    activeStop := enableBreakEven and tp1Reached ? math.max(activeInitialStop, activeEntry) : activeInitialStop
+
+    if tp1Qty > 0
+        strategy.exit("L-TP1", from_entry = "Long", qty_percent = tp1Qty, limit = activeTp1, stop = activeStop, comment_profit = "TP1", comment_loss = "SL", alert_profit = longTp1Msg, alert_loss = longStopMsg)
+    if tp2Qty > 0
+        strategy.exit("L-TP2", from_entry = "Long", qty_percent = tp2Qty, limit = activeTp2, stop = activeStop, comment_profit = "TP2", comment_loss = "SL", alert_profit = longTp2Msg, alert_loss = longStopMsg)
+    if tp3Qty > 0
+        strategy.exit("L-TP3", from_entry = "Long", qty_percent = tp3Qty, limit = activeTp3, stop = activeStop, comment_profit = "TP3", comment_loss = "SL", alert_profit = longTp3Msg, alert_loss = longStopMsg)
+
+    if closeOnOppositeSignal and bearishCross and confirmedBarOk
+        strategy.close("Long", alert_message = longCloseMsg, comment = "LX")
+        longExitPlaced := true
+
+if strategy.position_size < 0 and activeDirection == -1
+    if not tp1Reached and low <= activeTp1
+        tp1Reached := true
+    if not tp2Reached and low <= activeTp2
+        tp2Reached := true
+    if not tp3Reached and low <= activeTp3
+        tp3Reached := true
+
+    activeStop := enableBreakEven and tp1Reached ? math.min(activeInitialStop, activeEntry) : activeInitialStop
+
+    if tp1Qty > 0
+        strategy.exit("S-TP1", from_entry = "Short", qty_percent = tp1Qty, limit = activeTp1, stop = activeStop, comment_profit = "TP1", comment_loss = "SL", alert_profit = shortTp1Msg, alert_loss = shortStopMsg)
+    if tp2Qty > 0
+        strategy.exit("S-TP2", from_entry = "Short", qty_percent = tp2Qty, limit = activeTp2, stop = activeStop, comment_profit = "TP2", comment_loss = "SL", alert_profit = shortTp2Msg, alert_loss = shortStopMsg)
+    if tp3Qty > 0
+        strategy.exit("S-TP3", from_entry = "Short", qty_percent = tp3Qty, limit = activeTp3, stop = activeStop, comment_profit = "TP3", comment_loss = "SL", alert_profit = shortTp3Msg, alert_loss = shortStopMsg)
+
+    if closeOnOppositeSignal and bullishCross and confirmedBarOk
+        strategy.close("Short", alert_message = shortCloseMsg, comment = "SX")
+        shortExitPlaced := true
+
+justFlattened = strategy.position_size == 0 and strategy.position_size[1] != 0
+if justFlattened
+    activeDirection := 0
+    activeEntry := na
+    activeInitialStop := na
+    activeStop := na
+    activeRisk := na
+    activeTp1 := na
+    activeTp2 := na
+    activeTp3 := na
+    tp1Reached := false
+    tp2Reached := false
+    tp3Reached := false
+
+///////////////////////////////////////////////////////////////////////////////
+// Visualization
+///////////////////////////////////////////////////////////////////////////////
+signalBullColor = color.new(color.teal, 0)
+signalBearColor = color.new(color.red, 0)
+neutralColor = color.new(color.gray, 50)
+barBiasColor = signalClose > signalOpen ? signalBullColor : signalClose < signalOpen ? signalBearColor : neutralColor
+
+plot(showSignalMAs ? signalOpen : na, "Signal Open MA", color = color.new(color.orange, 0), linewidth = 2)
+plot(showSignalMAs ? signalClose : na, "Signal Close MA", color = color.new(color.aqua, 0), linewidth = 2)
+plot(showTrendEma ? trendEma : na, "Trend EMA", color = color.new(color.yellow, 0), linewidth = 2)
+
+pSupplyTop = plot(showStructureZones ? supplyTop : na, "Supply Top", color = color.new(color.red, 70), style = plot.style_linebr)
+pSupplyBottom = plot(showStructureZones ? supplyBottom : na, "Supply Bottom", color = color.new(color.red, 70), style = plot.style_linebr)
+pDemandTop = plot(showStructureZones ? demandTop : na, "Demand Top", color = color.new(color.green, 70), style = plot.style_linebr)
+pDemandBottom = plot(showStructureZones ? demandBottom : na, "Demand Bottom", color = color.new(color.green, 70), style = plot.style_linebr)
+fill(pSupplyTop, pSupplyBottom, color.new(color.red, 92))
+fill(pDemandTop, pDemandBottom, color.new(color.green, 92))
+
+pEntry = plot(showTradeLevels and strategy.position_size != 0 ? activeEntry : na, "Entry", color = color.new(color.blue, 0), style = plot.style_linebr, linewidth = 2)
+pStop = plot(showTradeLevels and strategy.position_size != 0 ? activeStop : na, "Stop", color = color.new(color.red, 0), style = plot.style_linebr, linewidth = 2)
+pTp1 = plot(showTradeLevels and strategy.position_size != 0 ? activeTp1 : na, "TP1", color = color.new(color.green, 10), style = plot.style_linebr)
+pTp2 = plot(showTradeLevels and strategy.position_size != 0 ? activeTp2 : na, "TP2", color = color.new(color.green, 25), style = plot.style_linebr)
+pTp3 = plot(showTradeLevels and strategy.position_size != 0 ? activeTp3 : na, "TP3", color = color.new(color.green, 40), style = plot.style_linebr)
+fill(pEntry, pStop, color.new(color.red, 92))
+fill(pEntry, pTp3, color.new(color.green, 94))
+
+plotshape(longEntryPlaced, title = "Long Entry", text = "Long", color = color.new(color.green, 0), textcolor = color.white, style = shape.labelup, location = location.belowbar, size = size.tiny)
+plotshape(shortEntryPlaced, title = "Short Entry", text = "Short", color = color.new(color.red, 0), textcolor = color.white, style = shape.labeldown, location = location.abovebar, size = size.tiny)
+plotshape(tp1Reached and not tp1Reached[1] ? activeTp1 : na, title = "TP1 Hit", text = "TP1", color = color.new(color.olive, 0), textcolor = color.white, style = shape.labelup, location = location.absolute, size = size.tiny)
+plotshape(tp2Reached and not tp2Reached[1] ? activeTp2 : na, title = "TP2 Hit", text = "TP2", color = color.new(color.olive, 0), textcolor = color.white, style = shape.labelup, location = location.absolute, size = size.tiny)
+plotshape(tp3Reached and not tp3Reached[1] ? activeTp3 : na, title = "TP3 Hit", text = "TP3", color = color.new(color.olive, 0), textcolor = color.white, style = shape.labelup, location = location.absolute, size = size.tiny)
+plotshape(longExitPlaced or shortExitPlaced ? close : na, title = "Manual Exit", text = "Exit", color = color.new(color.gray, 0), textcolor = color.white, style = shape.labelup, location = location.absolute, size = size.tiny)
+
+barcolor(showBarColors ? barBiasColor : na)
+bgcolor(drawdownLocked ? color.new(color.red, 92) : na)
+
+///////////////////////////////////////////////////////////////////////////////
+// Strategy statistics table
+///////////////////////////////////////////////////////////////////////////////
+profitFactor = math.abs(strategy.grossloss) > 0 ? strategy.grossprofit / math.abs(strategy.grossloss) : na
+winRate = strategy.closedtrades > 0 ? strategy.wintrades / strategy.closedtrades * 100.0 : na
+
+var table statsTable = table.new(position.top_right, 2, 7, bgcolor = color.new(color.black, 75), frame_color = color.new(color.gray, 75), frame_width = 1)
+if showStatsTable and barstate.islast
+    table.cell(statsTable, 0, 0, "Metric", text_color = color.white, bgcolor = color.new(color.gray, 80))
+    table.cell(statsTable, 1, 0, "Value", text_color = color.white, bgcolor = color.new(color.gray, 80))
+    table.cell(statsTable, 0, 1, "Signal TF", text_color = color.white)
+    table.cell(statsTable, 1, 1, signalTf, text_color = color.white)
+    table.cell(statsTable, 0, 2, "Closed Trades", text_color = color.white)
+    table.cell(statsTable, 1, 2, str.tostring(strategy.closedtrades), text_color = color.white)
+    table.cell(statsTable, 0, 3, "Win Rate", text_color = color.white)
+    table.cell(statsTable, 1, 3, na(winRate) ? "n/a" : str.tostring(winRate, "#.##") + "%", text_color = color.white)
+    table.cell(statsTable, 0, 4, "Profit Factor", text_color = color.white)
+    table.cell(statsTable, 1, 4, na(profitFactor) ? "n/a" : str.tostring(profitFactor, "#.##"), text_color = color.white)
+    table.cell(statsTable, 0, 5, "Current DD", text_color = color.white)
+    table.cell(statsTable, 1, 5, str.tostring(currentDrawdownPct, "#.##") + "%", text_color = drawdownLocked ? color.orange : color.white)
+    table.cell(statsTable, 0, 6, "Trades In Window", text_color = color.white)
+    table.cell(statsTable, 1, 6, str.tostring(tradesThisWindow), text_color = color.white)
+
+///////////////////////////////////////////////////////////////////////////////
+// Alerts
+///////////////////////////////////////////////////////////////////////////////
+alertcondition(longEntryPlaced, "Long Entry", "Long entry placed")
+alertcondition(shortEntryPlaced, "Short Entry", "Short entry placed")
+alertcondition(tp1Reached and not tp1Reached[1], "TP1 Hit", "TP1 reached")
+alertcondition(tp2Reached and not tp2Reached[1], "TP2 Hit", "TP2 reached")
+alertcondition(tp3Reached and not tp3Reached[1], "TP3 Hit", "TP3 reached")
+alertcondition(longExitPlaced, "Long Exit", "Long position closed")
+alertcondition(shortExitPlaced, "Short Exit", "Short position closed")
+
+///////////////////////////////////////////////////////////////////////////////
+// Data-window diagnostics
+///////////////////////////////////////////////////////////////////////////////
+plot(signalSpreadOk ? 1 : 0, "Signal Spread OK", display = display.data_window)
+plot(structureBias, "Structure Bias", display = display.data_window)
+plot(currentDrawdownPct, "Current Drawdown %", display = display.data_window)
+plot(tradesThisWindow, "Trades In Window", display = display.data_window)
