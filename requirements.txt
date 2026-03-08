@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+SQLAlchemy
+psycopg2-binary
+pydantic-settings
+scikit-learn
+joblib
+python-binance
+MetaTrader5
+httpx
+APScheduler
+python-dotenv
