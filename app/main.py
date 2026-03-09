@@ -19,7 +19,7 @@ from starlette.responses import Response
 
 from app.config import settings
 from app.database import create_tables
-from app.api.routes import control, trades, signals, performance
+from app.api.routes import control, trades, signals, performance, discovery
 from app.bot.trading_bot import get_bot
 from app.utils.logger import get_logger
 
@@ -134,6 +134,7 @@ app.include_router(control.router, prefix="/api/v1")
 app.include_router(trades.router, prefix="/api/v1")
 app.include_router(signals.router, prefix="/api/v1")
 app.include_router(performance.router, prefix="/api/v1")
+app.include_router(discovery.router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Root"])

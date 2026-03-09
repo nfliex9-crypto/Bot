@@ -1,0 +1,108 @@
+{
+  "rank": 4,
+  "name": "trend_ema_a6cdb7",
+  "family": "trend_following",
+  "composite_score": 0.497231,
+  "description": "EMA 8/50 cross RSI<80",
+  "complexity": 6,
+  "scores": {
+    "sharpe": 0.382262,
+    "profit_factor": 0.442305,
+    "drawdown": 0.647903,
+    "consistency": 0.75,
+    "simplicity_bonus": -0.04
+  },
+  "parameters": {
+    "fast": 8,
+    "slow": 50,
+    "rsi_filter": 80,
+    "sl": 2.0,
+    "tp": 3.0
+  },
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_reward_risk": 3.0,
+    "risk_per_trade_pct": 0.01
+  },
+  "logic": {
+    "long_entry": [
+      {
+        "left": "ema_8",
+        "op": "cross_above",
+        "right": "ema_50"
+      },
+      {
+        "left": "rsi_14",
+        "op": "<",
+        "right": 80
+      }
+    ],
+    "short_entry": [
+      {
+        "left": "ema_8",
+        "op": "cross_below",
+        "right": "ema_50"
+      },
+      {
+        "left": "rsi_14",
+        "op": ">",
+        "right": 20
+      }
+    ],
+    "long_exit": [
+      {
+        "left": "ema_8",
+        "op": "cross_below",
+        "right": "ema_50"
+      }
+    ],
+    "short_exit": [
+      {
+        "left": "ema_8",
+        "op": "cross_above",
+        "right": "ema_50"
+      }
+    ]
+  },
+  "performance": {
+    "training": {
+      "period": "training",
+      "total_trades": 264,
+      "win_rate": 0.3144,
+      "profit_factor": 1.6044,
+      "sharpe_ratio": 2.947,
+      "max_drawdown": 0.0974,
+      "avg_r_multiple": 0.3299,
+      "trade_frequency": 0.022,
+      "total_pnl": 9345.92,
+      "expectancy": 35.4012,
+      "consistency": 1.0
+    },
+    "validation": {
+      "period": "validation",
+      "total_trades": 74,
+      "win_rate": 0.3514,
+      "profit_factor": 1.8803,
+      "sharpe_ratio": 3.9601,
+      "max_drawdown": 0.0602,
+      "avg_r_multiple": 0.431,
+      "trade_frequency": 0.0185,
+      "total_pnl": 2965.0,
+      "expectancy": 40.0676,
+      "consistency": 0.5
+    },
+    "out_of_sample": {
+      "period": "out_of_sample",
+      "total_trades": 77,
+      "win_rate": 0.3896,
+      "profit_factor": 2.2421,
+      "sharpe_ratio": 4.7283,
+      "max_drawdown": 0.0538,
+      "avg_r_multiple": 0.4976,
+      "trade_frequency": 0.01925,
+      "total_pnl": 3781.16,
+      "expectancy": 49.1059,
+      "consistency": 0.75
+    }
+  }
+}
