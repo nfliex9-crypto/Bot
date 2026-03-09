@@ -26,7 +26,7 @@ from starlette.responses import Response
 # Centralised logging must be imported first so all modules inherit the config
 from app.utils.logging_config import get_structured_logger, configure_logging
 from app.config import settings
-from app.database import create_tables
+from app.database import create_tables, wait_for_db
 from app.monitoring.metrics import get_metrics
 
 # Routes
@@ -62,12 +62,16 @@ async def lifespan(app: FastAPI):
     logger.info(f"  Mode: {settings.TRADING_MODE.value.upper()}")
     logger.info(f"{'='*60}")
 
-    # Database
+    # Database — wait then create tables
     try:
+        await wait_for_db(max_attempts=15, delay=2.0)
         await create_tables()
-        logger.info("Database tables verified / created")
+        logger.info("Database ready")
+    except RuntimeError as e:
+        logger.error(f"Database unavailable: {e} — running without persistence")
     except Exception as e:
-        logger.error(f"Database init error: {e}")
+        # Non-fatal: bot can run in paper mode with degraded persistence
+        logger.warning(f"Database init warning: {type(e).__name__}: {e} — continuing")
 
     # Model registry + watcher
     try:

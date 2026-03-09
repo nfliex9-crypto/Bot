@@ -47,3 +47,7 @@ htmlcov/
 
 # macOS
 .DS_Store
+
+# Test artifacts
+test_smoke.db
+*.db

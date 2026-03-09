@@ -264,21 +264,43 @@ class TradeClassifier:
             logger.error(f"Failed to save model: {e}")
 
     def _load_model(self):
-        """Load model and scaler from disk."""
-        if not os.path.exists(self.model_path):
-            logger.info("No pre-trained model found. Using rule-based scoring.")
-            return
+        """
+        Load model and scaler from disk.
 
-        try:
-            with open(self.model_path, "rb") as f:
-                data = pickle.load(f)
-            self.model = data.get("model")
-            self.scaler = data.get("scaler")
-            self.is_trained = self.model is not None
-            logger.info(f"Model loaded from {self.model_path}")
-        except Exception as e:
-            logger.error(f"Failed to load model: {e}")
-            self.is_trained = False
+        Search order:
+        1. Configured model_path  (e.g. /app/models/rf_classifier.pkl)
+        2. Training pipeline path  (app/core/ai/models/trading_model.joblib)
+        3. Fall back to rule-based scoring — always safe.
+        """
+        candidate_paths = [self.model_path]
+
+        # Also try the training-pipeline artefact location
+        _training_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "core", "ai", "models", "trading_model.joblib",
+        )
+        if _training_path not in candidate_paths:
+            candidate_paths.append(_training_path)
+
+        for path in candidate_paths:
+            if not os.path.exists(path):
+                continue
+            try:
+                with open(path, "rb") as f:
+                    data = pickle.load(f)
+                self.model = data.get("model")
+                self.scaler = data.get("scaler")
+                self.is_trained = self.model is not None
+                if self.is_trained:
+                    logger.info(f"AI model loaded from {path}")
+                    return
+            except Exception as e:
+                logger.warning(f"Could not load model from {path}: {e}")
+
+        logger.info(
+            "No trained model found — using rule-based confidence scoring (safe fallback)"
+        )
+        self.is_trained = False
 
     def get_feature_importance(self) -> Dict[str, float]:
         """Return feature importances sorted by value."""
