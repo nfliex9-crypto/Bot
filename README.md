@@ -208,6 +208,29 @@ python scripts/backtest.py --symbol BTCUSDT --market crypto --days 30
 python scripts/backtest.py --all-symbols --days 60
 ```
 
+## Automated Strategy Discovery
+
+Discover profitable rule-based strategies automatically with walk-forward validation.
+
+```bash
+# Run on your historical OHLCV CSV
+python scripts/discover_strategies.py --data-file ./data/BTCUSDT_M5.csv --n-strategies 240
+
+# Local smoke test with synthetic data
+python scripts/discover_strategies.py --use-synthetic --n-strategies 240
+```
+
+Outputs are exported to `outputs/strategy_discovery/`:
+- `top_5_strategies.json`
+- `top_5_report.md`
+- `all_survivors.json`
+- `summary.json`
+
+The best discovered strategy is auto-converted to:
+- `app/core/strategy/discovered_auto.py`
+
+This generated module returns `EntryResult` objects compatible with the current trading engine conventions.
+
 ## Project Structure
 
 ```

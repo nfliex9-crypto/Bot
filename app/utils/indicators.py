@@ -72,6 +72,14 @@ def calculate_bollinger_bands(
     return upper, sma, lower
 
 
+def calculate_vwap(df: pd.DataFrame, period: int = 30) -> pd.Series:
+    """Rolling VWAP."""
+    typical_price = (df["high"] + df["low"] + df["close"]) / 3.0
+    pv = typical_price * df["volume"].fillna(0.0)
+    volume = df["volume"].rolling(period).sum().replace(0, np.nan)
+    return pv.rolling(period).sum() / volume
+
+
 def find_swing_highs(df: pd.DataFrame, lookback: int = 5) -> pd.Series:
     """
     Identify swing highs. A swing high is a candle where 'high' is the
@@ -244,6 +252,7 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["bb_upper"] = bb_upper
     df["bb_mid"] = bb_mid
     df["bb_lower"] = bb_lower
+    df["vwap"] = calculate_vwap(df, 30)
     df["momentum"] = calculate_momentum(df)
     df["candle_body"] = (df["close"] - df["open"]).abs()
     df["candle_range"] = df["high"] - df["low"]
