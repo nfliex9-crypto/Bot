@@ -16,9 +16,10 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -221,6 +222,23 @@ async def prometheus_metrics():
 
 
 # ── Exception Handler ──────────────────────────────────────────────────────
+
+@app.get("/download/project_export.zip", tags=["Download"], include_in_schema=True)
+async def download_project():
+    """
+    Download the complete project source code as a ZIP archive.
+    Contains all 76 source files (excludes .env, logs, cache, secrets).
+    """
+    zip_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "project_export.zip")
+    if not os.path.exists(zip_path):
+        raise HTTPException(status_code=404, detail="project_export.zip not found")
+    return FileResponse(
+        path=zip_path,
+        media_type="application/zip",
+        filename="project_export.zip",
+        headers={"Content-Disposition": "attachment; filename=project_export.zip"},
+    )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
