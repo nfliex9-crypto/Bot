@@ -1,0 +1,27 @@
+project: quant-lab
+seed: 42
+
+data:
+  start: "2020-01-01"
+  end: "2025-12-31"
+  interval: "1d"
+  symbols: ["SPY", "QQQ", "TLT", "GLD", "USO", "EURUSD", "BTCUSD"]
+  bronze_path: "data/bronze/ohlcv.parquet"
+  silver_path: "data/silver/features.parquet"
+  registry_path: "data/gold/strategy_registry.jsonl"
+
+research:
+  fee_bps: 0.2
+  slippage_bps: 0.5
+  sharpe_min: 0.8
+  max_drawdown_min: -0.20
+  profit_factor_min: 1.05
+
+portfolio:
+  target_vol: 0.12
+
+risk:
+  max_gross: 2.0
+  max_net: 0.5
+  max_symbol_weight: 0.35
+  kill_switch_dd: 0.20

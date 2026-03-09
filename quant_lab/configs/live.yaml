@@ -1,0 +1,3 @@
+mode: live
+order_notional_limit: 500000
+reconcile_interval_seconds: 5

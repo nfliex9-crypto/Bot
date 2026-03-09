@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant-lab"
+version = "0.1.0"
+description = "Institutional quant research lab with automatic alpha discovery"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26.0",
+  "pandas>=2.2.0",
+  "polars>=1.8.0",
+  "pyyaml>=6.0.2",
+  "duckdb>=1.1.2",
+  "scipy>=1.14.1",
+  "scikit-learn>=1.5.2",
+  "prometheus-client>=0.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.3",
+  "ruff>=0.8.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+quant-lab-research = "quant_lab.pipeline.run_research:main"
+quant-lab-paper = "quant_lab.pipeline.run_paper:main"

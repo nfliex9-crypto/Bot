@@ -1,0 +1,4 @@
+mode: research
+run_monte_carlo: true
+run_walk_forward: true
+run_purged_cv: true
