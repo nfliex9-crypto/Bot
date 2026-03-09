@@ -1,0 +1,96 @@
+{
+  "rank": 5,
+  "name": "brk_ch_b262e8",
+  "family": "breakout",
+  "composite_score": 0.479653,
+  "description": "Channel breakout 30-bar",
+  "complexity": 4,
+  "scores": {
+    "sharpe": 0.186783,
+    "profit_factor": 0.186552,
+    "drawdown": 0.774586,
+    "consistency": 0.9167,
+    "simplicity_bonus": -0.0
+  },
+  "parameters": {
+    "period": 30,
+    "sl": 2.0,
+    "tp": 3.0
+  },
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_reward_risk": 3.0,
+    "risk_per_trade_pct": 0.01
+  },
+  "logic": {
+    "long_entry": [
+      {
+        "left": "close",
+        "op": ">",
+        "right": "highest_30"
+      }
+    ],
+    "short_entry": [
+      {
+        "left": "close",
+        "op": "<",
+        "right": "lowest_30"
+      }
+    ],
+    "long_exit": [
+      {
+        "left": "close",
+        "op": "<",
+        "right": "ema_21"
+      }
+    ],
+    "short_exit": [
+      {
+        "left": "close",
+        "op": ">",
+        "right": "ema_21"
+      }
+    ]
+  },
+  "performance": {
+    "training": {
+      "period": "training",
+      "total_trades": 223,
+      "win_rate": 0.6413,
+      "profit_factor": 4.6359,
+      "sharpe_ratio": 8.8206,
+      "max_drawdown": 0.0309,
+      "avg_r_multiple": 0.8352,
+      "trade_frequency": 0.018583,
+      "total_pnl": 43611.97,
+      "expectancy": 195.5694,
+      "consistency": 1.0
+    },
+    "validation": {
+      "period": "validation",
+      "total_trades": 78,
+      "win_rate": 0.5513,
+      "profit_factor": 2.5559,
+      "sharpe_ratio": 6.0267,
+      "max_drawdown": 0.046,
+      "avg_r_multiple": 0.5609,
+      "trade_frequency": 0.0195,
+      "total_pnl": 4557.91,
+      "expectancy": 58.4347,
+      "consistency": 0.75
+    },
+    "out_of_sample": {
+      "period": "out_of_sample",
+      "total_trades": 88,
+      "win_rate": 0.4318,
+      "profit_factor": 1.6398,
+      "sharpe_ratio": 2.9649,
+      "max_drawdown": 0.0422,
+      "avg_r_multiple": 0.2769,
+      "trade_frequency": 0.022,
+      "total_pnl": 1931.02,
+      "expectancy": 21.9434,
+      "consistency": 1.0
+    }
+  }
+}

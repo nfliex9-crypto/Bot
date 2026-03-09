@@ -1,0 +1,108 @@
+{
+  "rank": 2,
+  "name": "trend_sma_2d5b1d",
+  "family": "trend_following",
+  "composite_score": 0.832711,
+  "description": "SMA 20/200 +MACD",
+  "complexity": 6,
+  "scores": {
+    "sharpe": 0.808587,
+    "profit_factor": 0.720541,
+    "drawdown": 1.0,
+    "consistency": 1.0,
+    "simplicity_bonus": -0.04
+  },
+  "parameters": {
+    "fast": 20,
+    "slow": 200,
+    "macd_filter": true,
+    "sl": 2.0,
+    "tp": 1.5
+  },
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_reward_risk": 1.5,
+    "risk_per_trade_pct": 0.01
+  },
+  "logic": {
+    "long_entry": [
+      {
+        "left": "sma_20",
+        "op": "cross_above",
+        "right": "sma_200"
+      },
+      {
+        "left": "macd_hist_12_26_9",
+        "op": ">",
+        "right": 0
+      }
+    ],
+    "short_entry": [
+      {
+        "left": "sma_20",
+        "op": "cross_below",
+        "right": "sma_200"
+      },
+      {
+        "left": "macd_hist_12_26_9",
+        "op": "<",
+        "right": 0
+      }
+    ],
+    "long_exit": [
+      {
+        "left": "sma_20",
+        "op": "cross_below",
+        "right": "sma_200"
+      }
+    ],
+    "short_exit": [
+      {
+        "left": "sma_20",
+        "op": "cross_above",
+        "right": "sma_200"
+      }
+    ]
+  },
+  "performance": {
+    "training": {
+      "period": "training",
+      "total_trades": 69,
+      "win_rate": 0.5217,
+      "profit_factor": 1.5126,
+      "sharpe_ratio": 3.3841,
+      "max_drawdown": 0.0526,
+      "avg_r_multiple": 0.3301,
+      "trade_frequency": 0.00575,
+      "total_pnl": 1902.12,
+      "expectancy": 27.5669,
+      "consistency": 1.0
+    },
+    "validation": {
+      "period": "validation",
+      "total_trades": 21,
+      "win_rate": 0.5714,
+      "profit_factor": 2.6201,
+      "sharpe_ratio": 7.4903,
+      "max_drawdown": 0.0376,
+      "avg_r_multiple": 0.5746,
+      "trade_frequency": 0.00525,
+      "total_pnl": 1109.3,
+      "expectancy": 52.8237,
+      "consistency": 1.0
+    },
+    "out_of_sample": {
+      "period": "out_of_sample",
+      "total_trades": 18,
+      "win_rate": 0.6667,
+      "profit_factor": 2.8973,
+      "sharpe_ratio": 8.574,
+      "max_drawdown": 0.0215,
+      "avg_r_multiple": 0.6866,
+      "trade_frequency": 0.0045,
+      "total_pnl": 1156.94,
+      "expectancy": 64.2742,
+      "consistency": 1.0
+    }
+  }
+}

@@ -1,0 +1,534 @@
+{
+  "generated_at": "2026-03-09T17:28:32.121249+00:00",
+  "strategies_survived": 46,
+  "top_strategies": [
+    {
+      "rank": 1,
+      "name": "trend_sma_e2a6b3",
+      "family": "trend_following",
+      "composite_score": 0.94333,
+      "description": "SMA 50/200 +MACD",
+      "complexity": 6,
+      "scores": {
+        "sharpe": 1.0,
+        "profit_factor": 1.0,
+        "drawdown": 0.999985,
+        "consistency": 0.9167,
+        "simplicity_bonus": -0.04
+      },
+      "parameters": {
+        "fast": 50,
+        "slow": 200,
+        "macd_filter": true,
+        "sl": 1.5,
+        "tp": 2.0
+      },
+      "risk_management": {
+        "sl_atr_multiplier": 1.5,
+        "tp_reward_risk": 2.0,
+        "risk_per_trade_pct": 0.01
+      },
+      "logic": {
+        "long_entry": [
+          {
+            "left": "sma_50",
+            "op": "cross_above",
+            "right": "sma_200"
+          },
+          {
+            "left": "macd_hist_12_26_9",
+            "op": ">",
+            "right": 0
+          }
+        ],
+        "short_entry": [
+          {
+            "left": "sma_50",
+            "op": "cross_below",
+            "right": "sma_200"
+          },
+          {
+            "left": "macd_hist_12_26_9",
+            "op": "<",
+            "right": 0
+          }
+        ],
+        "long_exit": [
+          {
+            "left": "sma_50",
+            "op": "cross_below",
+            "right": "sma_200"
+          }
+        ],
+        "short_exit": [
+          {
+            "left": "sma_50",
+            "op": "cross_above",
+            "right": "sma_200"
+          }
+        ]
+      },
+      "performance": {
+        "training": {
+          "period": "training",
+          "total_trades": 34,
+          "win_rate": 0.5,
+          "profit_factor": 1.7203,
+          "sharpe_ratio": 4.4021,
+          "max_drawdown": 0.053,
+          "avg_r_multiple": 0.486,
+          "trade_frequency": 0.002833,
+          "total_pnl": 1472.37,
+          "expectancy": 43.3051,
+          "consistency": 0.75
+        },
+        "validation": {
+          "period": "validation",
+          "total_trades": 10,
+          "win_rate": 0.5,
+          "profit_factor": 1.7273,
+          "sharpe_ratio": 4.4086,
+          "max_drawdown": 0.0216,
+          "avg_r_multiple": 0.4866,
+          "trade_frequency": 0.0025,
+          "total_pnl": 412.87,
+          "expectancy": 41.2873,
+          "consistency": 1.0
+        },
+        "out_of_sample": {
+          "period": "out_of_sample",
+          "total_trades": 9,
+          "win_rate": 0.6667,
+          "profit_factor": 3.5553,
+          "sharpe_ratio": 10.3006,
+          "max_drawdown": 0.0215,
+          "avg_r_multiple": 0.9868,
+          "trade_frequency": 0.00225,
+          "total_pnl": 846.43,
+          "expectancy": 94.0475,
+          "consistency": 1.0
+        }
+      }
+    },
+    {
+      "rank": 2,
+      "name": "trend_sma_2d5b1d",
+      "family": "trend_following",
+      "composite_score": 0.832711,
+      "description": "SMA 20/200 +MACD",
+      "complexity": 6,
+      "scores": {
+        "sharpe": 0.808587,
+        "profit_factor": 0.720541,
+        "drawdown": 1.0,
+        "consistency": 1.0,
+        "simplicity_bonus": -0.04
+      },
+      "parameters": {
+        "fast": 20,
+        "slow": 200,
+        "macd_filter": true,
+        "sl": 2.0,
+        "tp": 1.5
+      },
+      "risk_management": {
+        "sl_atr_multiplier": 2.0,
+        "tp_reward_risk": 1.5,
+        "risk_per_trade_pct": 0.01
+      },
+      "logic": {
+        "long_entry": [
+          {
+            "left": "sma_20",
+            "op": "cross_above",
+            "right": "sma_200"
+          },
+          {
+            "left": "macd_hist_12_26_9",
+            "op": ">",
+            "right": 0
+          }
+        ],
+        "short_entry": [
+          {
+            "left": "sma_20",
+            "op": "cross_below",
+            "right": "sma_200"
+          },
+          {
+            "left": "macd_hist_12_26_9",
+            "op": "<",
+            "right": 0
+          }
+        ],
+        "long_exit": [
+          {
+            "left": "sma_20",
+            "op": "cross_below",
+            "right": "sma_200"
+          }
+        ],
+        "short_exit": [
+          {
+            "left": "sma_20",
+            "op": "cross_above",
+            "right": "sma_200"
+          }
+        ]
+      },
+      "performance": {
+        "training": {
+          "period": "training",
+          "total_trades": 69,
+          "win_rate": 0.5217,
+          "profit_factor": 1.5126,
+          "sharpe_ratio": 3.3841,
+          "max_drawdown": 0.0526,
+          "avg_r_multiple": 0.3301,
+          "trade_frequency": 0.00575,
+          "total_pnl": 1902.12,
+          "expectancy": 27.5669,
+          "consistency": 1.0
+        },
+        "validation": {
+          "period": "validation",
+          "total_trades": 21,
+          "win_rate": 0.5714,
+          "profit_factor": 2.6201,
+          "sharpe_ratio": 7.4903,
+          "max_drawdown": 0.0376,
+          "avg_r_multiple": 0.5746,
+          "trade_frequency": 0.00525,
+          "total_pnl": 1109.3,
+          "expectancy": 52.8237,
+          "consistency": 1.0
+        },
+        "out_of_sample": {
+          "period": "out_of_sample",
+          "total_trades": 18,
+          "win_rate": 0.6667,
+          "profit_factor": 2.8973,
+          "sharpe_ratio": 8.574,
+          "max_drawdown": 0.0215,
+          "avg_r_multiple": 0.6866,
+          "trade_frequency": 0.0045,
+          "total_pnl": 1156.94,
+          "expectancy": 64.2742,
+          "consistency": 1.0
+        }
+      }
+    },
+    {
+      "rank": 3,
+      "name": "trend_ema_80513d",
+      "family": "trend_following",
+      "composite_score": 0.535909,
+      "description": "EMA 8/50 cross RSI<70",
+      "complexity": 6,
+      "scores": {
+        "sharpe": 0.437595,
+        "profit_factor": 0.53062,
+        "drawdown": 0.647903,
+        "consistency": 0.75,
+        "simplicity_bonus": -0.04
+      },
+      "parameters": {
+        "fast": 8,
+        "slow": 50,
+        "rsi_filter": 70,
+        "sl": 2.0,
+        "tp": 3.0
+      },
+      "risk_management": {
+        "sl_atr_multiplier": 2.0,
+        "tp_reward_risk": 3.0,
+        "risk_per_trade_pct": 0.01
+      },
+      "logic": {
+        "long_entry": [
+          {
+            "left": "ema_8",
+            "op": "cross_above",
+            "right": "ema_50"
+          },
+          {
+            "left": "rsi_14",
+            "op": "<",
+            "right": 70
+          }
+        ],
+        "short_entry": [
+          {
+            "left": "ema_8",
+            "op": "cross_below",
+            "right": "ema_50"
+          },
+          {
+            "left": "rsi_14",
+            "op": ">",
+            "right": 30
+          }
+        ],
+        "long_exit": [
+          {
+            "left": "ema_8",
+            "op": "cross_below",
+            "right": "ema_50"
+          }
+        ],
+        "short_exit": [
+          {
+            "left": "ema_8",
+            "op": "cross_above",
+            "right": "ema_50"
+          }
+        ]
+      },
+      "performance": {
+        "training": {
+          "period": "training",
+          "total_trades": 254,
+          "win_rate": 0.311,
+          "profit_factor": 1.6228,
+          "sharpe_ratio": 2.963,
+          "max_drawdown": 0.0875,
+          "avg_r_multiple": 0.3308,
+          "trade_frequency": 0.021167,
+          "total_pnl": 8911.64,
+          "expectancy": 35.0852,
+          "consistency": 1.0
+        },
+        "validation": {
+          "period": "validation",
+          "total_trades": 69,
+          "win_rate": 0.3188,
+          "profit_factor": 1.6529,
+          "sharpe_ratio": 3.1085,
+          "max_drawdown": 0.0616,
+          "avg_r_multiple": 0.3413,
+          "trade_frequency": 0.01725,
+          "total_pnl": 1985.24,
+          "expectancy": 28.7716,
+          "consistency": 0.5
+        },
+        "out_of_sample": {
+          "period": "out_of_sample",
+          "total_trades": 74,
+          "win_rate": 0.4054,
+          "profit_factor": 2.45,
+          "sharpe_ratio": 5.2274,
+          "max_drawdown": 0.0538,
+          "avg_r_multiple": 0.5452,
+          "trade_frequency": 0.0185,
+          "total_pnl": 4094.67,
+          "expectancy": 55.3334,
+          "consistency": 0.75
+        }
+      }
+    },
+    {
+      "rank": 4,
+      "name": "trend_ema_a6cdb7",
+      "family": "trend_following",
+      "composite_score": 0.497231,
+      "description": "EMA 8/50 cross RSI<80",
+      "complexity": 6,
+      "scores": {
+        "sharpe": 0.382262,
+        "profit_factor": 0.442305,
+        "drawdown": 0.647903,
+        "consistency": 0.75,
+        "simplicity_bonus": -0.04
+      },
+      "parameters": {
+        "fast": 8,
+        "slow": 50,
+        "rsi_filter": 80,
+        "sl": 2.0,
+        "tp": 3.0
+      },
+      "risk_management": {
+        "sl_atr_multiplier": 2.0,
+        "tp_reward_risk": 3.0,
+        "risk_per_trade_pct": 0.01
+      },
+      "logic": {
+        "long_entry": [
+          {
+            "left": "ema_8",
+            "op": "cross_above",
+            "right": "ema_50"
+          },
+          {
+            "left": "rsi_14",
+            "op": "<",
+            "right": 80
+          }
+        ],
+        "short_entry": [
+          {
+            "left": "ema_8",
+            "op": "cross_below",
+            "right": "ema_50"
+          },
+          {
+            "left": "rsi_14",
+            "op": ">",
+            "right": 20
+          }
+        ],
+        "long_exit": [
+          {
+            "left": "ema_8",
+            "op": "cross_below",
+            "right": "ema_50"
+          }
+        ],
+        "short_exit": [
+          {
+            "left": "ema_8",
+            "op": "cross_above",
+            "right": "ema_50"
+          }
+        ]
+      },
+      "performance": {
+        "training": {
+          "period": "training",
+          "total_trades": 264,
+          "win_rate": 0.3144,
+          "profit_factor": 1.6044,
+          "sharpe_ratio": 2.947,
+          "max_drawdown": 0.0974,
+          "avg_r_multiple": 0.3299,
+          "trade_frequency": 0.022,
+          "total_pnl": 9345.92,
+          "expectancy": 35.4012,
+          "consistency": 1.0
+        },
+        "validation": {
+          "period": "validation",
+          "total_trades": 74,
+          "win_rate": 0.3514,
+          "profit_factor": 1.8803,
+          "sharpe_ratio": 3.9601,
+          "max_drawdown": 0.0602,
+          "avg_r_multiple": 0.431,
+          "trade_frequency": 0.0185,
+          "total_pnl": 2965.0,
+          "expectancy": 40.0676,
+          "consistency": 0.5
+        },
+        "out_of_sample": {
+          "period": "out_of_sample",
+          "total_trades": 77,
+          "win_rate": 0.3896,
+          "profit_factor": 2.2421,
+          "sharpe_ratio": 4.7283,
+          "max_drawdown": 0.0538,
+          "avg_r_multiple": 0.4976,
+          "trade_frequency": 0.01925,
+          "total_pnl": 3781.16,
+          "expectancy": 49.1059,
+          "consistency": 0.75
+        }
+      }
+    },
+    {
+      "rank": 5,
+      "name": "brk_ch_b262e8",
+      "family": "breakout",
+      "composite_score": 0.479653,
+      "description": "Channel breakout 30-bar",
+      "complexity": 4,
+      "scores": {
+        "sharpe": 0.186783,
+        "profit_factor": 0.186552,
+        "drawdown": 0.774586,
+        "consistency": 0.9167,
+        "simplicity_bonus": -0.0
+      },
+      "parameters": {
+        "period": 30,
+        "sl": 2.0,
+        "tp": 3.0
+      },
+      "risk_management": {
+        "sl_atr_multiplier": 2.0,
+        "tp_reward_risk": 3.0,
+        "risk_per_trade_pct": 0.01
+      },
+      "logic": {
+        "long_entry": [
+          {
+            "left": "close",
+            "op": ">",
+            "right": "highest_30"
+          }
+        ],
+        "short_entry": [
+          {
+            "left": "close",
+            "op": "<",
+            "right": "lowest_30"
+          }
+        ],
+        "long_exit": [
+          {
+            "left": "close",
+            "op": "<",
+            "right": "ema_21"
+          }
+        ],
+        "short_exit": [
+          {
+            "left": "close",
+            "op": ">",
+            "right": "ema_21"
+          }
+        ]
+      },
+      "performance": {
+        "training": {
+          "period": "training",
+          "total_trades": 223,
+          "win_rate": 0.6413,
+          "profit_factor": 4.6359,
+          "sharpe_ratio": 8.8206,
+          "max_drawdown": 0.0309,
+          "avg_r_multiple": 0.8352,
+          "trade_frequency": 0.018583,
+          "total_pnl": 43611.97,
+          "expectancy": 195.5694,
+          "consistency": 1.0
+        },
+        "validation": {
+          "period": "validation",
+          "total_trades": 78,
+          "win_rate": 0.5513,
+          "profit_factor": 2.5559,
+          "sharpe_ratio": 6.0267,
+          "max_drawdown": 0.046,
+          "avg_r_multiple": 0.5609,
+          "trade_frequency": 0.0195,
+          "total_pnl": 4557.91,
+          "expectancy": 58.4347,
+          "consistency": 0.75
+        },
+        "out_of_sample": {
+          "period": "out_of_sample",
+          "total_trades": 88,
+          "win_rate": 0.4318,
+          "profit_factor": 1.6398,
+          "sharpe_ratio": 2.9649,
+          "max_drawdown": 0.0422,
+          "avg_r_multiple": 0.2769,
+          "trade_frequency": 0.022,
+          "total_pnl": 1931.02,
+          "expectancy": 21.9434,
+          "consistency": 1.0
+        }
+      }
+    }
+  ]
+}
