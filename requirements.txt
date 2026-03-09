@@ -14,11 +14,17 @@ psycopg2-binary==2.9.9
 pandas==2.2.2
 numpy==1.26.4
 pandas-ta==0.3.14b0
+pyarrow>=14.0.0
 
 # Machine learning
 scikit-learn==1.4.2
 joblib==1.4.2
 imbalanced-learn==0.12.2
+
+# Alpha Discovery Engine — Statistical & Quantitative
+scipy>=1.12.0
+statsmodels>=0.14.0
+hmmlearn>=0.3.0
 
 # Brokers
 python-binance==1.0.19
