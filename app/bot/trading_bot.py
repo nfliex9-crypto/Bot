@@ -11,6 +11,7 @@ The main orchestrator that:
 """
 import asyncio
 import signal as os_signal
+import threading
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
 from contextlib import asynccontextmanager
@@ -224,18 +225,35 @@ class TradingBot:
 
     async def _scan_loop(self):
         """Main scanning loop - runs every SCAN_INTERVAL_SECONDS."""
-        logger.info(f"Scanner started (interval: {settings.SCAN_INTERVAL_SECONDS}s)")
+        logger.info(
+            f"Scanner started | interval={settings.SCAN_INTERVAL_SECONDS}s "
+            f"mode={settings.TRADING_MODE.value}"
+        )
 
         while self._running:
             try:
                 if self.state == BotState.RUNNING:
+                    try:
+                        from app.monitoring.metrics import get_metrics
+                        get_metrics().record_scan()
+                    except Exception:
+                        pass
+
                     results = await self.scanner.scan_all()
+
+                    if results:
+                        logger.info(
+                            f"SIGNAL SCAN | {len(results)} valid setup(s) found "
+                            f"| top={results[0].symbol} "
+                            f"conf={results[0].prediction.confidence:.3f}",
+                            extra={"trade_log": True},
+                        )
 
                     # Execute valid setups (up to remaining session trade allowance)
                     for result in results:
                         risk_status = self.risk_manager.check_risk_limits()
                         if not risk_status.can_trade:
-                            logger.info("Risk limit hit, skipping remaining setups")
+                            logger.info(f"Risk limit reached: {risk_status.reason}")
                             break
                         await self._execute_setup(result)
 
@@ -245,8 +263,13 @@ class TradingBot:
                 break
             except Exception as e:
                 self._errors += 1
-                logger.error(f"Scan loop error: {e}", exc_info=True)
-                await asyncio.sleep(10)  # Brief pause before retry
+                logger.error(f"Scan loop error: {type(e).__name__}: {e}", exc_info=True)
+                try:
+                    from app.monitoring.metrics import get_metrics
+                    get_metrics().record_error("scan_loop")
+                except Exception:
+                    pass
+                await asyncio.sleep(10)
 
     async def _monitor_loop(self):
         """Monitor open positions loop - runs every 10 seconds."""
@@ -345,10 +368,33 @@ class TradingBot:
         await self._update_signal_status(signal_id, SignalStatus.EXECUTED)
 
         logger.info(
-            f"TRADE EXECUTED: {symbol} {entry.direction} "
-            f"lots={position_size.lot_size} risk=${position_size.risk_amount:.2f} "
-            f"ticket={order_result.ticket}"
+            f"TRADE EXECUTED | {settings.TRADING_MODE.value.upper()} | "
+            f"symbol={symbol} direction={entry.direction} "
+            f"lots={position_size.lot_size} entry={entry.entry_price:.5f} "
+            f"sl={entry.stop_loss:.5f} tp1={entry.take_profit_1:.5f} "
+            f"risk=${position_size.risk_amount:.2f} "
+            f"confidence={result.prediction.confidence:.3f} "
+            f"ticket={order_result.ticket} signal_id={signal_id}",
+            extra={"trade_log": True},
         )
+
+        # Record in metrics collector
+        try:
+            from app.monitoring.metrics import get_metrics
+            m = get_metrics()
+            m.record_trade_open(
+                trade_id=trade_id or 0,
+                symbol=symbol,
+                direction=entry.direction,
+                entry_price=order_result.entry_price or entry.entry_price,
+                intended_price=entry.entry_price,
+                ai_confidence=result.prediction.confidence,
+                market=market_type,
+                mode=settings.TRADING_MODE.value,
+            )
+            m.record_signal(symbol, "executed")
+        except Exception:
+            pass
 
     # --- Position Monitoring ---
 
@@ -644,13 +690,16 @@ class TradingBot:
         }
 
 
-# Singleton bot instance
+# ── Thread-safe singleton ─────────────────────────────────────────────────
 _bot_instance: Optional[TradingBot] = None
+_bot_lock = threading.Lock()
 
 
 def get_bot() -> TradingBot:
-    """Get or create the global bot instance."""
+    """Return the process-wide TradingBot singleton (thread-safe)."""
     global _bot_instance
     if _bot_instance is None:
-        _bot_instance = TradingBot()
+        with _bot_lock:
+            if _bot_instance is None:
+                _bot_instance = TradingBot()
     return _bot_instance

@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List, Optional
 from enum import Enum
 
@@ -39,6 +39,25 @@ class Settings(BaseSettings):
     BINANCE_API_KEY: Optional[str] = None
     BINANCE_SECRET_KEY: Optional[str] = None
     BINANCE_TESTNET: bool = True
+
+    # ── Validators: coerce empty strings to None ──────────────
+    @field_validator("MT5_LOGIN", mode="before")
+    @classmethod
+    def _coerce_mt5_login(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
+    @field_validator(
+        "MT5_PASSWORD", "MT5_PATH", "BINANCE_API_KEY",
+        "BINANCE_SECRET_KEY", "NEWS_API_KEY",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_optional_str(cls, v):
+        if v == "":
+            return None
+        return v
 
     # Risk Management
     ACCOUNT_BALANCE: float = 3000.0

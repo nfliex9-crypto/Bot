@@ -1,46 +1,64 @@
+# ============================================================
+# AI Trading Bot — Production Dockerfile
+# Python 3.11-slim, non-root user, health-check included
+# ============================================================
 FROM python:3.11-slim
 
-# System dependencies
+LABEL maintainer="AI Trading Bot"
+LABEL description="Automated trading platform — FastAPI + PostgreSQL + Redis"
+
+# ── System deps ───────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libpq-dev \
     curl \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Working directory
+# ── Working directory ────────────────────────────────────────
 WORKDIR /app
 
-# Install Python dependencies
+# ── Python dependencies (layer-cached) ───────────────────────
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY app/ ./app/
-COPY scripts/ ./scripts/
-COPY alembic/ ./alembic/
+# ── Application code ─────────────────────────────────────────
+COPY app/        ./app/
+COPY scripts/    ./scripts/
+COPY alembic/    ./alembic/
 COPY alembic.ini ./
 
-# Create required directories
-RUN mkdir -p /app/logs /app/models /app/data
+# ── Runtime directories ───────────────────────────────────────
+RUN mkdir -p /app/logs /app/models /app/data /app/app/core/ai/models
 
-# Non-root user for security
+# ── Entrypoint script ─────────────────────────────────────────
+COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# ── Non-root user ────────────────────────────────────────────
 RUN useradd -m -u 1000 trader && \
-    chown -R trader:trader /app
+    chown -R trader:trader /app /app/logs /app/models /app/data && \
+    chmod +x /docker-entrypoint.sh
 USER trader
 
-# Environment
+# ── Environment ──────────────────────────────────────────────
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-ENV BOT_AUTO_START=true
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV LOG_DIR=/app/logs
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# ── Health check ─────────────────────────────────────────────
+HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=5 \
+    CMD curl -sf http://localhost:8000/health || exit 1
 
-# Expose API port
 EXPOSE 8000
 
-# Start the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--loop", "asyncio"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "1", \
+     "--loop", "asyncio", \
+     "--log-config", "/dev/null"]

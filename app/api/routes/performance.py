@@ -7,6 +7,7 @@ from sqlalchemy import select, desc
 from typing import Optional
 from datetime import datetime, timedelta, date
 
+from app.config import settings
 from app.database import get_db
 from app.models.trade import Trade, TradeStatus
 from app.models.signal import Signal
@@ -122,7 +123,8 @@ async def get_equity_curve(
     )
     trades = result.scalars().all()
 
-    equity = settings_balance = 3000.0
+    start_balance = settings.ACCOUNT_BALANCE
+    equity = start_balance
     curve = []
     for t in trades:
         equity += (t.pnl or 0.0)
@@ -133,7 +135,7 @@ async def get_equity_curve(
             "symbol": t.symbol,
         })
 
-    return {"data": curve, "start_balance": settings_balance, "end_balance": round(equity, 2)}
+    return {"data": curve, "start_balance": start_balance, "end_balance": round(equity, 2)}
 
 
 @router.get("/by-session")
