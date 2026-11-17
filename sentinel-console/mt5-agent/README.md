@@ -38,7 +38,7 @@ This configures an optional **local-only** process supervisor with exponential b
 ## Reliability
 
 - Auto-start at Windows user logon through Task Scheduler, with restart on failure.
-- Independent watchdog task checks the agent every 5 minutes.
+- Independent watchdog task checks the agent every 5 minutes; if the loop heartbeat is stale for over 3 minutes, it verifies the agent process identity before attempting a process-tree restart.
 - Retries reconnecting to the terminal and broker on failure.
 - Heartbeat every 20 seconds, status marked offline after 90 seconds of missed heartbeats.
 - No guaranteed 100% uptime: a powered-off PC, Windows signed-out session, ISP outage, broker outage, account expiry or a major system crash may interrupt execution.
