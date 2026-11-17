@@ -106,7 +106,7 @@ function renderHeader(){
  const n=nav.find(n=>n[0]===state.page);byId("breadcrumb").textContent=n?.[1]||"";
  byId("modeBadge").className="mode-indicator"+(live()?" connected":"");
  byId("modeBadge").innerHTML='<span class="mode-dot"></span>'+(live()?esc(backendMode())+" / CONNECTED":state.preview?"SAMPLE VIEW":"DISCONNECTED");
- byId("connectorMini").innerHTML='<span class="socket '+(live()?"live":"")+'"></span><div><strong>MT5 Gateway</strong><small>'+(live()?"متصل بواجهة البوت":"غير متصل بوسيط التداول")+'</small></div><span class="mini-chevron">↗</span>';
+ byId("connectorMini").innerHTML='<span class="socket '+(live()?"live":"")+'"></span><div><strong>Strategy API</strong><small>'+(live()?"متصل بواجهة البوت":"غير متصل بوسيط التداول")+'</small></div><span class="mini-chevron">↗</span>';
  byId("footStatus").textContent=live()?"REMOTE API / "+backendMode():"ISOLATED CONTROL / SAMPLE";
  byId("footTimestamp").textContent=state.lastSync?"Last sync "+dateFmt(state.lastSync)+" UTC":"No verified broker feed";
 }
@@ -116,7 +116,7 @@ function button(label,action,klass="",disabled=false){return '<button class="btn
 function statusNotice(){
  if(state.preview)return '<div class="notice"><span style="font-size:20px">◇</span><div><strong>وضع المعاينة — بيانات توضيحية فقط</strong><div class="notice-small">الأرقام المعروضة ليست أسعاراً أو صفقات MT5. أزرار التداول غير متاحة حتى يتم الاتصال بمصدر حقيقي.</div></div>'+button("إعداد الاتصال","open-connect","btn-sm")+'</div>';
  if(!state.connected)return '<div class="notice"><strong>البوت غير متصل</strong> لا توجد بيانات موثقة بعد.</div>';
- return '<div class="notice success"><strong>API CONNECTED</strong><span class="notice-small">المصدر متصل، لكن هذا لا يثبت اتصال منصة MT5 بالوسيط؛ تحقق من حالة الحساب على Windows.</span></div>';
+ return '<div class="notice success"><strong>API CONNECTED</strong><span class="notice-small">المصدر متصل، لكن هذا لا يثبت اتصال منصة MT5 بالوسيط؛ افتح قسم MT5 Cloud Bridge للتحقق من حساب Demo.</span></div>';
 }
 function kpi(label,value,sub,color="#7ca1f5",cls=""){return '<article class="kpi" style="--color:'+color+'"><div class="kpi-caption">'+label+'<span class="kpi-icon">◈</span></div><div class="kpi-value '+cls+'">'+value+'</div><div class="kpi-delta">'+sub+'</div></article>'}
 function simpleChart(series,locked=false){
@@ -144,7 +144,7 @@ function overview(){
  const totalCount=p?sampleTrades.length:tod.trades;
  const openCount=p?base.filter(t=>t.status==="open").length:tod.open_trades;
  const equity=p?5511.2:state.remote.equity?.final_equity;
- let actions=button("↻ تحديث البيانات","refresh","btn-sm")+button("▦ إعداد النظام","open-connect","btn-sm btn-primary");
+ let actions=button("↻ تحديث البيانات","refresh","btn-sm")+button("⌁ MT5 Cloud Bridge","nav-mt5","btn-sm btn-primary");
  let html=heading("MISSION CONTROL / 01","لوحة القيادة الرئيسية","مراقبة البوت، حالة التداول، ومعلومات الأداء من مصدر واحد.",actions)+statusNotice();
  html+='<div class="grid kpi-grid">'+kpi("رصيد الحساب / Equity",money(equity),"EQUITY • "+(p?"SAMPLE":"BROKER / API"),"#4ce3bd")+kpi("P&L اليوم",money(totals),"TODAY / CLOSED TRADES",totals>=0?"#4ce3bd":"#ff748f",totals>=0?"pos":"neg")+kpi("الصفقات",num(totalCount,0),"RECORDED TRADES","#799dff")+kpi("المراكز المفتوحة",num(openCount,0),"OPEN POSITIONS","#ad8cff")+'</div>';
  html+='<div class="content-grid">'+panel("منحنى رأس المال","EQUITY PERFORMANCE / FROM TRADE HISTORY",simpleChart(parseEquity(),p)+'<div class="chart-foot"><span class="equity-label">EQUITY CURVE</span><span>'+ (p?"ILLUSTRATIVE DATA":esc(state.lastSync?"UPDATED "+dateFmt(state.lastSync):"NO DATA"))+'</span></div>','<span class="tag '+(p?"amber":"mint")+'">'+(p?"SAMPLE":"CONNECTED")+'</span>')+panel("عمليات التحكم","التحكم متاح فقط عبر API متصل وبوضع Demo/Paper",'<div class="command-grid">'+[
@@ -209,7 +209,7 @@ function logsView(){
  const ev=state.events;
  return heading("AUDIT TRAIL / 08","مركز الأحداث والسجلات","سجل عمليات لوحة التحكم المحلية ونتائج API. ليس بديلاً عن MT5 Journal.",button("↓ Export Logs","export-logs","btn-sm"))+statusNotice()+
  panel("System Event Stream","SESSION EVENTS / THIS BROWSER ONLY",ev.length?'<div class="list-feed">'+ev.map(e=>'<div class="feed-item"><div class="feed-line"></div><div class="feed-body"><strong>'+esc(e.type).toUpperCase()+'</strong><p>'+esc(e.message)+'</p><time>'+dateFmt(e.time)+'</time></div></div>').join("")+'</div>':empty("ليس هناك أحداث","ابدأ الاتصال أو استخدم أدوات البحث حتى يتم تسجيل الأحداث."))+
- '<div class="notice info" style="margin-top:17px"><strong>Logs Scope</strong><span>إدارة سجلات MT5 Terminal الفعلية تحتاج خدمة Windows Bridge وآلية مصادقة مخصصة، غير متوفرة في API الحالي.</span></div>';
+ '<div class="notice info" style="margin-top:17px"><strong>Logs Scope</strong><span>سجل MetaApi موجود في قسم MT5 Cloud Bridge؛ سجل تنفيذ محرك التداول يحتاج خدمة تشغيل مستقلة.</span></div>';
 }
 function settingsView(){
  return heading("SYSTEM CONNECTIVITY / 09","الربط وإعدادات النظام","طبقة التحكم معزولة عن مستودع التداول الرئيسي والصفقات الحقيقية.",button("↻ اختبر الاتصال","connect","btn-sm"))+statusNotice()+
@@ -222,7 +222,7 @@ function settingsView(){
  ].map(x=>'<div class="key-value"><span>'+x[0]+'</span><strong>'+esc(x[1])+'</strong></div>').join("")+'<div style="margin-top:18px">'+button("إدارة رمز الدخول","open-connect","btn-sm")+'</div></div>')+
  panel("متطلبات الربط على Vercel","Variable names only — never put broker secrets in browser",'<div class="panel-pad"><div class="code-block">DASHBOARD_ACCESS_KEY = (private console key)\nBOT_API_URL = https://your-private-bot-api.example\nBOT_API_TOKEN = (optional backend API token)</div><p class="small subtle" style="margin-top:14px">يجب تأمين backend نفسه وعدم تعريض FastAPI بدون Authentication. أوامر التحكم ترفض الوضع LIVE حتى بعد الاتصال.</p><div style="margin-top:16px">'+button(state.preview?"إخفاء بيانات العرض التجريبي":"تفعيل بيانات العرض التجريبي","toggle-preview","btn-sm")+'</div></div>')+'</div>'+
  panel("قدرات API الحالية","الوظائف المؤكدة من كود مستودع Bot",'<div class="panel-pad"><div class="grid inspector-grid">'+[
- ["Bot controls","Start / Stop / Pause / Resume"],["Portfolio","Trades / Signals / Equity"],["Research","Synthetic Backtest API"],["AI","Train / Reload / Registry"],["Config","Read only — no live patch endpoint"],["MT5 execution","Needs Windows terminal + Demo account"]
+ ["Bot controls","Start / Stop / Pause / Resume"],["Portfolio","Trades / Signals / Equity"],["Research","Synthetic Backtest API"],["AI","Train / Reload / Registry"],["Config","Read only — no live patch endpoint"],["MT5 execution","Cloud MT5 connected separately; strategy worker not deployed"]
  ].map(x=>'<div class="info-block"><strong>'+x[0]+'</strong>'+x[1]+'</div>').join("")+'</div></div>');
 }
 function mt5View(){return window.CloudMT5UI?.render()||heading("CLOUD MT5","الربط السحابي","جاري تحميل Cloud Bridge...")}
@@ -239,7 +239,7 @@ function navigate(page){state.page=page;if(page==="mt5")window.CloudMT5UI?.statu
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
 function openConnect(){
- showModal("إعداد الاتصال الآمن",'<div class="info-block"><strong>متصل بأي حساب؟</strong>هذا الموقع لا يدخل إلى MT5 مباشرة؛ يتصل بواجهة البوت عبر Proxy آمن على Vercel. الحساب التجريبي يتطلب Windows MT5 Bridge.</div><div class="field" style="margin-top:19px"><label>Sentinel Console Access Key</label><input class="input mono" type="password" id="consoleKey" placeholder="Enter private dashboard key" value="'+esc(state.key)+'"></div><p class="small subtle">رمز اللوحة يُحفظ في sessionStorage ضمن جلسة المتصفح فقط. لا تستخدم هنا كلمة مرور MT5.</p>',
+ showModal("إعداد الاتصال الآمن",'<div class="info-block"><strong>متصل بأي حساب؟</strong>هذا الموقع لا يدخل إلى MT5 مباشرة؛ يتصل بواجهة البوت عبر Proxy آمن على Vercel. Cloud MT5 Bridge يعمل بشكل مستقل، ومحرك الاستراتيجيات يحتاج API منفصلة.</div><div class="field" style="margin-top:19px"><label>Sentinel Console Access Key</label><input class="input mono" type="password" id="consoleKey" placeholder="Enter private dashboard key" value="'+esc(state.key)+'"></div><p class="small subtle">رمز اللوحة يُحفظ في sessionStorage ضمن جلسة المتصفح فقط. لا تستخدم هنا كلمة مرور MT5.</p>',
  button("إلغاء","close-modal","btn-sm")+button("حفظ واختبار الاتصال","save-connect","btn-primary btn-sm"));
 }
 function editStrategy(id){
