@@ -46,3 +46,22 @@ jobs:
             -H 'Content-Type: application/json' -d '{}' "$base?action=heartbeat")
           test "$status" = "401"
           grep -q '"INVALID_AGENT_AUTH"' /tmp/mt5_heartbeat.json
+
+  windows-installer-syntax:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse all Windows installer and watchdog PowerShell scripts
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem sentinel-console/mt5-agent -Filter '*.ps1'
+          foreach ($f in $files) {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+            }
+          }
+          Write-Host "Parsed $($files.Count) PowerShell scripts"
