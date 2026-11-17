@@ -60,7 +60,7 @@ window.MT5UI=(()=>{
    ["03","أنشئ رمز ربط","اضغط «ربط حساب MT5»، وانسخ الرمز المؤقت إلى برنامج الوكيل."],
    ["04","فعّل التشغيل التلقائي","ثبّت Scheduled Task وWatchdog، ثم راقب Heartbeat من هذه الصفحة."]
   ].map(x=>'<div class="feed-item"><div class="mono" style="color:var(--mint);font-size:17px">'+x[0]+'</div><div class="feed-body"><strong>'+x[1]+'</strong><p>'+x[2]+'</p></div></div>').join("")+
-  '<div style="margin-top:16px">'+button("↓ ملف إعداد Windows","mt5-download","btn-sm")+'</div></div>')+
+  '<div style="margin-top:16px">'+button("↓ تنزيل أداة Windows","mt5-download","btn-sm")+'</div></div>')+
   panel("استمرارية التشغيل","RECOVERY & MONITORING",'<div class="panel-pad">'+[
    ["إعادة اتصال MT5","تلقائي بعد انقطاع المنصة أو الوسيط"],
    ["Heartbeat","كل 20 ثانية من Windows"],
@@ -86,7 +86,7 @@ window.MT5UI=(()=>{
    '<div class="info-block"><strong>رمز ربط لمرة واحدة • 15 دقيقة</strong>يُستخدم هذا الرمز لربط برنامج Windows بالموقع. لا تدخل بيانات الوسيط هنا.</div>'+
    '<div class="code-block" style="text-align:center;font-size:18px;letter-spacing:2px;margin:18px 0;user-select:all">'+esc(result.pairing_code)+'</div>'+
    '<p class="small subtle">1. حمّل ملفات Windows Agent. 2. افتح PowerShell في مجلدها. 3. شغّل الأمر التالي، مع استبدال الرمز:</p>'+
-   '<div class="code-block" style="font-size:10px">py agent.py pair --url https://sentinel-mt5-console.vercel.app --code '+esc(result.pairing_code)+'</div>'+
+   '<div class="code-block" style="font-size:10px">py agent.py pair --url '+esc(result.endpoint||"https://sentinel-mt5-bridge.vercel.app")+' --code '+esc(result.pairing_code)+'</div>'+
    '<p class="small subtle" style="margin-top:12px">بعد نجاح الربط شغّل: <span class="mono">powershell -ExecutionPolicy Bypass -File .\\install_agent.ps1</span></p>',
    button("نسخ الرمز","mt5-copy-code","btn-sm")+button("إغلاق","close-modal","btn-sm btn-primary"),true);
  }
@@ -108,7 +108,7 @@ window.MT5UI=(()=>{
    return;
   }
   if(op==="mt5-copy-code"){if(pairing?.pairing_code){await navigator.clipboard.writeText(pairing.pairing_code);toast("تم نسخ الرمز","success")}return}
-  if(op==="mt5-download"){window.open("https://github.com/nfliex9-crypto/Bot/tree/sentinel-console-isolated-v1/sentinel-console/mt5-agent","_blank","noopener,noreferrer");return}
+  if(op==="mt5-download"){window.open("https://raw.githubusercontent.com/nfliex9-crypto/Bot/sentinel-console-isolated-v1/sentinel-console/mt5-agent/bootstrap.ps1","_blank","noopener,noreferrer");return}
   if(op.startsWith("mt5-revoke:")){
    const id=op.slice("mt5-revoke:".length);
    if(!confirm("هل تريد إلغاء ربط الجهاز؟ سيتوقف وصوله إلى لوحة التحكم، ولن يُغلق حساب MT5."))return;
