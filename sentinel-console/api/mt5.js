@@ -42,7 +42,7 @@ module.exports=async(req,res)=>{
     const grouped=created.match(/.{1,5}/g).join("-");
     const idhash=sha(created);
     await sql`INSERT INTO sentinel_mt5_pairings(code_hash,expires_at) VALUES (${idhash},NOW()+INTERVAL '15 minutes')`;
-    return answer(res,201,{ok:true,pairing_code:grouped,expires_in_seconds:900,endpoint:"https://sentinel-mt5-console.vercel.app"});
+    return answer(res,201,{ok:true,pairing_code:grouped,expires_in_seconds:900,endpoint:"https://sentinel-mt5-bridge.vercel.app"});
   }
   if(action==="claim"){
     const normalized=normalizeCode(req.body?.code);
