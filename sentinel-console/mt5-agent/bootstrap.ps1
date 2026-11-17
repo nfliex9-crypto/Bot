@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory=$true)][string]$Code,
-  [string]$ConsoleUrl = "https://sentinel-mt5-console.vercel.app",
+  [string]$ConsoleUrl = "https://sentinel-mt5-bridge.vercel.app",
   [string]$MT5Path = ""
 )
 $ErrorActionPreference="Stop"
@@ -20,7 +20,7 @@ $arguments=@((Join-Path $dir "agent.py"),"pair","--url",$ConsoleUrl,"--code",$Co
 if($MT5Path){$arguments+=@("--mt5-path",$MT5Path)}
 & $python @arguments
 if($LASTEXITCODE -ne 0){throw "Agent pairing failed"}
-& (Join-Path $dir "install_agent.ps1")
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir "install_agent.ps1")
 if(-not $?){throw "Autostart task failed"}
 Write-Host "Sentinel MT5 agent installed. Keep MT5 logged into a DEMO account." -ForegroundColor Green
 Write-Host "Log file: $env:LOCALAPPDATA\SentinelMT5\agent.log"
