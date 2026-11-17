@@ -1,0 +1,12 @@
+{
+  "name": "sentinel-mt5-console",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Isolated MT5 demo remote monitoring console",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2"
+  }
+}
