@@ -12,7 +12,7 @@ const hexUUID=()=>crypto.randomUUID();
 function server(){if(!process.env.DATABASE_URL)throw Error("DATABASE_URL missing");return neon(process.env.DATABASE_URL)}
 function owner(req){return constEqual(req.headers["x-console-key"],process.env.DASHBOARD_ACCESS_KEY)}
 function tokenString(req){const x=req.headers["x-mt5-agent-token"];return typeof x==="string"&&/^[0-9a-f]{64}$/.test(x)?x:null}
-function normalizeCode(input){return String(input||"").toUpperCase().replace(/[^A-Z2-7]/g,"")}
+function normalizeCode(input){return String(input||"").toUpperCase().replace(/[^A-Z2-9]/g,"")}
 function code(){const alphabet="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";const b=crypto.randomBytes(20);return [...b].map(n=>alphabet[n%alphabet.length]).join("")}
 const shorten=(x,max=100)=>String(x||"").slice(0,max);
 module.exports=async(req,res)=>{
