@@ -23,9 +23,17 @@ from logging.handlers import RotatingFileHandler
 HOME = pathlib.Path(os.environ.get("LOCALAPPDATA", pathlib.Path.home())) / "SentinelMT5"
 CONFIG_PATH = HOME / "config.json"
 LOCK_PATH = HOME / "agent.lock"
+LOOP_HEARTBEAT = HOME / "loop.heartbeat.json"
 SERVICE = "SentinelMT5"
 HEARTBEAT_SECS = 20
 STOP = False
+
+def mark_loop_alive() -> None:
+    """Local liveness marker used by the independent Windows watchdog."""
+    HOME.mkdir(parents=True, exist_ok=True)
+    tmp = LOOP_HEARTBEAT.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"pid":os.getpid(),"at":time.time()}),encoding="utf-8")
+    tmp.replace(LOOP_HEARTBEAT)
 
 def log_init() -> None:
     HOME.mkdir(parents=True, exist_ok=True)
@@ -290,6 +298,7 @@ def run(args) -> None:
     signal.signal(signal.SIGINT,shutdown_handler)
     logging.info("Sentinel agent started, awaiting demo account. Agent id=%s",cfg["agent_id"])
     while not STOP:
+        mark_loop_alive()
         start=time.monotonic()
         state=m.read()
         state["bot_state"]=supervisor.tick(state.get("trade_mode")=="demo" and state.get("connection_state")=="connected")
@@ -301,6 +310,7 @@ def run(args) -> None:
             logging.warning("Heartbeat upload failed: %s",exc)
             if "DEVICE_REVOKED_OR_NOT_FOUND" in str(exc):
                 logging.error("Device revoked. Agent exiting.");break
+        mark_loop_alive()
         elapsed=time.monotonic()-start
         # deliberate looping allows safe shutdown.
         until=time.monotonic()+max(1,HEARTBEAT_SECS-elapsed)
