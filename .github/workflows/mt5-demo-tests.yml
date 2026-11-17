@@ -1,0 +1,21 @@
+name: MT5 Demo Contract Tests
+
+on:
+  push:
+    branches: [mt5-demo-isolation-2026-11-17]
+  workflow_dispatch:
+
+jobs:
+  demo-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install minimal test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest==8.2.0 pytest-asyncio==0.23.6 pandas==2.3.2 pydantic==2.7.1 pydantic-settings==2.2.1 loguru==0.7.2 pytz==2024.1
+      - name: Verify DEMO contract
+        run: pytest -q tests/test_mt5_demo_contract.py
