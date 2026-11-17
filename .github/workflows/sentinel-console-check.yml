@@ -30,3 +30,19 @@ jobs:
       - name: Verify no direct live-order endpoints
         run: |
           ! grep -Eq 'place_order|order_send|/trade/execute' sentinel-console/app.js
+
+  public-bridge-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify isolated MT5 bridge accepts no unauthenticated devices
+        run: |
+          set -eu
+          base='https://sentinel-mt5-bridge.vercel.app/api/mt5'
+          status=$(curl -sS --max-time 20 -o /tmp/mt5_claim.json -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -d '{"code":"SHORT"}' "$base?action=claim")
+          test "$status" = "400"
+          grep -q '"INVALID_PAIRING_CODE"' /tmp/mt5_claim.json
+          status=$(curl -sS --max-time 20 -o /tmp/mt5_heartbeat.json -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -d '{}' "$base?action=heartbeat")
+          test "$status" = "401"
+          grep -q '"INVALID_AGENT_AUTH"' /tmp/mt5_heartbeat.json
