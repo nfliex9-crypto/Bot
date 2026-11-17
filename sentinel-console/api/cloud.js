@@ -147,7 +147,7 @@ async function refreshLinked(sql,row,token) {
 module.exports=async(req,res)=>{
   const action=String(req.query.action||"");
   const reads=new Set(["status","discover"]),writes=new Set(["token","link","refresh","forget-token","unlink"]);
-  if((req.method!=="GET"&&!writes.has(action))||(req.method!=="POST"&&!reads.has(action)))
+  if(!((req.method==="GET"&&reads.has(action))||(req.method==="POST"&&writes.has(action))))
     return response(res,405,{ok:false,error:"METHOD_NOT_ALLOWED"});
   if(!reads.has(action)&&!writes.has(action))
     return response(res,404,{ok:false,error:"UNKNOWN_ACTION"});
