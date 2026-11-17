@@ -88,7 +88,7 @@ window.MT5UI=(()=>{
    '<p class="small subtle">1. حمّل ملفات Windows Agent. 2. افتح PowerShell في مجلدها. 3. شغّل الأمر التالي، مع استبدال الرمز:</p>'+
    '<div class="code-block" style="font-size:10px">py agent.py pair --url '+esc(result.endpoint||"https://sentinel-mt5-bridge.vercel.app")+' --code '+esc(result.pairing_code)+'</div>'+
    '<p class="small subtle" style="margin-top:12px">طريقة التثبيت التلقائي على Windows: نزّل ملف الإعداد ثم شغّله من PowerShell:</p>'+
-   '<div class="code-block" style="font-size:10px">iwr https://raw.githubusercontent.com/nfliex9-crypto/Bot/sentinel-console-isolated-v1/sentinel-console/mt5-agent/bootstrap.ps1 -OutFile "$env:TEMP\\sentinel-bootstrap.ps1"\\npowershell -ExecutionPolicy Bypass -File "$env:TEMP\\sentinel-bootstrap.ps1" -Code '+esc(result.pairing_code)+'</div>',
+   '<div class="code-block" style="font-size:10px">iwr https://raw.githubusercontent.com/nfliex9-crypto/Bot/sentinel-console-isolated-v1/sentinel-console/mt5-agent/bootstrap.ps1 -OutFile "$env:TEMP\\sentinel-bootstrap.ps1"; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\sentinel-bootstrap.ps1" -Code '+esc(result.pairing_code)+'</div>',
    button("نسخ أمر التثبيت","mt5-copy-install","btn-sm")+button("نسخ الرمز","mt5-copy-code","btn-sm")+button("إغلاق","close-modal","btn-sm btn-primary"),true);
  }
  async function action(op){
