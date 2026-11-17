@@ -111,6 +111,8 @@ def pair(args) -> None:
                           {"code": args.code, "agent_name": args.name}, bypass=args.bypass or "")
     agent_id,token = result["agent_id"],result["agent_token"]
     keyring_store(agent_id,token)
+    if args.bypass:
+        keyring_store("vercel-bypass:" + agent_id, args.bypass)
     previous = {}
     try:
         previous = read_config()
@@ -123,7 +125,6 @@ def pair(args) -> None:
         "mt5_path": args.mt5_path or previous.get("mt5_path",""),
         "bot_command": previous.get("bot_command",[]),
         "auto_restart_bot": previous.get("auto_restart_bot",False),
-        "vercel_bypass": args.bypass or "",
     }
     save_config(config)
     print("Paired successfully. ID:",agent_id)
@@ -221,7 +222,13 @@ class BotSupervisor:
             if time.monotonic()-self.last_start>600:self.crashes=0
             return "running"
         if time.monotonic()<self.next_restart:return "restarting"
-        if self.proc is not None:self.crashes+=1
+        if self.proc is not None:
+            # Child exited unexpectedly: exponential backoff prevents rapid crash loops.
+            self.crashes += 1
+            self.next_restart = time.monotonic() + min(300, 5 * (2 ** min(self.crashes, 6)))
+            self.proc = None
+            logging.warning("Managed demo bot exited; retry scheduled in %.0fs", self.next_restart-time.monotonic())
+            return "restarting"
         try:
             kwargs={"cwd":str(pathlib.Path(self.command[0]).parent)} if pathlib.Path(self.command[0]).is_absolute() else {}
             env=os.environ.copy()
@@ -263,6 +270,15 @@ def run(args) -> None:
     lock=single_instance()
     cfg=read_config()
     token=keyring_load(cfg["agent_id"])
+    bypass = ""
+    try:
+        bypass = keyring_load("vercel-bypass:" + cfg["agent_id"])
+    except RuntimeError:
+        if cfg.get("vercel_bypass"):
+            bypass = cfg["vercel_bypass"]
+            keyring_store("vercel-bypass:" + cfg["agent_id"], bypass)
+            cfg.pop("vercel_bypass", None)
+            save_config(cfg)
     m=MT5Monitor(cfg.get("mt5_path",""))
     supervisor=BotSupervisor(cfg.get("bot_command",[]),cfg.get("auto_restart_bot",False))
     global STOP
@@ -278,7 +294,7 @@ def run(args) -> None:
         state["bot_state"]=supervisor.tick(state.get("trade_mode")=="demo" and state.get("connection_state")=="connected")
         try:
             request_json(cfg["console_url"],"heartbeat",state,
-                         agent_id=cfg["agent_id"],agent_token=token,bypass=cfg.get("vercel_bypass",""))
+                         agent_id=cfg["agent_id"],agent_token=token,bypass=bypass)
             logging.info("Heartbeat sent. MT5=%s bot=%s",state["connection_state"],state["bot_state"])
         except Exception as exc:
             logging.warning("Heartbeat upload failed: %s",exc)
