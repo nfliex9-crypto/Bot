@@ -78,16 +78,21 @@ class MT5Broker(BaseBroker):
 
     def __init__(self, paper_mode: bool = None):
         _paper = paper_mode if paper_mode is not None else settings.is_paper
-        super().__init__(paper_mode=_paper or not MT5_AVAILABLE)
+        # Never silently convert DEMO/LIVE execution into fake paper fills.
+        super().__init__(paper_mode=_paper)
         self._paper_account = MT5PaperAccount(settings.ACCOUNT_BALANCE)
         self._utc = pytz.UTC
 
     async def connect(self) -> bool:
         """Initialize MT5 connection."""
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             self._connected = True
-            logger.info("MT5 broker: connected in paper/simulation mode")
+            logger.info("MT5 broker: connected in explicit PAPER/simulation mode")
             return True
+
+        if not MT5_AVAILABLE:
+            logger.error("MT5 DEMO/LIVE requires a Windows MT5 terminal; Linux cannot silently simulate broker fills")
+            return False
 
         try:
             kwargs = {}
@@ -108,8 +113,16 @@ class MT5Broker(BaseBroker):
                     logger.error(f"MT5 login failed: {mt5.last_error()}")
                     return False
 
-            self._connected = True
             info = mt5.account_info()
+            if info is None:
+                logger.error("MT5 connected to terminal but account_info() is unavailable")
+                mt5.shutdown()
+                return False
+            if settings.is_demo and info.trade_mode != mt5.ACCOUNT_TRADE_MODE_DEMO:
+                logger.error("DEMO mode rejected: connected MT5 account is not a broker-confirmed demo account")
+                mt5.shutdown()
+                return False
+            self._connected = True
             logger.info(
                 f"MT5 connected: account={info.login} balance={info.balance} "
                 f"currency={info.currency}"
@@ -131,7 +144,7 @@ class MT5Broker(BaseBroker):
         logger.info("MT5 broker disconnected")
 
     async def get_account_info(self) -> AccountInfo:
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             acc = self._paper_account
             return AccountInfo(
                 balance=acc.balance,
@@ -161,7 +174,7 @@ class MT5Broker(BaseBroker):
             return AccountInfo(balance=0, equity=0, margin=0, free_margin=0, margin_level=0)
 
     async def get_tick(self, symbol: str) -> Optional[TickData]:
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             return await self._get_simulated_tick(symbol)
 
         try:
@@ -186,7 +199,7 @@ class MT5Broker(BaseBroker):
         timeframe: str,
         count: int = 200,
     ) -> Optional[OHLCV]:
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             return await self._get_simulated_ohlcv(symbol, timeframe, count)
 
         try:
@@ -221,7 +234,7 @@ class MT5Broker(BaseBroker):
         take_profit: float,
         comment: str = "AIBot",
     ) -> OrderResult:
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             return await self._place_paper_order(
                 symbol, direction, lot_size, stop_loss, take_profit, comment
             )
@@ -285,7 +298,7 @@ class MT5Broker(BaseBroker):
         ticket: str,
         lot_size: Optional[float] = None,
     ) -> OrderResult:
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             return await self._close_paper_order(ticket, lot_size)
 
         try:
@@ -335,7 +348,7 @@ class MT5Broker(BaseBroker):
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
     ) -> OrderResult:
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             return OrderResult(success=True, ticket=ticket)
 
         try:
@@ -365,7 +378,7 @@ class MT5Broker(BaseBroker):
             return OrderResult(success=False, error=str(e))
 
     async def get_open_orders(self) -> List[Dict]:
-        if self.paper_mode or not MT5_AVAILABLE:
+        if self.paper_mode:
             return self._paper_account.orders
 
         try:
