@@ -204,8 +204,9 @@ class MT5Monitor:
 
 class BotSupervisor:
     """Optional *locally configured* bot command. Never accepts commands from the web."""
-    def __init__(self, command, enabled):
+    def __init__(self, command, enabled, cwd=""):
         self.command=command if isinstance(command,list) and all(isinstance(x,str) for x in command) else []
+        self.cwd=str(cwd or "")
         self.enabled=bool(enabled) and bool(self.command)
         self.proc=None
         self.crashes=0
@@ -230,7 +231,7 @@ class BotSupervisor:
             logging.warning("Managed demo bot exited; retry scheduled in %.0fs", self.next_restart-time.monotonic())
             return "restarting"
         try:
-            kwargs={"cwd":str(pathlib.Path(self.command[0]).parent)} if pathlib.Path(self.command[0]).is_absolute() else {}
+            kwargs={"cwd":self.cwd} if self.cwd and pathlib.Path(self.cwd).is_dir() else {}
             env=os.environ.copy()
             env.update({"TRADING_MODE":"demo","SENTINEL_DEMO_ONLY":"1"})
             self.proc=subprocess.Popen(self.command,env=env,stdin=subprocess.DEVNULL,
@@ -280,7 +281,7 @@ def run(args) -> None:
             cfg.pop("vercel_bypass", None)
             save_config(cfg)
     m=MT5Monitor(cfg.get("mt5_path",""))
-    supervisor=BotSupervisor(cfg.get("bot_command",[]),cfg.get("auto_restart_bot",False))
+    supervisor=BotSupervisor(cfg.get("bot_command",[]),cfg.get("auto_restart_bot",False),cfg.get("bot_cwd",""))
     global STOP
     def shutdown_handler(signum,frame):
         global STOP
@@ -309,6 +310,31 @@ def run(args) -> None:
     lock.close()
     logging.info("Sentinel agent stopped")
 
+def attach_bot(args) -> None:
+    """Attach one locally selected Python bot script for demo-only supervision.
+
+    This is an explicit action on the Windows machine, never a remote web command.
+    The bot itself MUST honor TRADING_MODE=demo and SENTINEL_DEMO_ONLY=1.
+    """
+    if os.name != "nt":
+        raise RuntimeError("Configure the bot on the Windows MT5 host.")
+    config = read_config()
+    script = pathlib.Path(args.script).resolve()
+    if not script.is_file() or script.suffix.lower() != ".py":
+        raise ValueError("Provide an existing .py script as the bot entrypoint")
+    python = pathlib.Path(args.python or sys.executable).resolve()
+    if not python.is_file():
+        raise ValueError("Python interpreter not found")
+    command = [str(python), str(script)] + list(args.argument or [])
+    config["bot_command"] = command
+    config["bot_cwd"] = str(script.parent)
+    config["auto_restart_bot"] = True
+    save_config(config)
+    print("Supervision configured for:", script.name)
+    print("Mode forced to DEMO; the bot must enforce demo mode internally.")
+    print("Restart the Sentinel-MT5-Agent scheduled task to apply changes.")
+
+
 def main() -> None:
     log_init()
     parser=argparse.ArgumentParser(description="Sentinel MT5 DEMO-only monitoring agent")
@@ -320,8 +346,15 @@ def main() -> None:
     p.add_argument("--mt5-path",default="",help="Optional terminal64.exe absolute path")
     p.add_argument("--bypass",default="",help="Vercel deployment-protection bypass if configured")
     sub.add_parser("run",help="Run continuous heartbeats, reconnection and bot supervision")
+    attach = sub.add_parser("attach-bot",help="Opt-in to restart a local DEMO-only Python bot after crashes")
+    attach.add_argument("--script",required=True,help="Absolute path to the bot Python entrypoint")
+    attach.add_argument("--python",default="",help="Optional virtualenv Python executable")
+    attach.add_argument("--argument",action="append",default=[],help="Additional argument; repeat if needed")
     args=parser.parse_args()
-    try:pair(args) if args.operation=="pair" else run(args)
+    try:
+        if args.operation == "pair": pair(args)
+        elif args.operation == "attach-bot": attach_bot(args)
+        else: run(args)
     except Exception as exc:
         logging.error("%s: %s",type(exc).__name__,str(exc))
         sys.exit(1)
