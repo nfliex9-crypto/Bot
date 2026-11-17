@@ -1,36 +1,44 @@
-# Sentinel MT5 Windows Scheduled Task setup
-# Run as the Windows user who has MetaTrader 5 installed and logged in to a Demo account.
+# Sentinel MT5 Windows persistent installation.
+# Run in a Windows desktop session under the SAME user who is logged in to MT5 Demo.
 $ErrorActionPreference = "Stop"
 $TaskName = "Sentinel-MT5-Agent"
 $WatchdogName = "Sentinel-MT5-Watchdog"
-$Agent = Join-Path $PSScriptRoot "agent.py"
-$Watchdog = Join-Path $PSScriptRoot "watchdog.ps1"
+$PersistentRoot = Join-Path $env:LOCALAPPDATA "SentinelMT5\app"
 $Config = Join-Path $env:LOCALAPPDATA "SentinelMT5\config.json"
 if (!(Test-Path $Config)) { throw "Pair the agent first: py agent.py pair --url ... --code ..." }
-if (!(Test-Path $Agent)) { throw "agent.py not found" }
-$Python = (& py -3 -c "import sys; print(sys.executable)" 2>$null | Select-Object -First 1).Trim()
-if (!$Python -or !(Test-Path $Python)) { throw "Python 3 not found. Install Python 3 and try again." }
-# Verify dependencies before scheduling the task.
-& $Python -c "import MetaTrader5, keyring" 2>$null
-if ($LASTEXITCODE -ne 0) { throw "Dependencies missing. Run: py -m pip install -r requirements.txt" }
+New-Item -ItemType Directory -Force -Path $PersistentRoot | Out-Null
+# Never schedule from Downloads or a temporary extracted ZIP folder.
+foreach ($name in @("agent.py", "watchdog.ps1", "requirements.txt", "install_agent.ps1")) {
+  $src = Join-Path $PSScriptRoot $name
+  $dst = Join-Path $PersistentRoot $name
+  if (!(Test-Path $src)) { throw "Missing $name in installer folder" }
+  if ([IO.Path]::GetFullPath($src) -ne [IO.Path]::GetFullPath($dst)) {
+    Copy-Item -LiteralPath $src -Destination $dst -Force
+  }
+}
+$Agent = Join-Path $PersistentRoot "agent.py"
+$Watchdog = Join-Path $PersistentRoot "watchdog.ps1"
+$pythonLines = @(& py -3 -c "import sys; print(sys.executable)" 2>$null)
+if ($LASTEXITCODE -ne 0 -or $pythonLines.Count -lt 1) { throw "Python 3 missing. Install Python and retry." }
+$Python = [string]$pythonLines[0]
+if (!(Test-Path $Python)) { throw "Python executable missing: $Python" }
+& $Python -c "import MetaTrader5, keyring"
+if ($LASTEXITCODE -ne 0) { throw "Dependencies missing: py -m pip install -r requirements.txt" }
 $arguments = '"' + $Agent + '" run'
-$action = New-ScheduledTaskAction -Execute $Python -Argument $arguments -WorkingDirectory $PSScriptRoot
+$action = New-ScheduledTaskAction -Execute $Python -Argument $arguments -WorkingDirectory $PersistentRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
 $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Sentinel MT5 demo heartbeat, reconnect and local process supervision" -Force | Out-Null
-
-# Separate watchdog every 5 minutes: if agent unexpectedly exits or is disabled after reboot,
-# it starts the registered agent task; MultipleInstances=IgnoreNew prevents duplicate agents.
-$watchAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $Watchdog + '"') -WorkingDirectory $PSScriptRoot
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Sentinel MT5 demo connection agent" -Force | Out-Null
+# Independent watchdog. Scheduled tasks are per-user and require interactive login for MT5 GUI.
+$watchAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $Watchdog + '"') -WorkingDirectory $PersistentRoot
 $watchTrigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(1))
 $watchTrigger.Repetition.Interval = "PT5M"
 $watchTrigger.Repetition.Duration = "P3650D"
-$watchSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskName $WatchdogName -Action $watchAction -Trigger $watchTrigger -Settings $watchSettings -Principal $principal -Description "Re-start Sentinel MT5 agent if no longer running" -Force | Out-Null
+$watchSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable
+Register-ScheduledTask -TaskName $WatchdogName -Action $watchAction -Trigger $watchTrigger -Settings $watchSettings -Principal $principal -Description "Restart Sentinel MT5 agent when it exits" -Force | Out-Null
 Start-ScheduledTask -TaskName $TaskName
-Write-Host "Sentinel MT5 agent scheduled and launched." -ForegroundColor Green
-Write-Host "Agent: $TaskName"
-Write-Host "Watchdog: $WatchdogName"
+Write-Host "Sentinel MT5 agent installed in: $PersistentRoot" -ForegroundColor Green
+Write-Host "Tasks: $TaskName / $WatchdogName"
 Write-Host "Logs: $env:LOCALAPPDATA\SentinelMT5\agent.log"
-Write-Host "Reminder: MT5 is a desktop terminal. Keep the Windows user session logged in on an always-on Windows VPS."
+Write-Host "Note: scheduled at USER LOGON, not before Windows sign-in."
