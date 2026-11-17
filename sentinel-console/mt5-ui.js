@@ -87,8 +87,9 @@ window.MT5UI=(()=>{
    '<div class="code-block" style="text-align:center;font-size:18px;letter-spacing:2px;margin:18px 0;user-select:all">'+esc(result.pairing_code)+'</div>'+
    '<p class="small subtle">1. حمّل ملفات Windows Agent. 2. افتح PowerShell في مجلدها. 3. شغّل الأمر التالي، مع استبدال الرمز:</p>'+
    '<div class="code-block" style="font-size:10px">py agent.py pair --url '+esc(result.endpoint||"https://sentinel-mt5-bridge.vercel.app")+' --code '+esc(result.pairing_code)+'</div>'+
-   '<p class="small subtle" style="margin-top:12px">بعد نجاح الربط شغّل: <span class="mono">powershell -ExecutionPolicy Bypass -File .\\install_agent.ps1</span></p>',
-   button("نسخ الرمز","mt5-copy-code","btn-sm")+button("إغلاق","close-modal","btn-sm btn-primary"),true);
+   '<p class="small subtle" style="margin-top:12px">طريقة التثبيت التلقائي على Windows: نزّل ملف الإعداد ثم شغّله من PowerShell:</p>'+
+   '<div class="code-block" style="font-size:10px">iwr https://raw.githubusercontent.com/nfliex9-crypto/Bot/sentinel-console-isolated-v1/sentinel-console/mt5-agent/bootstrap.ps1 -OutFile "$env:TEMP\\sentinel-bootstrap.ps1"\\npowershell -ExecutionPolicy Bypass -File "$env:TEMP\\sentinel-bootstrap.ps1" -Code '+esc(result.pairing_code)+'</div>',
+   button("نسخ أمر التثبيت","mt5-copy-install","btn-sm")+button("نسخ الرمز","mt5-copy-code","btn-sm")+button("إغلاق","close-modal","btn-sm btn-primary"),true);
  }
  async function action(op){
   if(op==="mt5-refresh"){await poll();return}
@@ -106,6 +107,13 @@ window.MT5UI=(()=>{
    try{const r=await api("setup",{});showPairing(r);eventLog("mt5-pairing","Created a temporary 15-minute MT5 pairing code")}
    catch(e){toast(e.message,"error")}
    return;
+  }
+  if(op==="mt5-copy-install"){
+   if(pairing?.pairing_code){
+    const u="https://raw.githubusercontent.com/nfliex9-crypto/Bot/sentinel-console-isolated-v1/sentinel-console/mt5-agent/bootstrap.ps1";
+    const cmd='iwr '+u+' -OutFile "$env:TEMP\\\\sentinel-bootstrap.ps1"\\n'+'powershell -ExecutionPolicy Bypass -File "$env:TEMP\\\\sentinel-bootstrap.ps1" -Code '+pairing.pairing_code;
+    await navigator.clipboard.writeText(cmd);toast("تم نسخ أوامر تثبيت Windows","success");
+   }return;
   }
   if(op==="mt5-copy-code"){if(pairing?.pairing_code){await navigator.clipboard.writeText(pairing.pairing_code);toast("تم نسخ الرمز","success")}return}
   if(op==="mt5-download"){window.open("https://raw.githubusercontent.com/nfliex9-crypto/Bot/sentinel-console-isolated-v1/sentinel-console/mt5-agent/bootstrap.ps1","_blank","noopener,noreferrer");return}
