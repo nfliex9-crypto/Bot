@@ -209,7 +209,9 @@ class TradingBot:
         binance_ok = await self.binance_broker.connect()
 
         if not mt5_ok:
-            logger.warning("MT5 broker connection failed, using paper mode")
+            if not settings.is_paper:
+                raise RuntimeError("MT5 execution account not connected: refusing to start DEMO/LIVE with simulated prices or fills")
+            logger.warning("MT5 broker connection failed in explicit PAPER mode")
         if not binance_ok:
             logger.warning("Binance broker connection failed, using paper mode")
 
