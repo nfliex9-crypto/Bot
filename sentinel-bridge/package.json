@@ -1,0 +1,11 @@
+{
+  "name": "sentinel-mt5-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2"
+  }
+}
