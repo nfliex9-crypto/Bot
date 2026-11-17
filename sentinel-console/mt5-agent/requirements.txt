@@ -1,0 +1,2 @@
+MetaTrader5
+keyring>=25,<27
