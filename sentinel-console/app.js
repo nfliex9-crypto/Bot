@@ -10,6 +10,7 @@ const idName=s=>String(s||"").replace(/_/g," ").toUpperCase();
 const STORE="sentinel-console-v1";
 const nav=[
  ["overview","نظرة عامة","◈","OVERVIEW"],
+ ["mt5","ربط حساب MT5","⌁","MT5 CONNECTION"],
  ["trades","الصفقات والمراكز","⇄","TRADES"],
  ["signals","الإشارات والقرارات","◉","SIGNALS"],
  ["strategies","مكتبة الاستراتيجيات","▦","STRATEGIES"],
@@ -224,16 +225,17 @@ function settingsView(){
  ["Bot controls","Start / Stop / Pause / Resume"],["Portfolio","Trades / Signals / Equity"],["Research","Synthetic Backtest API"],["AI","Train / Reload / Registry"],["Config","Read only — no live patch endpoint"],["MT5 execution","Needs Windows terminal + Demo account"]
  ].map(x=>'<div class="info-block"><strong>'+x[0]+'</strong>'+x[1]+'</div>').join("")+'</div></div>');
 }
+function mt5View(){return window.MT5UI?.render()||heading("MT5 CONNECTION","الربط","جاري تحميل صفحة MT5...")}
 function renderPage(){
  let h="";
  try{switch(state.page){
- case"overview":h=overview();break;case"trades":h=tradesView();break;case"signals":h=signalsView();break;
+ case"overview":h=overview();break;case"mt5":h=mt5View();break;case"trades":h=tradesView();break;case"signals":h=signalsView();break;
  case"strategies":h=strategiesView();break;case"backtest":h=backtestView();break;case"ai":h=aiView();break;
  case"risk":h=riskView();break;case"logs":h=logsView();break;case"settings":h=settingsView();break;
  default:h=overview();}}catch(e){h=heading("DISPLAY ERROR","تعذّر عرض الصفحة",esc(e.message));eventLog("render-error",e.message)}
  byId("page").innerHTML=h;
 }
-function navigate(page){state.page=page;state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
+function navigate(page){state.page=page;if(page==="mt5")window.MT5UI?.poll(true);state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
 function openConnect(){
@@ -309,6 +311,7 @@ function localBacktest(bars,balance,spreadPct){
  return {trades,wins,winRate:trades?wins/trades:0,pnl:cash-balance,maxDD,curve,bars:bars.length,openAtEnd:!!position};
 }
 async function act(action){
+ if(action.startsWith("mt5-")){await window.MT5UI?.action(action);return}
  if(action.startsWith("nav-")){navigate(action.slice(4));return}
  if(action==="refresh"){if(state.preview){toast("هذه معاينة. لا يوجد مصدر حي للتحديث.");return}await refresh();return}
  if(action==="open-connect"){openConnect();return}
