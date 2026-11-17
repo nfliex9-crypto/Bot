@@ -16,6 +16,9 @@ jobs:
           node --check sentinel-console/api/gateway.js
           node --check sentinel-console/api/mt5.js
           node --check sentinel-console/mt5-ui.js
+          node --check sentinel-console/cloud-ui.js
+          node --check sentinel-console/api/cloud.js
+          node --test sentinel-console/tests/cloud.test.cjs
           node --check sentinel-bridge/api/mt5.js
       - name: Unit test Windows agent core under mocked MT5
         run: |
