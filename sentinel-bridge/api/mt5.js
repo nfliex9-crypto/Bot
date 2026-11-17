@@ -14,7 +14,7 @@ module.exports=async(req,res)=>{
  const sql=neon(process.env.DATABASE_URL);
  try{
   if(action==="claim"){
-   const code=String(req.body?.code||"").toUpperCase().replace(/[^A-Z2-7]/g,"");
+   const code=String(req.body?.code||"").toUpperCase().replace(/[^A-Z2-9]/g,"");
    if(code.length!==20)return respond(res,400,{ok:false,error:"INVALID_PAIRING_CODE"});
    const h=sha(code);
    const claimed=await sql`UPDATE sentinel_mt5_pairings SET claimed_at=NOW() WHERE code_hash=${h}
