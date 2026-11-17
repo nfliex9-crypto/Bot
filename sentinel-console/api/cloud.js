@@ -95,7 +95,7 @@ function rowStatus(r) {
     equity:r.verified_trade_mode==="DEMO"?r.equity:null,
     currency:r.verified_trade_mode==="DEMO"?r.currency:null,
     error_code:r.error_code,last_checked_at:r.last_checked_at,last_verified_at:r.last_verified_at,
-    cloud_connected:r.connection_status==="CONNECTED"&&r.verified_trade_mode==="DEMO"
+    cloud_connected:r.connection_status==="CONNECTED"&&r.verified_trade_mode==="DEMO"&&r.last_checked_at&&Date.now()-new Date(r.last_checked_at).getTime()<120000
   };
 }
 async function refreshLinked(sql,row,token) {
@@ -123,8 +123,8 @@ async function refreshLinked(sql,row,token) {
     const next=await sql`UPDATE sentinel_mt5_cloud_accounts SET
       broker_server=${server}, account_state=${status},
       connection_status=${connection}, verified_trade_mode=${tradeMode},
-      account_last4=${last4},balance=${verified?Number(info?.balance):null},
-      equity=${verified?Number(info?.equity):null},
+      account_last4=${last4},balance=${verified&&Number.isFinite(Number(info?.balance))?Number(info.balance):null},
+      equity=${verified&&Number.isFinite(Number(info?.equity))?Number(info.equity):null},
       currency=${verified?String(info?.currency||"USD").slice(0,6):null},
       error_code=${tradeMode==="REJECTED_NON_DEMO"?"ACCOUNT_NOT_DEMO":null},
       last_checked_at=NOW(),
