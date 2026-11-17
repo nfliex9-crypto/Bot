@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#090e18">
+  <meta name="description" content="Sentinel MT5 Control — isolated trading research and operations console.">
+  <title>Sentinel | MT5 Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <div id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-mark"><svg viewBox="0 0 40 40" fill="none"><path d="M20 3 36 12v16L20 37 4 28V12L20 3Z" stroke="currentColor" stroke-width="1.6"/><path d="M10 23h7l3-9 4 13 3-7h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="brand-name">SENTINEL<span class="brand-dot">.</span></div><div class="brand-sub">MT5 / CONTROL SYSTEM</div></div></div>
+      <div class="workspace-badge"><span class="tiny-pulse"></span><span>مركز القيادة</span><span class="workspace-version">V1.0</span></div>
+      <div class="nav-label">WORKSPACE / النظام</div><nav class="nav" id="nav"></nav>
+      <div class="sidebar-bottom"><div class="connector-mini" id="connectorMini"><span class="socket"></span><div><strong>MT5 Gateway</strong><small>غير متصل</small></div><span class="mini-chevron">↗</span></div><div class="sidebar-caption">ISOLATED CONSOLE • NO LIVE ORDERS BY DEFAULT</div></div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <div class="topbar-title"><button class="mobile-menu icon-button" id="mobileMenu" aria-label="القائمة">☰</button><div class="breadcrumbs"><span>WORKSPACE</span><span class="slash">/</span><strong id="breadcrumb">نظرة عامة</strong></div></div>
+        <div class="topbar-actions"><span class="mode-indicator" id="modeBadge"><span class="mode-dot"></span> SAMPLE VIEW</span><span class="utc-clock" id="clock">--:--:-- UTC</span><button class="icon-button" id="refreshBtn" aria-label="تحديث" title="تحديث">↻</button><button class="top-connect" id="connectBtn"><span class="connect-button-dot"></span> الاتصال بالبوت</button><div class="avatar">S</div></div>
+      </header>
+      <div class="scroll-area"><main class="page" id="page"><div class="loading-screen"><div class="loader-ring"></div><p>Preparing Sentinel Console...</p></div></main></div>
+      <footer class="statusbar"><span><span class="status-led"></span><span id="footStatus">CONTROL PLANE / STANDBY</span></span><span id="footTimestamp">No broker connection</span><span>BUILD 2026.11 · ENCRYPTED GATEWAY</span></footer>
+    </div>
+  </div>
+  <div id="modalRoot"></div><div id="toastRoot" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
