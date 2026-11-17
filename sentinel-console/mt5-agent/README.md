@@ -20,7 +20,7 @@ powershell -ExecutionPolicy Bypass -File "$env:TEMP\sentinel-bootstrap.ps1" -Cod
 
 3. Return to the Console and check the device status; a demo-account heartbeat should appear within a minute. You may need to authorize PowerShell Task Scheduler installation on Windows.
 
-The agent files are installed in `%LOCALAPPDATA%\SentinelMT5\package`. The agent token is kept in Windows Credential Manager, not in the web browser. Logs are at `%LOCALAPPDATA%\SentinelMT5\agent.log`.
+The bootstrap downloads into `%LOCALAPPDATA%\SentinelMT5\package`, and Scheduled Tasks run a persistent copy from `%LOCALAPPDATA%\SentinelMT5\app`. The agent token is kept in Windows Credential Manager, not in the web browser. Logs are at `%LOCALAPPDATA%\SentinelMT5\agent.log`.
 
 ## Optional: supervise/restart an existing DEMO-only Python trading bot
 
@@ -46,7 +46,7 @@ This configures an optional **local-only** process supervisor with exponential b
 
 ## Scope of this integration
 
-The dashboard can confirm **Windows Agent + broker-confirmed MT5 Demo connection** and display account balance/equity, open-position count and agent heartbeat. It **does not start an existing unknown Grok bot automatically** or install that bot. To supervise the trading engine, attach its entrypoint locally as shown above.
+The dashboard can confirm **Windows Agent + locally verified MT5 Demo connection** and display account balance/equity, open-position count and agent heartbeat. It **does not start an existing unknown Grok bot automatically** or install that bot. To supervise the trading engine, attach its entrypoint locally as shown above.
 
 The previous stand-alone console's trade/strategy/backtest pages remain separate. They do not become broker-executable through pairing alone.
 
