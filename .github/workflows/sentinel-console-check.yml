@@ -14,6 +14,13 @@ jobs:
         run: |
           node --check sentinel-console/app.js
           node --check sentinel-console/api/gateway.js
+          node --check sentinel-console/api/mt5.js
+          node --check sentinel-console/mt5-ui.js
+          node --check sentinel-bridge/api/mt5.js
+      - name: Unit test Windows agent core under mocked MT5
+        run: |
+          python -m py_compile sentinel-console/mt5-agent/agent.py
+          python -m unittest discover -s sentinel-console/mt5-agent -p 'test_agent.py' -v
       - name: Assert isolated deployment assets
         run: |
           test -s sentinel-console/index.html
