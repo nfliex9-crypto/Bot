@@ -7,6 +7,7 @@ from enum import Enum
 
 class TradingMode(str, Enum):
     PAPER = "paper"
+    DEMO = "demo"   # Broker-confirmed MT5 demo account, never simulated
     LIVE = "live"
 
 
@@ -125,6 +126,10 @@ class Settings(BaseSettings):
     @property
     def is_paper(self) -> bool:
         return self.TRADING_MODE == TradingMode.PAPER
+
+    @property
+    def is_demo(self) -> bool:
+        return self.TRADING_MODE == TradingMode.DEMO
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
