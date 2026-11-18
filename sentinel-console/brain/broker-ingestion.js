@@ -24,10 +24,15 @@ function selectMarkets(payload,now=new Date()){
 function selectJob(symbols,previous,now=new Date(),minRefreshMs=2*3600000){
  const records=Array.isArray(previous)?previous:[];
  const jobs=selectableJobs(symbols);
- const unique=new Map(records.map(r=>[String(r.symbol)+"|"+String(r.timeframe),new Date(r.imported_at).getTime()]));
- return jobs.map((x,i)=>({
-  ...x,index:i,last:unique.get(x.symbol+"|"+x.timeframe)??0
- })).filter(x=>!x.last||!Number.isFinite(x.last)||now.getTime()-x.last>=minRefreshMs)
+ const unique=new Map(records.map(r=>[String(r.symbol)+"|"+String(r.timeframe),{
+   last:new Date(r.attempted_at??r.imported_at).getTime(),
+   status:String(r.status||"UNKNOWN")
+ }]));
+ return jobs.map((x,i)=>{
+  const prior=unique.get(x.symbol+"|"+x.timeframe);
+  return {...x,index:i,last:prior?.last??0,status:prior?.status??"NEVER"};
+ }).filter(x=>!x.last||!Number.isFinite(x.last)||
+    now.getTime()-x.last>=(["ERROR","NO_CLOSED_BROKER_CANDLES"].includes(x.status)?30*60000:minRefreshMs))
  .sort((a,b)=>(a.last-b.last)||(a.index-b.index))[0]||null;
 }
 function selectableJobs(symbols){
