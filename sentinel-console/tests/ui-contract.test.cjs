@@ -35,3 +35,13 @@ test("provider operations require deployment-level SSO and demo checks",()=>{
  assert.match(source,/a\.isDemo===true/);
  assert.doesNotMatch(source,/req\.headers\["x-console-key"\]/);
 });
+
+test("MT5 demo ONLINE is independent of broker equity, no redundant verification step",()=>{
+ const ui=file("free-ui.js");
+ assert.doesNotMatch(ui,/section\("Verified",3/);
+ assert.match(ui,/a\.online/);
+ assert.match(ui,/financialsReady/);
+ const backend=file("api/free-mt5.js");
+ assert.match(backend,/base\.online=/);
+ assert.match(backend,/base\.verificationError=/);
+});
