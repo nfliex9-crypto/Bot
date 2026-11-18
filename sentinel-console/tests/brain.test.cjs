@@ -108,3 +108,32 @@ test("intelligence code makes no requests to order execution routes",()=>{
  assert.doesNotMatch(src,/place_order|order_send|placeOrder/);
  assert.match(src,/DEMO_ACCOUNT_REQUIRED/);
 });
+
+test("regime-aware research records trade market context without trading",()=>{
+ const r=brain.research(fixture(1200),{coverage:"complete",truncated:false,timeframe:"M15"});
+ assert.equal(r.version,"brain-research-v2");
+ assert.equal(r.quality.source_timeframe,"M15");
+ assert.equal(r.quality.time_gap_events,0);
+ for(const strat of r.strategies){
+  assert.ok(strat.regimes);
+  const regimes=Object.keys(strat.regimes);
+  assert.deepEqual(regimes,["trending","ranging","volatile","transition"]);
+  assert.equal(regimes.reduce((n,k)=>n+strat.regimes[k].trades,0),strat.oos.trades);
+ }
+ assert.equal(r.execution_enabled,false);
+});
+test("data-quality audit detects reversed and duplicate provider timestamps",()=>{
+ const candles=fixture(400),bad=[...candles];
+ [bad[3],bad[4]]=[bad[4],bad[3]];
+ bad.push({...bad[1]});
+ const r=brain.normalizeCandles(bad);
+ assert.equal(r.bars.length,400);
+ assert.ok(r.quality.out_of_order_or_duplicate_timestamps>=2);
+ assert.equal(r.quality.duplicate_rows,1);
+});
+test("research exposes source gaps instead of silently treating incomplete bars as continuous",()=>{
+ const candles=fixture(600);
+ const gap=candles.map((b,i)=>({...b,timestamp:b.timestamp+(i>=300?7200:0)}));
+ const r=brain.research(gap,{coverage:"complete",truncated:false,timeframe:"M15"});
+ assert.ok(r.quality.time_gap_events>=1);
+});
