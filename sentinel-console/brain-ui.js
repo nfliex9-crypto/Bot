@@ -100,6 +100,18 @@ window.SentinelBrain=(()=>{
     strategyTable(latest),
     latest?'<span class="tag">'+esc(latest.symbol)+' · '+esc(latest.timeframe)+' · '+dateFmt(latest.date)+'</span>':'<span class="tag">AWAITING RESEARCH</span>');
   if(latest)html+='<div class="info-block" style="margin-top:16px"><strong>حالات القرار</strong>PAPER_CANDIDATE: مرشح ورقي فقط · PAUSE_RESEARCH: مستبعد بحثياً · INSUFFICIENT: سجل صغير · DATA_INCOMPLETE: بيانات ناقصة. لا توجد صفقات آلية من هذا المختبر.</div>';
+  if(latest?.quality){
+   const q=latest.quality;
+   html+=panel("Data Quality","جودة المصدر التاريخي قبل أي ترقية للاستراتيجية",
+    '<div class="panel-pad">'+[
+     ["Coverage",String(q.source_coverage||"unknown")],
+     ["Bars",num(latest.candles||0,0)],
+     ["Missing spread",q.missing_spread_ratio==null?"—":(Number(q.missing_spread_ratio)*100).toFixed(1)+"%"],
+     ["Rejected / duplicate bars",num(q.rejected_rows||0,0)+" / "+num(q.duplicate_rows||0,0)],
+     ["Time gap events",q.time_gap_events==null?"—":num(q.time_gap_events,0)]
+    ].map(x=>'<div class="key-value"><span>'+esc(x[0])+'</span><strong>'+esc(x[1])+'</strong></div>').join("")+
+    '<div class="small subtle" style="margin-top:12px">فجوات نهاية الأسبوع ممكن تكون طبيعية؛ لا تعتبر وحدها دليلاً على خلل السوق.</div></div>');
+  }
   if(latest?.strategies?.length){
    const regimeRows=latest.strategies.flatMap(s=>
      Object.entries(s.regimes||{}).filter(([,v])=>v.trades>=12)
