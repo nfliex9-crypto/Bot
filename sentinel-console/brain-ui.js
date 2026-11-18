@@ -33,7 +33,7 @@ window.SentinelBrain=(()=>{
   if(!r.ok||!j?.ok)throw Error(errorText(j?.error));
   return j.data;
  }
- const fx=x=>Number.isFinite(Number(x))?Number(x).toFixed(3):"—";
+ const fx=x=>x===null||x===undefined||x===""?"—":Number.isFinite(Number(x))?Number(x).toFixed(3):"—";
  const badgeFor=status=>{
   if(status==="PAPER_CANDIDATE"||status==="BOOST_PAPER_RESEARCH_2X")
    return '<span class="tag mint">'+esc(status)+'</span>';
@@ -42,11 +42,13 @@ window.SentinelBrain=(()=>{
  };
  const percentCount=(n,d)=>d>0?((n/d)*100).toFixed(1)+"%":"—";
  function strategyTable(run){
-  if(!run?.strategies?.length)return empty("لا يوجد اختبار تاريخي مؤكد","استورد شموع السوق الحقيقية ثم نفّذ تحليل الاستراتيجيات.");
-  return '<div class="table-wrap"><table class="table"><thead><tr><th>Strategy</th><th>القرار</th><th>OOS Trades</th><th>Expectancy (R)</th><th>Costs x2 (R)</th></tr></thead><tbody>'+
+  if(!run?.strategies?.length)return empty("لا توجد نتائج OOS موثقة","استورد شموع السوق الحقيقية ثم نفّذ تحليل الاستراتيجيات.");
+  return '<div class="table-wrap"><table class="table"><thead><tr><th>Strategy</th><th>القرار</th><th>OOS Trades</th><th>Expectancy (R)</th><th>Costs x2 (R)</th><th>Days</th><th>Adjusted LB (R)</th></tr></thead><tbody>'+
    run.strategies.map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td>'+badgeFor(s.status)+'</td><td class="mono">'+num(s.trades,0)+'</td>'+
     '<td class="mono '+(s.expectancy_r>0?"pos":"neg")+'">'+fx(s.expectancy_r)+'</td>'+
-    '<td class="mono '+(s.stress_expectancy_r>0?"pos":"neg")+'">'+fx(s.stress_expectancy_r)+'</td></tr>').join("")+
+    '<td class="mono '+(s.stress_expectancy_r>0?"pos":"neg")+'">'+fx(s.stress_expectancy_r)+'</td>'+
+    '<td class="mono">'+(s.integrity?num(s.integrity.sample_days,0):"—")+'</td>'+
+    '<td class="mono '+(s.integrity?.lower_bound_r>0?"pos":"neg")+'">'+fx(s.integrity?.lower_bound_r)+'</td></tr>').join("")+
    '</tbody></table></div>';
  }
  function render(){
@@ -84,7 +86,7 @@ window.SentinelBrain=(()=>{
     [168,720,2200,8760,17520,43800].filter(h=>h<=maxWindow[view.timeframe]).map(h=>
       '<option value="'+h+'" '+(view.hours===h?"selected":"")+'>'+({168:"7 أيام",720:"30 يوماً",2200:"~3 أشهر",8760:"سنة",17520:"سنتان",43800:"5 سنوات"}[h])+'</option>').join("")+
     '</select></div></div>'+
-    '<div class="info-block" style="margin-top:14px"><strong>Out-of-sample</strong>اختبار 3 فترات زمنية متتابعة، دخول الشمعة التالية، Stop/Target، تكلفة مضاعفة، ورفض البيانات الناقصة. ما في ربح مضمون.</div>'+
+    '<div class="info-block" style="margin-top:14px"><strong>Out-of-sample</strong>اختبار 3 فترات متتابعة، دخول الشمعة التالية، تكلفة مضاعفة، وحد ثقة يومي مصحّح لأربع استراتيجيات. لا تنفيذ تلقائي.</div>'+
     '<div class="action-strip" style="margin-top:16px">'+
       '<span class="small subtle">'+(running?"جاري: "+esc(view.stage):"جاهز للتحليل")+'</span>'+
       button(running?"جاري فحص البيانات...":"▶ استيراد وتحليل الاستراتيجيات","brain-pipeline","btn-primary btn-sm",running||!isOnline()||!view.symbol)+
@@ -113,12 +115,13 @@ window.SentinelBrain=(()=>{
   html+=panel("Strategy Selector","نتائج خارج العينة بعد التكاليف · أفضل المرشحين فقط للتجربة الورقية",
     strategyTable(latest),
     latest?'<span class="tag">'+esc(latest.symbol)+' · '+esc(latest.timeframe)+' · '+dateFmt(latest.date)+'</span>':'<span class="tag">AWAITING RESEARCH</span>');
-  if(latest)html+='<div class="info-block" style="margin-top:16px"><strong>حالات القرار</strong>PAPER_CANDIDATE: مرشح ورقي فقط · PAUSE_RESEARCH: مستبعد بحثياً · INSUFFICIENT: سجل صغير · DATA_INCOMPLETE: بيانات ناقصة. لا توجد صفقات آلية من هذا المختبر.</div>';
+  if(latest)html+='<div class="info-block" style="margin-top:16px"><strong>حالات القرار</strong>PAPER_CANDIDATE: مرشح ورقي فقط بعد تصحيح الاختبارات · MULTIPLE_TESTS_UNCERTAIN: حد الثقة اليومي غير كافٍ · PAUSE_RESEARCH: مستبعد بحثياً · DATA_INCOMPLETE: بيانات ناقصة. لا توجد صفقات آلية من هذا المختبر.</div>';
   if(latest?.quality){
    const q=latest.quality;
    html+=panel("Data Quality","جودة المصدر التاريخي قبل أي ترقية للاستراتيجية",
     '<div class="panel-pad">'+[
      ["Coverage",String(q.source_coverage||"unknown")],
+     ["Dataset SHA-256",latest.dataset?.id?latest.dataset.id.slice(0,20)+"…":"—"],
      ["Bars",num(latest.candles||0,0)],
      ["Missing spread",q.missing_spread_ratio==null?"—":(Number(q.missing_spread_ratio)*100).toFixed(1)+"%"],
      ["Rejected / duplicate bars",num(q.rejected_rows||0,0)+" / "+num(q.duplicate_rows||0,0)],
