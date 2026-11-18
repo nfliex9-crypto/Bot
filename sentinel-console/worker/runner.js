@@ -248,6 +248,9 @@ async function main(){
   const started=Date.now();
   try{const r=await runOnce(sql);console.log(JSON.stringify({event:"research_cycle",status:r.status,totals:r.totals||{},orders_executed:0}))}
   catch(e){console.error(JSON.stringify({event:"worker_error",code:clean(e.message)}))}
+  try{const cloud=await require("./cloud-trader/runner.js").runCloudCycle(sql);
+    console.log(JSON.stringify({event:"cloud_demo_monitor",status:cloud.status,mode:cloud.mode,orders_sent:cloud.orders_sent||0}));
+  }catch(e){console.error(JSON.stringify({event:"cloud_demo_monitor_error",code:clean(e.message)}))}
   await new Promise(resolve=>setTimeout(resolve,Math.max(30000,900000-(Date.now()-started))));
  }
 }

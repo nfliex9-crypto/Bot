@@ -19,10 +19,18 @@ module.exports=async(req,res)=>{
  if(!process.env.DATABASE_URL)return reply(res,503,{ok:false,error:"DATABASE_NOT_CONFIGURED"});
  try{
   const sql=neon(process.env.DATABASE_URL);
-  const records=await sql`SELECT s.agent_id,s.updated_at,s.snapshot,s.account_last4,
-    a.last_seen_at,a.connection_state,a.trade_mode,a.bot_state
-    FROM sentinel_independent_trader_status s JOIN sentinel_mt5_agents a USING(agent_id)
-    ORDER BY s.updated_at DESC LIMIT 10`;
+  const existing=await sql`SELECT to_regclass('public.sentinel_independent_trader_status') AS native_table,
+    to_regclass('public.sentinel_cloud_trader_cycles') AS cloud_table`;
+  const nativeReady=Boolean(existing[0]?.native_table);
+  const cloudReady=Boolean(existing[0]?.cloud_table);
+  const [records,cloudRecords]=await Promise.all([
+    nativeReady?sql`SELECT s.agent_id,s.updated_at,s.snapshot,s.account_last4,
+      a.last_seen_at,a.connection_state,a.trade_mode,a.bot_state
+      FROM sentinel_independent_trader_status s JOIN sentinel_mt5_agents a USING(agent_id)
+      ORDER BY s.updated_at DESC LIMIT 10`:Promise.resolve([]),
+    cloudReady?sql`SELECT cycle_id,account_last4,mode,status,reason,observations,orders_sent,observed_at
+      FROM sentinel_cloud_trader_cycles ORDER BY observed_at DESC LIMIT 1`:Promise.resolve([])
+  ]);
   const now=Date.now();
   const entries=records.map(r=>{
    const updated=new Date(r.updated_at).getTime(),seen=new Date(r.last_seen_at).getTime();
@@ -36,8 +44,19 @@ module.exports=async(req,res)=>{
      broker_fill_proven:false,
      note:"Device state only. Broker execution requires independent order/deal reconciliation."};
   });
+  const last=cloudRecords[0]||null;
+  const ts=last?new Date(last.observed_at).getTime():0;
+  const cloud=last?{
+    status:Number.isFinite(ts)&&now-ts>=0&&now-ts<35*60000?last.status:"STALE",
+    detail:last.status,mode:last.mode,reason:last.reason,
+    account_last4:last.account_last4,observed_at:last.observed_at,
+    orders_sent:last.orders_sent,
+    observations:Array.isArray(last.observations)?last.observations:[],
+    broker_fill_proven:false
+  }:{status:cloudReady?"NOT_STARTED":"NOT_INSTALLED",mode:"SHADOW_ONLY",
+     observations:[],orders_sent:0,broker_fill_proven:false};
   return reply(res,200,{ok:true,mode:"INDEPENDENT_DEMO_TRADER_STATUS_ONLY",
-   trader:entries,generated_at:new Date().toISOString(),
+   cloud,trader:entries,generated_at:new Date().toISOString(),
    remote_order_endpoints_enabled:false});
  }catch(err){
   console.error("sentinel_trader_status_unavailable",String(err?.code||"DB_ERROR").slice(0,50));
