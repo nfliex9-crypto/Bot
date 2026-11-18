@@ -50,7 +50,7 @@ function assessForward(trades,{costStressR=.15}={}){
     status="PAUSE_PAPER_RESEARCH";multiplier=0;
     reason="Persistent underperformance after conservative costs";
   }else if(m.count>=40&&m.lower_confidence_r!==null&&m.lower_confidence_r>.03&&
-   m.early_mean_r>0&&m.recent_mean_r>0&&m.profit_factor!==null&&m.profit_factor>1.3){
+   m.early_mean_r>0&&m.recent_mean_r>0&&(m.profit_factor===null?m.mean_r>0:m.profit_factor>1.3)){
     status="BOOST_PAPER_RESEARCH_2X";multiplier=2;
     reason="Forward evidence positive in early and recent samples with lower-bound support";
   }else if(m.count>=25){
