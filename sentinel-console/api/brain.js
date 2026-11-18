@@ -151,6 +151,7 @@ async function tradeSync(sql,id,token){
    complete:x.complete,brokerProfit:x.broker_profit,strategyId:x.strategy_id
  })));
  return {source:"TickerAll MT5 Demo",received:raw.length,normalized:rows.length,stored:stored.length,
+  history_may_be_truncated:raw.length>=5000||r?.truncated===true,
   ...perf,fee_data_complete:false,attribution_available:perf.completed_records>perf.unattributed_records};
 }
 async function candlesSync(sql,id,token,request){
@@ -205,8 +206,8 @@ async function evaluation(sql,id,req){
     WHERE account_id=${id} AND symbol=${symbol} AND timeframe=${timeframe}
     ORDER BY bar_time DESC LIMIT 10000`,
   sql`SELECT COUNT(*)::int AS count FROM sentinel_brain_trades WHERE account_id=${id} AND complete=true`,
-  sql`SELECT close_time,broker_profit,complete,strategy_id,risk_amount,tagged_at
-      FROM sentinel_brain_trades WHERE account_id=${id} AND strategy_id IS NOT NULL
+  sql`SELECT ticket,symbol,open_time,close_time,broker_profit,complete,strategy_id,risk_amount,tagged_at
+      FROM sentinel_brain_trades WHERE account_id=${id} AND symbol=${symbol} AND strategy_id IS NOT NULL
       ORDER BY close_time DESC LIMIT 2000`
  ]);
  const meta=importRows[0];
@@ -222,11 +223,14 @@ async function evaluation(sql,id,req){
  const results=brain.research(bars,{coverage:meta.coverage,
   truncated:meta.truncated||Number(meta.provider_count)>10000,stopReason:meta.stop_reason});
  const forward=selector.assessForward(taggedRows.map(t=>({
-    closeTime:t.close_time,brokerProfit:t.broker_profit,complete:t.complete,
+    closeTime:t.close_time,openTime:t.open_time,ticket:t.ticket,symbol:t.symbol,
+    brokerProfit:t.broker_profit,complete:t.complete,
     strategyId:t.strategy_id,riskAmount:t.risk_amount,taggedAt:t.tagged_at
  })));
  results.forward_quality=forward.quality;
  results.paper_schedule=selector.scheduleResearch(results,forward);
+ results.forward_scope={symbol,timeframe_attributed:false,
+  note:"Forward broker outcomes are scoped by symbol. Existing order tags do not reliably identify entry timeframe."};
  const runId=crypto.randomUUID(),quality=JSON.stringify(results.quality),analysis=JSON.stringify(results);
  await sql`INSERT INTO sentinel_brain_runs
  (id,account_id,symbol,timeframe,candles_used,historical_trades_seen,coverage,data_quality,analysis)
@@ -248,19 +252,24 @@ async function status(sql){
     FROM sentinel_brain_runs ORDER BY created_at DESC LIMIT 6`,
   sql`SELECT account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,
     imported_at FROM sentinel_brain_imports ORDER BY imported_at DESC LIMIT 15`,
-  sql`SELECT account_id,close_time,broker_profit,complete,strategy_id,risk_amount,tagged_at
+  sql`SELECT account_id,ticket,symbol,open_time,close_time,broker_profit,complete,strategy_id,risk_amount,tagged_at
     FROM sentinel_brain_trades WHERE strategy_id IS NOT NULL ORDER BY close_time DESC LIMIT 2000`
  ]);
  const grouped=new Map();
  for(const t of tagged){
-   const group=grouped.get(t.account_id)||[];
-   group.push({closeTime:t.close_time,brokerProfit:t.broker_profit,
-     complete:t.complete,strategyId:t.strategy_id,riskAmount:t.risk_amount,
-     taggedAt:t.tagged_at});
-   grouped.set(t.account_id,group);
+   const key=String(t.account_id)+"|"+String(t.symbol);
+   const group=grouped.get(key)||[];
+   group.push({closeTime:t.close_time,openTime:t.open_time,ticket:t.ticket,symbol:t.symbol,
+     brokerProfit:t.broker_profit,complete:t.complete,strategyId:t.strategy_id,
+     riskAmount:t.risk_amount,taggedAt:t.tagged_at});
+   grouped.set(key,group);
  }
- const forward_by_account={};
- for(const [id,group] of grouped)forward_by_account[id]=selector.assessForward(group);
+ const forward_by_account_symbol={};
+ for(const [key,group] of grouped){
+   const sep=key.indexOf("|"),account=key.slice(0,sep),symbol=key.slice(sep+1);
+   if(!forward_by_account_symbol[account])forward_by_account_symbol[account]={};
+   forward_by_account_symbol[account][symbol]=selector.assessForward(group,{symbol});
+ }
  const accountRows=trades.map(x=>({account_id:x.account_id,
     real_trades:Number(x.all_count||0),completed_trades:Number(x.completed||0),
     attributed_trades:Number(x.attributed||0),wins:Number(x.wins||0),
@@ -270,7 +279,7 @@ async function status(sql){
   real_trades:accountRows.reduce((n,a)=>n+a.real_trades,0),
   completed_trades:accountRows.reduce((n,a)=>n+a.completed_trades,0),
   attributed_trades:accountRows.reduce((n,a)=>n+a.attributed_trades,0),
-  accounts:accountRows,forward_by_account,
+  accounts:accountRows,forward_by_account_symbol,
   candles:Number(bars[0]?.count||0),
   runs:runs.map(x=>({id:x.id,account_id:x.account_id,symbol:x.symbol,timeframe:x.timeframe,
    candles:x.candles_used,date:x.created_at,portfolio:x.analysis?.portfolio,
