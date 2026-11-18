@@ -82,7 +82,7 @@ window.FreeMT5UI=(()=>{
   '<div class="onboarding-path">'+
   section("TickerAll API",1,'<span class="step-meta">'+(stateMT.configured?"تم حفظ المفتاح بأمان":"انسخ المفتاح من TickerAll")+'</span>',stateMT.configured)+
   section("MT5 Demo",2,'<span class="step-meta">'+(a?"تم العثور على الحساب":"أضف حسابك التجريبي")+'</span>',!!a)+
-  section("Verified",3,'<span class="step-meta">'+(verified()?"الاتصال مؤكد":"بانتظار تأكيد الوسيط")+'</span>',verified())+
+  section("Verified",3,'<span class="step-meta">'+(verified()?"الحساب مؤكد":a?.verificationError?friendly(a.verificationError):"بانتظار بيانات الوسيط")+'</span>',verified())+
   '</div>'+
   '<div class="connect-actions">'+
    (!stateMT.configured?button("ربط TickerAll API","free-key","btn-primary"):!a?button("ربط حساب MT5 Demo","free-connect","btn-primary"):button("تحديث حالة الحساب","free-status","btn-primary"))+
@@ -91,15 +91,15 @@ window.FreeMT5UI=(()=>{
  }
  function accountView(a){
   const d=stateMT.details[a.id];
-  const ok=Boolean(a.hot&&d?.online&&d?.isDemo);
-  return '<div class="panel"><div class="panel-title"><div><h3>حساب MetaTrader 5</h3><p class="mono">'+esc(a.server||"UNKNOWN")+' · '+esc(a.accountNumber||"••••")+'</p></div><span class="tag '+(ok?"mint":"amber")+'">'+(ok?"DEMO VERIFIED":a.hot?"CHECKING":"OFFLINE")+'</span></div>'+
+  const ok=Boolean(a.verified&&a.hot&&d?.online&&d?.isDemo);
+  return '<div class="panel"><div class="panel-title"><div><h3>حساب MetaTrader 5</h3><p class="mono">'+esc(a.server||"UNKNOWN")+' · '+esc(a.accountNumber||"••••")+'</p></div><span class="tag '+(ok?"mint":"amber")+'">'+(ok?"DEMO VERIFIED":a.hot?"SYNC REQUIRED":"OFFLINE")+'</span></div>'+
   '<div class="grid kpi-grid" style="padding:16px;margin:0">'+
    kpi("الرصيد",ok?money(d.balance,d.currency||"USD"):"—","BALANCE","#4ce3bd")+
    kpi("رأس المال",ok?money(d.equity,d.currency||"USD"):"—","EQUITY","#799dff")+
    kpi("المراكز",ok?num(d.positions?.length||0,0):"—","OPEN POSITIONS","#ab8cff")+
    kpi("الحالة",a.hot?"ACTIVE":"IDLE","CLOUD SESSION",a.hot?"#4ce3bd":"#ffca80")+
   '</div><div class="panel-pad" style="padding-top:0"><div class="action-strip">'+
-   '<span class="small subtle">'+(ok?"المعلومات مؤكدة من MT5":"جلسة الوسيط غير مؤكدة أو باردة")+'</span>'+
+   '<span class="small subtle">'+(ok?"بيانات الحساب مؤكدة":a.verificationError?friendly(a.verificationError):"بانتظار قراءة بيانات الوسيط")+'</span>'+
    '<div class="head-buttons">'+button("فحص الحساب","free-inspect:"+a.id,"btn-sm")+
    button("سجل الصفقات","free-history:"+a.id,"btn-sm")+
    button("الرموز","free-symbols:"+a.id,"btn-sm")+
@@ -160,8 +160,9 @@ window.FreeMT5UI=(()=>{
      return;
    }
    if(a.startsWith("free-inspect:")){
-     const id=a.slice(13),r=await api("inspect",{accountId:id});stateMT.details[id]=r.account;
-     renderPage();toast(r.account.online?"حساب Demo متصل":"جلسة الديمو غير نشطة",r.account.online?"success":"info");
+     await sync(true);
+     const item=stateMT.accounts.find(x=>x.id===a.slice(13));
+     toast(item?.verified?"تم تأكيد اتصال حساب MT5 Demo":friendly(item?.verificationError||"BROKER_SNAPSHOT_FAILED"),item?.verified?"success":"info");
      return;
    }
    if(a.startsWith("free-history:")){
