@@ -20,7 +20,7 @@ async function recordQuote(sql,{accountId,symbol,raw,now=new Date()}={}){
  if(!q.observed)return q;
  await sql`INSERT INTO sentinel_autonomy_spread_observations
  (account_id,symbol,observed_at,bid,ask,spread,source)
- VALUES(${accountId},${symbol},${q.at},${q.bid},${q.ask},${q.spread},
+ VALUES(${accountId},${symbol},${q.at},${q.bid},${q.ask},(${q.ask}::numeric-${q.bid}::numeric),
  'TICKERALL_MT5_DEMO_QUOTE')
  ON CONFLICT(account_id,symbol,observed_at) DO NOTHING`;
  return {status:q.status,symbol:q.symbol,spread_bps:q.spread_bps,
