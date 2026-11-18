@@ -5,7 +5,8 @@
  * scores and paper-only rankings. No trading APIs, no synthetic candles,
  * no future-bar signals or use of backtest labels as forward evidence.
  */
-const VERSION="brain-research-v2";
+const VERSION="brain-research-v3";
+const {blockBootstrap}=require("./robustness.js");
 const STRATEGIES=[
  {id:"ema_pullback",label:"EMA pullback",family:"trend"},
  {id:"donchian_breakout",label:"Donchian breakout",family:"breakout"},
@@ -197,6 +198,7 @@ function research(candleInput,sourceQuality={}){
   const all=starts.flatMap((from,k)=>simulateFold(bars,ind,id,from,ends[k]));
   const stressed=starts.flatMap((from,k)=>simulateFold(bars,ind,id,from,ends[k],2));
   const m=metrics(all),sm=metrics(stressed);
+  const integrity=blockBootstrap(stressed,{strategyId:id,strategyCount:STRATEGIES.length});
   const regimes=Object.fromEntries(["trending","ranging","volatile","transition"].map(regime=>{
    const observed=all.filter(t=>t.regime===regime);
    const stressedRegime=stressed.filter(t=>t.regime===regime);
@@ -216,10 +218,15 @@ function research(candleInput,sourceQuality={}){
   else if(m.expectancy_r<=0||sm.expectancy_r<=0||positiveFolds<2){
     status="PAUSE_RESEARCH";reason="Non-positive OOS or double-cost expectancy / unstable folds";
   }else if((m.lower_confidence_expectancy_r??-1)>.03&&m.drawdown_r<=12){
-    status="PAPER_CANDIDATE";reason="OOS positive with evidence, stress costs, fold stability";
+    if(integrity.eligible_for_paper_research){
+     status="PAPER_CANDIDATE";reason="OOS and double-cost evidence survives day-block multiple-test correction";
+    }else{
+     status="MULTIPLE_TESTS_UNCERTAIN";
+     reason="OOS trades appear positive, but independent day-level bootstrap cannot confirm edge after screening all strategies";
+    }
   }
   return {strategy_id:id,label,family,status,reason,folds,regimes,
-   oos:m,double_costs:sm,positive_folds:positiveFolds,
+   integrity,oos:m,double_costs:sm,positive_folds:positiveFolds,
    relative_research_priority:0};
  });
  // Per-symbol paper research priority ONLY; not lots, orders, or risk settings.
@@ -230,6 +237,7 @@ function research(candleInput,sourceQuality={}){
   candidates.forEach((f,i)=>{f.relative_research_priority=Math.round(scores[i]/total*1000)/1000});
  }
  return {version:VERSION,candles:bars.length,quality,strategies:findings,
+  research_validation:"daily_blocks_bonferroni_4_strategies",
   portfolio:{status:candidates.length?"PAPER_RESEARCH_CANDIDATES":"NO_PROMOTABLE_STRATEGIES",
    candidate_count:candidates.length,
    weights:Object.fromEntries(candidates.map(f=>[f.strategy_id,f.relative_research_priority])),
