@@ -3,7 +3,7 @@
 window.SentinelBrain=(()=>{
  let view={data:null,symbols:[],symbol:"",timeframe:"M15",hours:720,loading:false,stage:"",error:"",
   lastImport:null,lastTrades:null,lastEvaluation:null};
- let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],public_research:[],market_imports:[],broker_candles:[],broker_hypotheses:[],error:null};
+ let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],public_research:[],market_imports:[],broker_candles:[],broker_hypotheses:[],spread_observations:[],error:null};
  const msg={
   DEMO_ACCOUNT_REQUIRED:"الربط لا يخص حساب MT5 Demo مؤكد.",
   BROKER_SESSION_COLD:"جلسة MT5 بردت؛ افتح MT5 وأعد تنشيطها قبل الاستيراد.",
@@ -102,6 +102,18 @@ window.SentinelBrain=(()=>{
       '</tbody></table></div>'+
      '<div class="panel-pad"><p class="small subtle">وجود شموع بدون سبريد تاريخي لا يعني اكتمال الاختبار بعد التكاليف. الاستراتيجيات تبقى للبحث ولا تتحول تلقائياً إلى صفقات.</p>'+
      (imports.filter(x=>x.status==="ERROR").length?'<div class="notice">بعض طلبات الوسيط تأخرت أو فشلت. العامل يبدّل الأسواق ويحاول لاحقاً بدون تعطيل الاستيراد الآخر.</div>':"")+'</div>');
+  }
+  if(autonomy.broker_candles?.length){
+   const observed=autonomy.spread_observations||[];
+   html+=panel("MT5 Live Spread Monitor","تجميع bid/ask من حساب Demo نفسه، وليس افتراض السبريد التاريخي",
+     '<div class="panel-pad">'+
+     (observed.length?observed.map(x=>
+       '<div class="key-value"><span>'+esc(x.symbol)+' · '+num(x.observations,0)+
+         ' رصدة مباشرة</span><strong>'+
+         (Number(x.observations)>=30?fx(x.p90_spread_bps)+' bps (P90)':
+           'جارٍ بناء العينة')+'</strong></div>').join(""):
+       '<div class="key-value"><span>عينات spread حقيقية</span><strong>0 · بانتظار أول Bid/Ask</strong></div>')+
+       '<p class="small subtle">كل عينة تُخزن بتاريخ التقاطها الفعلي. لا يتم نسبتها لشموع قديمة ولا اعتمادها وحدها لتفعيل صفقات.</p></div>');
   }
   if(autonomy.broker_hypotheses?.length){
    const ideas=autonomy.broker_hypotheses||[];
