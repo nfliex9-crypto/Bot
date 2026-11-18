@@ -52,6 +52,7 @@ jobs:
           node --test sentinel-console/tests/ui-contract.test.cjs
           node --check sentinel-bridge/native-ingest.js
           node --test sentinel-bridge/tests/native-ingest.test.cjs
+          node --test sentinel-bridge/tests/native-bridge.test.cjs
           node --check sentinel-bridge/api/mt5.js
       - name: Unit test Windows agent core under mocked MT5
         run: |
