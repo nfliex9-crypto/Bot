@@ -7,18 +7,19 @@ const URL="https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval
 const PROVIDER="BINANCE_PUBLIC_SPOT";
 function parseKlines(raw,now=new Date()){
  if(!Array.isArray(raw))throw Error("INVALID_PUBLIC_KLINES");
- const accepted=[];let invalid=0;
+ const accepted=[];let invalid=0,openBarExcluded=0;
  for(const x of raw.slice(0,1000)){
   if(!Array.isArray(x)||x.length<8){invalid++;continue}
   const t=Number(x[0]),end=Number(x[6]),o=Number(x[1]),h=Number(x[2]),l=Number(x[3]),c=Number(x[4]),v=Number(x[5]);
-  if(!Number.isSafeInteger(t)||!Number.isSafeInteger(end)||end<=t||end>=now.getTime()||
+  if(Number.isSafeInteger(end)&&end>=now.getTime()){openBarExcluded++;continue}
+  if(!Number.isSafeInteger(t)||!Number.isSafeInteger(end)||end<=t||
     ![o,h,l,c,v].every(Number.isFinite)||o<=0||l<=0||h<Math.max(o,c)||l>Math.min(o,c)){invalid++;continue}
   accepted.push({timestamp:t,open:o,high:h,low:l,close:c,spread:null,tickVolume:v});
  }
  const output=normalizeCandles(accepted);
  const gaps=output.bars.slice(1).filter((b,i)=>b.timestamp-output.bars[i].timestamp!==3600000).length;
  return {bars:output.bars,quality:{received:raw.length,accepted:output.bars.length,
-  invalid:invalid+output.quality.rejected_rows,duplicates:output.quality.duplicate_rows,gaps,
+  invalid:invalid+output.quality.rejected_rows,open_bar_excluded:openBarExcluded,duplicates:output.quality.duplicate_rows,gaps,
   broker_spread_known:false}};
 }
 async function refreshPublic(sql,{fetcher,now=new Date()}={}){
