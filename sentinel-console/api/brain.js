@@ -282,7 +282,7 @@ async function status(sql){
   accounts:accountRows,forward_by_account_symbol,
   candles:Number(bars[0]?.count||0),
   runs:runs.map(x=>({id:x.id,account_id:x.account_id,symbol:x.symbol,timeframe:x.timeframe,
-   candles:x.candles_used,date:x.created_at,portfolio:x.analysis?.portfolio,
+   candles:x.candles_used,date:x.created_at,quality:x.analysis?.quality,portfolio:x.analysis?.portfolio,
    paper_schedule:x.analysis?.paper_schedule,forward_quality:x.analysis?.forward_quality,
    strategies:x.analysis?.strategies?.map(s=>({
     id:s.strategy_id,status:s.status,trades:s.oos.trades,expectancy_r:s.oos.expectancy_r,
