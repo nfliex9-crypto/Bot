@@ -17,7 +17,7 @@ function decrypt(cipher,key){
 }
 async function fetchJSON(url,headers={}){
  const u=new URL(url);
- if(u.protocol!=="https:"||!((u.hostname==="api.tickerall.com"&&u.pathname.startsWith("/v1/accounts"))||(u.hostname==="api.crossref.org"&&u.pathname==="/works")))throw Error("SOURCE_NOT_ALLOWLISTED");
+ if(u.protocol!=="https:"||!((u.hostname==="api.tickerall.com"&&/^\/v1\/accounts(?:\/[A-Za-z0-9_-]{3,128}(?:\/(?:symbols|candles|history))?)?$/.test(u.pathname))||(u.hostname==="api.crossref.org"&&u.pathname==="/works")))throw Error("SOURCE_NOT_ALLOWLISTED");
  const response=await fetch(u,{headers:{Accept:"application/json",...headers},redirect:"error",cache:"no-store",signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error((u.hostname==="api.tickerall.com"?"BROKER_HTTP_":"RESEARCH_HTTP_")+response.status);
  return response.json();
