@@ -38,13 +38,14 @@ async function saveBars(sql,account,symbol,tf,source,hours=broker.LOOKBACK_HOURS
  ON CONFLICT(account_id,symbol,timeframe,bar_time) DO UPDATE SET open=EXCLUDED.open,high=EXCLUDED.high,low=EXCLUDED.low,close=EXCLUDED.close,spread=EXCLUDED.spread,tick_volume=EXCLUDED.tick_volume,fetched_at=NOW()`;
  await sql`INSERT INTO sentinel_brain_imports(account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,stop_reason,imported_at)
  VALUES(${account},${symbol},${tf},${hours},${bars.length},${String(source.coverage||"unknown")},${source.truncated===true},${String(source.stopReason||"")},NOW())
- ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET provider_count=EXCLUDED.provider_count,coverage=EXCLUDED.coverage,
+ ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET requested_hours=EXCLUDED.requested_hours,provider_count=EXCLUDED.provider_count,coverage=EXCLUDED.coverage,
  truncated=EXCLUDED.truncated,stop_reason=EXCLUDED.stop_reason,imported_at=NOW()`;
  return {...batch,bars};
 }
 
 async function recordAttempt(sql,account,symbol,tf,result){
  const status=String(result.status||"UNKNOWN").slice(0,50);
+ const success=["STORED_RESEARCH_BLOCKED","RESEARCH_ONLY"].includes(status);
  const error=String(result.error||result.reason||"").slice(0,100);
  const coverage=result.coverage||null;
  const missing=Number.isFinite(result.missing_spread_ratio)?result.missing_spread_ratio:null;
@@ -55,11 +56,11 @@ async function recordAttempt(sql,account,symbol,tf,result){
  (account_id,symbol,timeframe,attempted_at,last_success_at,status,provider_rows,stored_rows,
  coverage,missing_spread_ratio,open_bar_excluded,error_code)
  VALUES(${account},${symbol},${tf},NOW(),
- CASE WHEN ${status!=="ERROR"} THEN NOW() ELSE NULL END,
+ CASE WHEN ${success} THEN NOW() ELSE NULL END,
  ${status},${received},${stored},${coverage},${missing},${excluded},${error})
  ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET
  attempted_at=NOW(),
- last_success_at=CASE WHEN EXCLUDED.status!='ERROR' THEN NOW()
+ last_success_at=CASE WHEN EXCLUDED.status IN ('STORED_RESEARCH_BLOCKED','RESEARCH_ONLY') THEN NOW()
    ELSE sentinel_autonomy_import_attempts.last_success_at END,
  status=EXCLUDED.status,provider_rows=EXCLUDED.provider_rows,stored_rows=EXCLUDED.stored_rows,
  coverage=EXCLUDED.coverage,missing_spread_ratio=EXCLUDED.missing_spread_ratio,
