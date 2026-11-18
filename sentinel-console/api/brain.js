@@ -8,6 +8,7 @@ const crypto=require("node:crypto");
 const {neon}=require("@neondatabase/serverless");
 const brain=require("../brain/engine.js");
 const selector=require("../brain/selector.js");
+const {tradeMemory}=require("../brain/trade-memory.js");
 const API="https://api.tickerall.com";
 const TF=new Set(["M5","M15","H1","H4","D1"]);
 const MAX_HOURS={M5:720,M15:2200,H1:8760,H4:17520,D1:43800};
@@ -239,7 +240,7 @@ async function evaluation(sql,id,req){
  return {run_id:runId,symbol,timeframe,evidence:results,mode:"RESEARCH_ONLY",orders_executed:0};
 }
 async function status(sql){
- const [trades,bars,runs,imports,tagged]=await Promise.all([
+ const [trades,bars,runs,imports,tagged,memoryTrades]=await Promise.all([
   sql`SELECT account_id,COUNT(*)::int AS all_count,
     COUNT(*) FILTER(WHERE complete)::int AS completed,
     COUNT(*) FILTER(WHERE complete AND strategy_id IS NOT NULL)::int AS attributed,
@@ -253,7 +254,9 @@ async function status(sql){
   sql`SELECT account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,
     imported_at FROM sentinel_brain_imports ORDER BY imported_at DESC LIMIT 15`,
   sql`SELECT account_id,ticket,symbol,open_time,close_time,broker_profit,complete,strategy_id,risk_amount,tagged_at
-    FROM sentinel_brain_trades WHERE strategy_id IS NOT NULL ORDER BY close_time DESC LIMIT 2000`
+    FROM sentinel_brain_trades WHERE strategy_id IS NOT NULL ORDER BY close_time DESC LIMIT 2000`,
+  sql`SELECT account_id,symbol,side,open_time,close_time,broker_profit,complete
+    FROM sentinel_brain_trades ORDER BY close_time DESC LIMIT 5000`
  ]);
  const grouped=new Map();
  for(const t of tagged){
@@ -270,6 +273,15 @@ async function status(sql){
    if(!forward_by_account_symbol[account])forward_by_account_symbol[account]={};
    forward_by_account_symbol[account][symbol]=selector.assessForward(group,{symbol});
  }
+ const memoryGroups=new Map();
+ for(const row of memoryTrades){
+  const group=memoryGroups.get(row.account_id)||[];
+  group.push(row);memoryGroups.set(row.account_id,group);
+ }
+ const trade_memory_by_account={};
+ for(const [account,rows] of memoryGroups){
+  trade_memory_by_account[account]=tradeMemory(rows);
+ }
  const accountRows=trades.map(x=>({account_id:x.account_id,
     real_trades:Number(x.all_count||0),completed_trades:Number(x.completed||0),
     attributed_trades:Number(x.attributed||0),wins:Number(x.wins||0),
@@ -279,7 +291,7 @@ async function status(sql){
   real_trades:accountRows.reduce((n,a)=>n+a.real_trades,0),
   completed_trades:accountRows.reduce((n,a)=>n+a.completed_trades,0),
   attributed_trades:accountRows.reduce((n,a)=>n+a.attributed_trades,0),
-  accounts:accountRows,forward_by_account_symbol,
+  accounts:accountRows,forward_by_account_symbol,trade_memory_by_account,
   candles:Number(bars[0]?.count||0),
   runs:runs.map(x=>({id:x.id,account_id:x.account_id,symbol:x.symbol,timeframe:x.timeframe,
    candles:x.candles_used,date:x.created_at,version:x.version,quality:x.analysis?.quality,portfolio:x.analysis?.portfolio,
