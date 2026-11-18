@@ -113,6 +113,8 @@ test("public BTC klines preserve the actual exchange source and reject the unclo
  assert.equal(normalized.bars.length,999);
  assert.equal(normalized.quality.accepted,999);
  assert.equal(normalized.quality.broker_spread_known,false);
+ assert.equal(normalized.quality.invalid,0);
+ assert.equal(normalized.quality.open_bar_excluded,1);
  assert.ok(normalized.bars.every(b=>b.spread===null));
 });
 test("public source rejects forged Binance symbols or trading URLs before requesting",async()=>{
