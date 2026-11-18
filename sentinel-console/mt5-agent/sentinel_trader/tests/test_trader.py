@@ -9,7 +9,7 @@ import sys
 import time
 import unittest
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from sentinel_trader.config import Settings
 from sentinel_trader.journal import Journal
 from sentinel_trader.strategy import Signal, decide, ema, atr
