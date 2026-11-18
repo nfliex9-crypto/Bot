@@ -6,6 +6,7 @@ const {fingerprint}=require("../brain/provenance.js");
 const factory=require("../brain/strategy-factory.js");
 const {researchRadar}=require("../brain/research-radar.js");
 const {refreshPublic}=require("../brain/public-feed.js");
+const broker=require("../brain/broker-ingestion.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -23,19 +24,12 @@ async function fetchJSON(url,headers={}){
  if(!response.ok)throw Error((u.hostname==="api.tickerall.com"?"BROKER_HTTP_":"RESEARCH_HTTP_")+response.status);
  return response.json();
 }
-function selectMarkets(payload,now){
- const symbols=(Array.isArray(payload?.symbols)?payload.symbols:[]).filter(s=>typeof s==="string"&&/^[A-Za-z0-9._#-]{2,24}$/.test(s));
- const weekend=[0,6].includes(now.getUTCDay());
- return [
-  ["gold",/^(XAUUSD|GOLD)([._#-]?[A-Za-z0-9]+)?$/i],
-  ["btc",/^BTCUSD([._#-]?[A-Za-z0-9]+)?$/i],
-  ["eurusd",/^EURUSD([._#-]?[A-Za-z0-9]+)?$/i],
-  ["nasdaq",/^(NAS100|US100|USTEC)([._#-]?[A-Za-z0-9]+)?$/i]
- ].filter(([name])=>!weekend||name==="btc").map(([,p])=>symbols.find(s=>p.test(s))).filter(Boolean).slice(0,4);
-}
+const selectMarkets=broker.selectMarkets;
+
 async function saveBars(sql,account,symbol,tf,source){
- const bars=core.normalizeCandles(Array.isArray(source.candles)?source.candles:[]).bars.slice(-10000);
- if(!bars.length)return [];
+ const batch=broker.normalizeBatch(source,{timeframe:tf,now:new Date()});
+ const bars=batch.bars.slice(-10000);
+ if(!bars.length)return {...batch,bars:[]};
  const j=JSON.stringify(bars.map(b=>({bar_time:new Date(b.timestamp).toISOString(),open:b.open,high:b.high,low:b.low,close:b.close,spread:b.spread,tick_volume:b.tickVolume})));
  await sql`INSERT INTO sentinel_brain_candles(account_id,symbol,timeframe,bar_time,open,high,low,close,spread,tick_volume)
  SELECT ${account},${symbol},${tf},r.bar_time,r.open,r.high,r.low,r.close,r.spread,r.tick_volume
@@ -45,7 +39,7 @@ async function saveBars(sql,account,symbol,tf,source){
  VALUES(${account},${symbol},${tf},${tf==="M15"?1440:3000},${bars.length},${String(source.coverage||"unknown")},${source.truncated===true},${String(source.stopReason||"")},NOW())
  ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET provider_count=EXCLUDED.provider_count,coverage=EXCLUDED.coverage,
  truncated=EXCLUDED.truncated,stop_reason=EXCLUDED.stop_reason,imported_at=NOW()`;
- return bars;
+ return {...batch,bars};
 }
 async function cacheBars(sql,account,symbol,tf){
  const rows=await sql`SELECT bar_time,open,high,low,close,spread,tick_volume
@@ -111,21 +105,36 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
    symbols=selectMarkets(await fetcher(API+"/v1/accounts/"+demo.id+"/symbols",{Authorization:"Bearer "+token}),now);
   }catch(e){notes.symbol_error=clean(e.message)}
   if(symbols.length){
-   for(const symbol of symbols)for(const tf of ["M15","H1"])try{
-    const last=await sql`SELECT imported_at FROM sentinel_brain_imports
-     WHERE account_id=${demo.id} AND symbol=${symbol} AND timeframe=${tf}`;
-    if(last.length&&now.getTime()-new Date(last[0].imported_at).getTime()<7200000){
-     results.push({symbol,tf,status:"HISTORY_REFRESH_NOT_DUE"});continue;
+    const prior=await sql`SELECT symbol,timeframe,imported_at FROM sentinel_brain_imports
+      WHERE account_id=${demo.id} ORDER BY imported_at ASC`;
+    const job=broker.selectJob(symbols,prior,now);
+    notes.broker_symbols=symbols;
+    if(job){
+      const {symbol,timeframe:tf,hours}=job;
+      try{
+        const url=API+"/v1/accounts/"+demo.id+"/candles?"+
+          new URLSearchParams({symbol,timeframe:tf,hours:String(hours)});
+        const response=await fetcher(url,{Authorization:"Bearer "+token});
+        const batch=await saveBars(sql,demo.id,symbol,tf,response);
+        if(!batch.bars.length){
+          results.push({symbol,tf,status:"NO_CLOSED_BROKER_CANDLES",
+            received:batch.quality.raw_provider_rows,coverage:batch.coverage});
+        }else if(!batch.safeForResearch){
+          results.push({symbol,tf,status:"STORED_RESEARCH_BLOCKED",
+            stored:batch.bars.length,coverage:batch.coverage,
+            missing_spread_ratio:batch.quality.missing_spread_ratio,
+            truncated:batch.truncated,closed_bar_excluded:batch.quality.open_bar_excluded,
+            reason:"BROKER_DATA_QUALITY_GATE"});
+        }else{
+          const evaluation=await assess(sql,{account:demo.id,symbol,tf,bars:batch.bars,
+            coverage:batch.coverage,truncated:batch.truncated,cycleId:id,now});
+          results.push({...evaluation,stored:batch.bars.length,coverage:batch.coverage});
+        }
+      }catch(e){results.push({symbol,tf,status:"ERROR",error:clean(e.message)})}
+    }else{
+      notes.broker_imports="UP_TO_DATE";
+      results.push({status:"HISTORY_REFRESH_NOT_DUE"});
     }
-    const url=API+"/v1/accounts/"+demo.id+"/candles?"+new URLSearchParams({
-      symbol,timeframe:tf,hours:String(tf==="M15"?1440:3000)
-    });
-    const response=await fetcher(url,{Authorization:"Bearer "+token});
-    const bars=await saveBars(sql,demo.id,symbol,tf,response);
-    if(!bars.length){results.push({symbol,tf,status:"NO_BARS"});continue}
-    results.push(await assess(sql,{account:demo.id,symbol,tf,bars,coverage:response.coverage,
-      truncated:response.truncated,cycleId:id,now}));
-   }catch(e){results.push({symbol,tf,status:"ERROR",error:clean(e.message)})}
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
    const cached=await sql`SELECT account_id,symbol,timeframe,MAX(bar_time) AS last_bar
