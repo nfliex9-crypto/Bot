@@ -3,13 +3,14 @@
 // Auth: one-time 20-char code (15 min) then 256-bit agent token. All writes scoped to the paired device.
 const crypto=require("node:crypto");
 const {normalizeUpload}=require("../native-ingest.js");
+const {normalize:normalizeTraderStatus}=require("../trader-contract.js");
 const {neon}=require("@neondatabase/serverless");
 const sha=s=>crypto.createHash("sha256").update(s).digest("hex");
 const respond=(res,status,body)=>{res.setHeader("Cache-Control","no-store");res.setHeader("X-Content-Type-Options","nosniff");return res.status(status).json(body)};
 const shorten=(x,max=80)=>String(x||"").slice(0,max);
 module.exports=async(req,res)=>{
  const action=String(req.query.action||"");
- if(req.method!=="POST"||!["claim","heartbeat","candles"].includes(action))return respond(res,404,{ok:false,error:"NOT_FOUND"});
+ if(req.method!=="POST"||!["claim","heartbeat","candles","trader-status"].includes(action))return respond(res,404,{ok:false,error:"NOT_FOUND"});
  if(Buffer.byteLength(JSON.stringify(req.body||{}))>(action==="candles"?131072:8192))return respond(res,413,{ok:false,error:"PAYLOAD_TOO_LARGE"});
  if(!process.env.DATABASE_URL)return respond(res,503,{ok:false,error:"BRIDGE_NOT_CONFIGURED"});
  const sql=neon(process.env.DATABASE_URL);
@@ -31,6 +32,22 @@ module.exports=async(req,res)=>{
   const token=req.headers["x-mt5-agent-token"];
   if(!/^[0-9a-f-]{36}$/i.test(id)||typeof token!=="string"||!/^[0-9a-f]{64}$/.test(token))
    return respond(res,401,{ok:false,error:"INVALID_AGENT_AUTH"});
+  if(action==="trader-status"){
+    const payload=normalizeTraderStatus(req.body||{},Date.now());
+    if(!payload)return respond(res,422,{ok:false,error:"INVALID_TRADER_STATUS"});
+    const active=await sql`SELECT account_last4 FROM sentinel_mt5_agents
+      WHERE agent_id=${id} AND token_hash=${sha(token)} AND trade_mode='demo'
+      AND connection_state='connected' AND last_seen_at>NOW()-INTERVAL '90 seconds'
+      LIMIT 1`;
+    if(active.length!==1)return respond(res,403,{ok:false,error:"FRESH_DEMO_HEARTBEAT_REQUIRED"});
+    if(payload.account_last4!==String(active[0].account_last4||""))
+      return respond(res,403,{ok:false,error:"ACCOUNT_MISMATCH"});
+    await sql`INSERT INTO sentinel_independent_trader_status(agent_id,account_last4,snapshot,updated_at)
+      VALUES(${id}::uuid,${payload.account_last4},${JSON.stringify(payload)}::jsonb,NOW())
+      ON CONFLICT(agent_id) DO UPDATE SET account_last4=EXCLUDED.account_last4,
+        snapshot=EXCLUDED.snapshot,updated_at=NOW()`;
+    return respond(res,200,{ok:true,mode:"READ_ONLY_TRADER_TELEMETRY",accepted:true,orders_enabled:false});
+  }
   if(action==="candles"){
     // Live paired DEMO heartbeat is a prerequisite; the uploaded history itself
     // remains explicitly unverified and NEVER gains order/reward permissions.
