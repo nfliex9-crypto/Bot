@@ -83,8 +83,7 @@ window.FreeMT5UI=(()=>{
   '<p>'+(a?"الاتصال السحابي آمن، وكل الأرقام من الوسيط مباشرة.":"خطوتان فقط، بدون Windows أو رسوم MetaApi.")+'</p>'+
   '<div class="onboarding-path">'+
   section("TickerAll API",1,'<span class="step-meta">'+(stateMT.configured?"تم حفظ المفتاح بأمان":"انسخ المفتاح من TickerAll")+'</span>',stateMT.configured)+
-  section("MT5 Demo",2,'<span class="step-meta">'+(a?"تم العثور على الحساب":"أضف حسابك التجريبي")+'</span>',!!a)+
-  section("Verified",3,'<span class="step-meta">'+(verified()?"الحساب مؤكد":a?.verificationError?friendly(a.verificationError):"بانتظار بيانات الوسيط")+'</span>',verified())+
+  section("MT5 Demo",2,'<span class="step-meta">'+(connected()?"حساب Demo ONLINE":a?"تم العثور على الحساب":"أضف حسابك التجريبي")+'</span>',connected())+
   '</div>'+
   '<div class="connect-actions">'+
    (!stateMT.configured?button("ربط TickerAll API","free-key","btn-primary"):!a?button("ربط حساب MT5 Demo","free-connect","btn-primary"):button("تحديث حالة الحساب","free-status","btn-primary"))+
@@ -93,21 +92,22 @@ window.FreeMT5UI=(()=>{
  }
  function accountView(a){
   const d=stateMT.details[a.id];
-  const ok=Boolean(a.verified&&a.hot&&d?.online&&d?.isDemo);
-  return '<div class="panel"><div class="panel-title"><div><h3>حساب MetaTrader 5</h3><p class="mono">'+esc(a.server||"UNKNOWN")+' · '+esc(a.accountNumber||"••••")+'</p></div><span class="tag '+(ok?"mint":"amber")+'">'+(ok?"DEMO VERIFIED":a.hot?"SYNC REQUIRED":"OFFLINE")+'</span></div>'+
+  const ok=Boolean(a.online);
+  const financial=Boolean(a.verified&&d?.online&&d?.isDemo);
+  return '<div class="panel"><div class="panel-title"><div><h3>حساب MetaTrader 5</h3><p class="mono">'+esc(a.server||"UNKNOWN")+' · '+esc(a.accountNumber||"••••")+'</p></div><span class="tag '+(ok?"mint":"amber")+'">'+(ok?"DEMO ONLINE":"OFFLINE")+'</span></div>'+
   '<div class="grid kpi-grid" style="padding:16px;margin:0">'+
-   kpi("الرصيد",ok?money(d.balance,d.currency||"USD"):"—","BALANCE","#4ce3bd")+
-   kpi("رأس المال",ok?money(d.equity,d.currency||"USD"):"—","EQUITY","#799dff")+
-   kpi("المراكز",ok?num(d.positions?.length||0,0):"—","OPEN POSITIONS","#ab8cff")+
-   kpi("الحالة",a.hot?"ACTIVE":"IDLE","CLOUD SESSION",a.hot?"#4ce3bd":"#ffca80")+
+   kpi("الرصيد",financial&&d.balance!=null?money(d.balance,d.currency||"USD"):"—","BALANCE","#4ce3bd")+
+   kpi("رأس المال",financial&&d.equity!=null?money(d.equity,d.currency||"USD"):"—","EQUITY","#799dff")+
+   kpi("المراكز",financial?num(d.positions?.length||0,0):"—","OPEN POSITIONS","#ab8cff")+
+   kpi("الحالة",ok?"ONLINE":a.hot?"ACTIVE":"IDLE","CLOUD SESSION",a.hot?"#4ce3bd":"#ffca80")+
   '</div><div class="panel-pad" style="padding-top:0"><div class="action-strip">'+
-   '<span class="small subtle">'+(ok?"بيانات الحساب مؤكدة":a.verificationError?friendly(a.verificationError):"بانتظار قراءة بيانات الوسيط")+'</span>'+
+   '<span class="small subtle">'+(ok?"بيانات الحساب مؤكدة":ok?"الحساب متصل · قراءة الرصيد قيد التحديث":a.verificationError?friendly(a.verificationError):"بانتظار قراءة بيانات الوسيط")+'</span>'+
    '<div class="head-buttons">'+button("فحص الحساب","free-inspect:"+a.id,"btn-sm")+
    button("سجل الصفقات","free-history:"+a.id,"btn-sm")+
    button("الرموز","free-symbols:"+a.id,"btn-sm")+
    button("فصل الحساب","free-disconnect:"+a.id,"btn-sm btn-danger")+'</div></div>'+
-   (ok&&(d.positions||[]).length?'<div class="table-wrap" style="margin-top:16px"><table class="table"><thead><tr><th>الرمز</th><th>الصفقة</th><th>الحجم</th><th>P&L</th></tr></thead><tbody>'+d.positions.map(p=>'<tr><td class="mono">'+esc(p.symbol)+'</td><td>'+esc(p.side)+'</td><td class="mono">'+esc(p.volume)+'</td><td class="mono">'+esc(p.profit)+'</td></tr>').join("")+'</tbody></table></div>':"")+
-   (!a.hot?'<div class="compact-alert"><icon name="refresh-cw"></icon><span>الاتصال بارد. الخطة المجانية قد تحتاج إعادة ربط الحساب بعد الخمول.</span>'+button("إعادة الربط","free-connect","btn-sm")+'</div>':"")+
+   (financial&&(d.positions||[]).length?'<div class="table-wrap" style="margin-top:16px"><table class="table"><thead><tr><th>الرمز</th><th>الصفقة</th><th>الحجم</th><th>P&L</th></tr></thead><tbody>'+d.positions.map(p=>'<tr><td class="mono">'+esc(p.symbol)+'</td><td>'+esc(p.side)+'</td><td class="mono">'+esc(p.volume)+'</td><td class="mono">'+esc(p.profit)+'</td></tr>').join("")+'</tbody></table></div>':"")+
+   (!ok?'<div class="compact-alert"><icon name="refresh-cw"></icon><span>الاتصال بارد. الخطة المجانية قد تحتاج إعادة ربط الحساب بعد الخمول.</span>'+button("إعادة الربط","free-connect","btn-sm")+'</div>':"")+
    '</div></div>';
  }
  function render(){
@@ -164,7 +164,7 @@ window.FreeMT5UI=(()=>{
    if(a.startsWith("free-inspect:")){
      await sync(true);
      const item=stateMT.accounts.find(x=>x.id===a.slice(13));
-     toast(item?.verified?"تم تأكيد اتصال حساب MT5 Demo":friendly(item?.verificationError||"BROKER_SNAPSHOT_FAILED"),item?.verified?"success":"info");
+     toast(item?.online?"MT5 Demo ONLINE"+(item.verified?" · الرصيد محدث":" · بيانات الرصيد لم تصل بعد"):friendly(item?.verificationError||"BROKER_SNAPSHOT_FAILED"),item?.online?"success":"info");
      return;
    }
    if(a.startsWith("free-history:")){
