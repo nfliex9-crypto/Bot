@@ -37,6 +37,6 @@ test("persistence requires 20 fresh sequential same-venue snapshots over time",(
  const series=Array.from({length:20},(_,i)=>base(now-2400+i*120));
  assert.equal(book.studyPersistence(series.slice(1),{now}).status,"INSUFFICIENT_SNAPSHOTS");
  assert.equal(book.studyPersistence(series,{now}).status,"PERSISTENCE_OBSERVED_NOT_PROVEN");
- assert.equal(book.studyPersistence([...series.slice(0,19),base(now+5000)],{now}).status,"INVALID_SEQUENCE_OR_STALE");
+ assert.equal(book.studyPersistence([...series.slice(0,19),base(now+5000)],{now}).status,"BAD_SNAPSHOT");
  assert.equal(book.studyPersistence([...series.slice(0,19),base(now,"MT5_BROKER_DOM")],{now}).status,"INVALID_SEQUENCE_OR_STALE");
 });
