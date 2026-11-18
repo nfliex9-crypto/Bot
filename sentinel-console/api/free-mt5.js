@@ -59,14 +59,24 @@ async function request(path,token,method="GET",body=null){
  try{
    response=await fetch(PROVIDER+path,{
     method,headers,body:body!==null?JSON.stringify(body):undefined,
-    signal:AbortSignal.timeout(10000),redirect:"error",cache:"no-store"
+    signal:AbortSignal.timeout(method==="POST"&&path==="/v1/sessions"?25000:10000),redirect:"error",cache:"no-store"
    });
- }catch(_){throw Error("TICKERALL_UNREACHABLE")}
+ }catch(err){
+   const timedOut=["AbortError","TimeoutError"].includes(String(err?.name||""));
+   const code=timedOut?"TICKERALL_SESSION_TIMEOUT":"TICKERALL_NETWORK_FAILURE";
+   // Log only the error category: never log broker passwords, API keys or request bodies.
+   console.warn("tickerall_transport",{action:method==="POST"?"connect":"read",code});
+   throw Error(code);
+ }
  let data={};
  try{data=await response.json()}catch(_){}
  if(!response.ok){
   const reason=String(data?.code||data?.error||"").slice(0,64);
+  console.warn("tickerall_rejected",{action:method==="POST"?"connect":"read",status:response.status,code:reason.replace(/[^A-Z0-9_]/g,"").slice(0,55)});
   if(reason==="BROKER_AUTH_FAILED"||reason==="FREE_TIER_LIVE_REJECTED"||reason==="FORBIDDEN")throw Error(reason);
+  if(reason==="BROKER_UNREACHABLE")throw Error("BROKER_UNREACHABLE");
+  if(reason==="BROKER_ACCOUNT_HELD_BY_ANOTHER_KEY"||reason==="BROKER_ACCOUNT_ALREADY_LINKED")throw Error(reason);
+  if(reason==="VALIDATION_ERROR")throw Error("TICKERALL_REQUEST_VALIDATION");
   if(response.status===401||response.status===403)throw Error("TICKERALL_KEY_REJECTED");
   if(response.status===429)throw Error("TICKERALL_RATE_LIMIT");
   if(response.status===409)throw Error(safe(data.code||data.error||"BROKER_SESSION_COLD",75));
@@ -238,7 +248,9 @@ module.exports=async(req,res)=>{
  }catch(e){
   const code=safe(e?.message||"UNKNOWN",75);
   const known=new Set(["BROKER_AUTH_FAILED","FREE_TIER_LIVE_REJECTED","FORBIDDEN","TICKERALL_TOKEN_MISSING","TICKERALL_KEY_REJECTED",
-    "TICKERALL_RATE_LIMIT","TICKERALL_UNREACHABLE","BROKER_ACCOUNT_NOT_HOT",
+    "TICKERALL_RATE_LIMIT","TICKERALL_UNREACHABLE","TICKERALL_SESSION_TIMEOUT","TICKERALL_NETWORK_FAILURE",
+   "BROKER_UNREACHABLE","TICKERALL_REQUEST_VALIDATION","BROKER_ACCOUNT_HELD_BY_ANOTHER_KEY",
+   "BROKER_ACCOUNT_ALREADY_LINKED","BROKER_ACCOUNT_NOT_HOT",
     "BROKER_SESSION_COLD","FREE_TIER_LIVE_REJECTED"]);
   return reply(res,known.has(code)?422:502,{ok:false,error:known.has(code)?code:"PROVIDER_ERROR"});
  }
