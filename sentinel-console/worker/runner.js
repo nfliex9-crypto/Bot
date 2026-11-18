@@ -8,6 +8,7 @@ const {researchRadar}=require("../brain/research-radar.js");
 const {refreshPublic}=require("../brain/public-feed.js");
 const broker=require("../brain/broker-ingestion.js");
 const {recordBrokerHypotheses}=require("../brain/broker-hypotheses.js");
+const {recordQuote}=require("../brain/quote-observer.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -20,7 +21,7 @@ function decrypt(cipher,key){
 }
 async function fetchJSON(url,headers={}){
  const u=new URL(url);
- if(u.protocol!=="https:"||!((u.hostname==="api.tickerall.com"&&/^\/v1\/accounts(?:\/[A-Za-z0-9_-]{3,128}(?:\/(?:symbols|candles|history))?)?$/.test(u.pathname))||(u.hostname==="api.crossref.org"&&u.pathname==="/works")||(u.hostname==="data-api.binance.vision"&&u.pathname==="/api/v3/klines"&&u.searchParams.get("symbol")==="BTCUSDT"&&u.searchParams.get("interval")==="1h"&&u.searchParams.get("limit")==="1000"&&[...u.searchParams.keys()].length===3)))throw Error("SOURCE_NOT_ALLOWLISTED");
+ if(u.protocol!=="https:"||!((u.hostname==="api.tickerall.com"&&/^\/v1\/accounts(?:\/[A-Za-z0-9_-]{3,128}(?:\/(?:symbols|candles|history)|\/symbols\/[A-Za-z0-9._-]{2,24}\/quote)?)?$/.test(u.pathname))||(u.hostname==="api.crossref.org"&&u.pathname==="/works")||(u.hostname==="data-api.binance.vision"&&u.pathname==="/api/v3/klines"&&u.searchParams.get("symbol")==="BTCUSDT"&&u.searchParams.get("interval")==="1h"&&u.searchParams.get("limit")==="1000"&&[...u.searchParams.keys()].length===3)))throw Error("SOURCE_NOT_ALLOWLISTED");
  const response=await fetch(u,{headers:{Accept:"application/json",...headers},redirect:"error",cache:"no-store",signal:AbortSignal.timeout(u.pathname.endsWith("/candles")?25000:12000)});
  if(!response.ok)throw Error((u.hostname==="api.tickerall.com"?"BROKER_HTTP_":"RESEARCH_HTTP_")+response.status);
  return response.json();
@@ -175,6 +176,17 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
       notes.broker_imports="UP_TO_DATE";
       results.push({status:"HISTORY_REFRESH_NOT_DUE"});
     }
+    try{
+      // A single genuine quote per cycle; stamped when received, never backfilled.
+      const eligible=symbols.filter(x=>/^[A-Za-z0-9._-]{2,24}$/.test(x));
+      if(eligible.length){
+        const pos=Math.floor(now.getTime()/900000)%eligible.length;
+        const symbol=eligible[pos];
+        const quote=await fetcher(API+"/v1/accounts/"+demo.id+"/symbols/"+
+          encodeURIComponent(symbol)+"/quote",{Authorization:"Bearer "+token});
+        notes.quote=await recordQuote(sql,{accountId:demo.id,symbol,raw:quote,now:new Date()});
+      }
+    }catch(e){notes.quote={status:"UNAVAILABLE",reason:clean(e.message)}}
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
    const cached=await sql`SELECT account_id,symbol,timeframe,MAX(bar_time) AS last_bar
