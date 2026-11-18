@@ -24,6 +24,7 @@ jobs:
           node --check sentinel-console/brain/strategy-factory.js
           node --check sentinel-console/brain/research-radar.js
           node --check sentinel-console/worker/runner.js
+          node --check sentinel-console/worker/cron.js
           node --check sentinel-console/api/autonomy.js
           node --test sentinel-console/tests/autonomy.test.cjs
           node --check sentinel-console/brain/robustness.js
