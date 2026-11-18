@@ -3,6 +3,7 @@
 window.SentinelBrain=(()=>{
  let view={data:null,symbols:[],symbol:"",timeframe:"M15",hours:720,loading:false,stage:"",error:"",
   lastImport:null,lastTrades:null,lastEvaluation:null};
+ let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],error:null};
  const msg={
   DEMO_ACCOUNT_REQUIRED:"الربط لا يخص حساب MT5 Demo مؤكد.",
   BROKER_SESSION_COLD:"جلسة MT5 بردت؛ افتح MT5 وأعد تنشيطها قبل الاستيراد.",
@@ -59,6 +60,34 @@ window.SentinelBrain=(()=>{
   let html=heading("SENTINEL / INTELLIGENCE","العقل المتعلّم","تغذية من صفقات MT5 والشموع التاريخية. فحص خارج العيّنة وترتيب بحثي للاستراتيجيات.",
     button("↻ تحديث","brain-refresh","btn-sm",running)+button("↓ تصدير Evidence JSON","brain-export","btn-sm",running||!latest)+button("فتح MT5","nav-mt5","btn-sm",running));
   html+='<div class="notice info"><strong>RESEARCH MODE · NO ORDERS</strong><span class="notice-small">النتائج تُستخدم لاستبعاد الاستراتيجيات الضعيفة من التجارب وترشيح الأفضل للتداول الورقي، بدون مضاعفة اللوت أو تفعيل تداول تلقائي.</span></div>';
+  const worker=autonomy.worker||{},fresh=worker.fresh===true;
+  html+=panel("Autonomous Strategy Factory","متابعة دورية، غربلة الاستراتيجيات والمصادر العلمية · بدون تنفيذ صفقات",
+    '<div class="panel-pad"><div class="grid kpi-grid">'+
+      kpi("العقل السحابي",fresh?"MONITORING":worker.status||"NOT DEPLOYED",
+         "HEARTBEAT","#4ce3bd")+
+      kpi("استراتيجيات مسجلة",num(autonomy.candidates?.length||0,0),
+         "LATEST RECORDS","#799dff")+
+      kpi("مكافآت بحثية",num(autonomy.stats?.find(x=>x.status==="BOOST_PAPER_RESEARCH_2X")?.count||0,0),
+         "2X PAPER PRIORITY","#ab8cff")+
+      kpi("تم استبعادها",num(autonomy.stats?.find(x=>x.status==="RETIRE_PAPER_RESEARCH")?.count||0,0),
+         "RESEARCH RETIREMENTS","#ffca80")+'</div>'+
+    '<div class="key-value"><span>آخر Heartbeat</span><strong>'+(worker.last_heartbeat_at?dateFmt(worker.last_heartbeat_at):"—")+'</strong></div>'+
+    '<div class="key-value"><span>آخر دورة بحث</span><strong>'+(autonomy.cycles?.[0]?esc(autonomy.cycles[0].status):"لم تبدأ")+'</strong></div>'+
+    '<div class="key-value"><span>تداول آلي / مضاعفة اللوت</span><strong>غير مفعّل · بحث فقط</strong></div>'+
+    (!fresh?'<div class="notice" style="margin-top:12px"><strong>Worker غير مؤكد</strong><span class="notice-small">لا يوجد Heartbeat حديث؛ تشغيل 24/7 لم يُتحقق منه بعد.</span></div>':'')+
+    (autonomy.error?'<div class="small subtle">'+esc(autonomy.error)+'</div>':'')+
+    '<div class="action-strip" style="margin-top:14px">'+button("تحديث العقل","brain-autonomy","btn-sm")+'</div></div>');
+  if(autonomy.candidates?.length){
+   html+=panel("Strategy Evolution / Leaderboard","مكافآت التجارب لا تزيد حجم المخاطرة",
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Family</th><th>Symbol</th><th>TF</th><th>Decision</th><th>Reward</th><th>Heldout R</th></tr></thead><tbody>'+
+    autonomy.candidates.slice(0,20).map(c=>'<tr><td class="mono">'+esc(c.family)+'</td><td>'+esc(c.symbol)+'</td><td>'+esc(c.timeframe)+'</td><td>'+badgeFor(c.status)+'</td><td class="mono">'+num(c.reward_points,0)+'</td><td class="mono">'+fx(c.holdout?.expectancy_r)+'</td></tr>').join("")+'</tbody></table></div>');
+  }
+  if(autonomy.papers?.length){
+   html+=panel("Research Radar · Crossref","مراجع علمية منشورة: بيانات ببليوغرافية فقط، وليست توصيات دخول",
+    '<div class="panel-pad">'+autonomy.papers.slice(0,7).map(p=>
+      '<div class="key-value"><span>'+esc(p.title)+' · '+esc(p.year||"—")+'</span><a href="https://doi.org/'+encodeURIComponent(p.doi)+'" target="_blank" rel="noopener noreferrer">DOI ↗</a></div>'
+    ).join("")+'</div>');
+  }
   if(!account())html+='<div class="notice"><strong>لا يوجد حساب Demo مرتبط</strong><span class="notice-small">اربط حساب MT5 عبر TickerAll قبل الاستيراد.</span>'+button("ربط MT5","nav-mt5","btn-sm btn-primary")+'</div>';
   else if(!isOnline())html+='<div class="notice"><strong>اتصال MT5 غير نشط</strong><span class="notice-small">فعّل جلسة TickerAll قبل تحميل سجل الصفقات والشموع.</span></div>';
   if(view.error)html+='<div class="notice"><strong>فحص البيانات</strong><span class="notice-small">'+esc(view.error)+'</span></div>';
@@ -214,7 +243,18 @@ window.SentinelBrain=(()=>{
   }catch(e){view.error=e.message;toast(e.message,"error")}
   finally{const error=view.error;view.loading=false;view.stage="";await refresh(true);if(error)view.error=error;renderPage()}
  }
+ async function refreshAutonomy(){
+  try{
+   const response=await fetch("/api/autonomy",{credentials:"same-origin",cache:"no-store"});
+   const data=await response.json();
+   if(!response.ok||!data.ok)throw Error(data.error||"AUTONOMY_API_UNAVAILABLE");
+   autonomy={...data,error:null};
+  }catch(e){autonomy.error=e.message}
+  if(state.page==="ai")renderPage();
+ }
  async function action(cmd){
+  if(cmd==="brain-autonomy"){await refreshAutonomy();return}
+
   if(cmd==="brain-export"){
    const current=activeRuns()[0];
    if(!current){toast("لا يوجد تحليل حقيقي لتصديره","error");return}
@@ -267,7 +307,8 @@ window.SentinelBrain=(()=>{
   }
   if(e.target.id==="brainHours")view.hours=Number(e.target.value);
  });
- async function init(){await refresh(true);await maybeAutoSync()}
- return {render,refresh,symbols,action,init,maybeAutoSync};
+ async function init(){await refresh(true);await refreshAutonomy();await maybeAutoSync()}
+ setInterval(()=>{if(document.visibilityState==="visible"&&state.page==="ai")refreshAutonomy()},60000);
+ return {render,refresh,symbols,action,init,maybeAutoSync,refreshAutonomy};
 })();
 window.SentinelBrain.init();
