@@ -65,7 +65,10 @@ test("token validated against provider and encrypted at rest",async()=>{
  }finally{global.fetch=old}
 });
 test("invalid broker credentials rejected before reaching provider",async()=>{
- const r=await call("POST","connect",{account:"notanumber",password:"pwd",server:"Test"});\n assert.equal(r.statusCode,400);\n});\ntest("account list blocks real accounts and never renders their balances",async()=>{
+ const r=await call("POST","connect",{account:"notanumber",password:"pwd",server:"Test"});
+ assert.equal(r.statusCode,400);
+});
+test("account list blocks real accounts and never renders their balances",async()=>{
  const old=global.fetch;
  global.fetch=async()=>new Response(JSON.stringify([
   {id:"acc_DEMO_1",broker:"mt5",server:"Demo",accountNumber:"****1234",isDemo:true,status:"CONNECTED",hot:true},
