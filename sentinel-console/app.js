@@ -258,7 +258,7 @@ function renderPage(){
  default:h=overview();}}catch(e){h=heading("DISPLAY ERROR","تعذّر عرض الصفحة",esc(e.message));eventLog("render-error",e.message)}
  byId("page").innerHTML=h;
 }
-function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);if(page==="ai"){window.SentinelBrain?.refresh(true);window.SentinelBrain?.symbols(true)}state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
+function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);if(page==="ai")void (async()=>{await window.SentinelBrain?.refresh(true);await window.SentinelBrain?.symbols(true);await window.SentinelBrain?.maybeAutoSync?.()})()state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
 function openConnect(){navigate("mt5");}
