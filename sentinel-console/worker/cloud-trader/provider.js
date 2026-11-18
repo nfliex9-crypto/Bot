@@ -14,7 +14,7 @@ function provider(token,{fetcher=fetch,allowWrites=false,timeoutMs=12000}={}){
   if(trade&&(body?.type!=="market"||!SYMBOL.test(body?.symbol||"")||!["BUY","SELL"].includes(body?.side)||!(body.volume>0)||!(body.stopLoss>0)||!(body.takeProfit>0)||typeof body.comment!=="string"||body.comment.length>31))throw Error("UNSAFE_ORDER_BODY");
   const url=new URL(path,BASE);if(url.origin!==BASE)throw Error("PROVIDER_ORIGIN_NOT_ALLOWED");
   const h={Authorization:"Bearer "+token,Accept:"application/json"};if(trade){h["Content-Type"]="application/json";h["Idempotency-Key"]=key}
-  const r=await fetcher(url.toString(),{method,headers:h,body:trade?JSON.stringify(body):undefined,redirect:"error",cache:"no-store",signal:AbortSignal.timeout(timeoutMs)});
+  const r=await fetcher(url.toString(),{method,headers:h,body:trade?JSON.stringify(body):undefined,redirect:"error",cache:"no-store",signal:AbortSignal.timeout(route.endsWith("/candles")?Math.max(timeoutMs,20000):timeoutMs)});
   if(!r.ok){let code="HTTP_"+r.status;try{code=String((await r.json())?.error||code).slice(0,80)}catch(_){}throw Error("TICKERALL_"+code)}
   return await r.json();
  }
