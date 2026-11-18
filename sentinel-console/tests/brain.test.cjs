@@ -83,6 +83,12 @@ test("missing spread history cannot promote a strategy",()=>{
  assert.equal(r.portfolio.candidate_count,0);
  assert.ok(r.strategies.every(x=>x.status==="COST_DATA_WEAK"));
 });
+test("zero-priced spreads cannot masquerade as cost-free broker execution",()=>{
+ const bars=fixture(950).map(b=>({...b,spread:0}));
+ const result=brain.research(bars,{coverage:"complete",truncated:false});
+ assert.equal(result.portfolio.candidate_count,0);
+ assert.ok(result.strategies.every(x=>x.status==="COST_DATA_WEAK"));
+});
 test("small candle samples cannot produce a trained strategy",()=>{
  const r=brain.research(fixture(250),{coverage:"complete",truncated:false});
  assert.equal(r.portfolio.status,"NO_DATA");
