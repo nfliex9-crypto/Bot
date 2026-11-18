@@ -7,6 +7,7 @@ const factory=require("../brain/strategy-factory.js");
 const {researchRadar}=require("../brain/research-radar.js");
 const {refreshPublic}=require("../brain/public-feed.js");
 const broker=require("../brain/broker-ingestion.js");
+const {recordBrokerHypotheses}=require("../brain/broker-hypotheses.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -149,6 +150,15 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
             missing_spread_ratio:batch.quality.missing_spread_ratio,
             truncated:batch.truncated,closed_bar_excluded:batch.quality.open_bar_excluded,
             reason:"BROKER_DATA_QUALITY_GATE"};
+          if(batch.quality.missing_spread_ratio>.25&&batch.bars.length>=900){
+            try{
+              const hypothesis=await recordBrokerHypotheses(sql,{
+                account:demo.id,symbol,timeframe:tf,batch
+              });
+              attempt.hypotheses=hypothesis.count;
+              attempt.hypothesis_status=hypothesis.status;
+            }catch(e){attempt.hypothesis_error=clean(e.message)}
+          }
         }else{
           const evaluation=await assess(sql,{account:demo.id,symbol,tf,bars:batch.bars,
             coverage:batch.coverage,truncated:batch.truncated,cycleId:id,now});
