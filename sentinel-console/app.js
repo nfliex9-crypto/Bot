@@ -10,7 +10,7 @@ const idName=s=>String(s||"").replace(/_/g," ").toUpperCase();
 const STORE="sentinel-console-v1";
 const nav=[
  ["overview","نظرة عامة","◈","OVERVIEW"],
- ["mt5","MT5 Cloud Bridge","⌁","CLOUD MT5"],
+ ["mt5","MT5 مجاني","⌁","FREE MT5"],
  ["trades","الصفقات والمراكز","⇄","TRADES"],
  ["signals","الإشارات والقرارات","◉","SIGNALS"],
  ["strategies","مكتبة الاستراتيجيات","▦","STRATEGIES"],
@@ -144,7 +144,7 @@ function overview(){
  const totalCount=p?sampleTrades.length:tod.trades;
  const openCount=p?base.filter(t=>t.status==="open").length:tod.open_trades;
  const equity=p?5511.2:state.remote.equity?.final_equity;
- let actions=button("↻ تحديث البيانات","refresh","btn-sm")+button("⌁ MT5 Cloud Bridge","nav-mt5","btn-sm btn-primary");
+ let actions=button("↻ تحديث البيانات","refresh","btn-sm")+button("⌁ MT5 مجاني","nav-mt5","btn-sm btn-primary");
  let html=heading("MISSION CONTROL / 01","لوحة القيادة الرئيسية","مراقبة البوت، حالة التداول، ومعلومات الأداء من مصدر واحد.",actions)+statusNotice();
  html+='<div class="grid kpi-grid">'+kpi("رصيد الحساب / Equity",money(equity),"EQUITY • "+(p?"SAMPLE":"BROKER / API"),"#4ce3bd")+kpi("P&L اليوم",money(totals),"TODAY / CLOSED TRADES",totals>=0?"#4ce3bd":"#ff748f",totals>=0?"pos":"neg")+kpi("الصفقات",num(totalCount,0),"RECORDED TRADES","#799dff")+kpi("المراكز المفتوحة",num(openCount,0),"OPEN POSITIONS","#ad8cff")+'</div>';
  html+='<div class="content-grid">'+panel("منحنى رأس المال","EQUITY PERFORMANCE / FROM TRADE HISTORY",simpleChart(parseEquity(),p)+'<div class="chart-foot"><span class="equity-label">EQUITY CURVE</span><span>'+ (p?"ILLUSTRATIVE DATA":esc(state.lastSync?"UPDATED "+dateFmt(state.lastSync):"NO DATA"))+'</span></div>','<span class="tag '+(p?"amber":"mint")+'">'+(p?"SAMPLE":"CONNECTED")+'</span>')+panel("عمليات التحكم","التحكم متاح فقط عبر API متصل وبوضع Demo/Paper",'<div class="command-grid">'+[
@@ -225,7 +225,7 @@ function settingsView(){
  ["Bot controls","Start / Stop / Pause / Resume"],["Portfolio","Trades / Signals / Equity"],["Research","Synthetic Backtest API"],["AI","Train / Reload / Registry"],["Config","Read only — no live patch endpoint"],["MT5 execution","Cloud MT5 connected separately; strategy worker not deployed"]
  ].map(x=>'<div class="info-block"><strong>'+x[0]+'</strong>'+x[1]+'</div>').join("")+'</div></div>');
 }
-function mt5View(){return window.CloudMT5UI?.render()||heading("CLOUD MT5","الربط السحابي","جاري تحميل Cloud Bridge...")}
+function mt5View(){return window.FreeMT5UI?.render()||heading("FREE MT5","الربط المجاني","جاري تحميل MT5 Bridge...")}
 function renderPage(){
  let h="";
  try{switch(state.page){
@@ -235,7 +235,7 @@ function renderPage(){
  default:h=overview();}}catch(e){h=heading("DISPLAY ERROR","تعذّر عرض الصفحة",esc(e.message));eventLog("render-error",e.message)}
  byId("page").innerHTML=h;
 }
-function navigate(page){state.page=page;if(page==="mt5")window.CloudMT5UI?.status(true);state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
+function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.status(true);state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
 function openConnect(){
@@ -311,7 +311,7 @@ function localBacktest(bars,balance,spreadPct){
  return {trades,wins,winRate:trades?wins/trades:0,pnl:cash-balance,maxDD,curve,bars:bars.length,openAtEnd:!!position};
 }
 async function act(action){
- if(action.startsWith("cloud-")){await window.CloudMT5UI?.action(action);return}
+ if(action.startsWith("free-")){await window.FreeMT5UI?.action(action);return}
  if(action.startsWith("nav-")){navigate(action.slice(4));return}
  if(action==="refresh"){if(state.preview){toast("هذه معاينة. لا يوجد مصدر حي للتحديث.");return}await refresh();return}
  if(action==="open-connect"){openConnect();return}
