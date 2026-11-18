@@ -233,9 +233,9 @@ async function evaluation(sql,id,req){
   note:"Forward broker outcomes are scoped by symbol. Existing order tags do not reliably identify entry timeframe."};
  const runId=crypto.randomUUID(),quality=JSON.stringify(results.quality),analysis=JSON.stringify(results);
  await sql`INSERT INTO sentinel_brain_runs
- (id,account_id,symbol,timeframe,candles_used,historical_trades_seen,coverage,data_quality,analysis)
+ (id,account_id,symbol,timeframe,candles_used,historical_trades_seen,coverage,data_quality,analysis,version)
  VALUES(${runId},${id},${symbol},${timeframe},${bars.length},
-    ${Number(tradeRows[0]?.count||0)},${meta.coverage},${quality}::jsonb,${analysis}::jsonb)`;
+    ${Number(tradeRows[0]?.count||0)},${meta.coverage},${quality}::jsonb,${analysis}::jsonb,${brain.VERSION})`;
  return {run_id:runId,symbol,timeframe,evidence:results,mode:"RESEARCH_ONLY",orders_executed:0};
 }
 async function status(sql){
@@ -248,7 +248,7 @@ async function status(sql){
     MAX(close_time) FILTER(WHERE complete) AS last_closed_trade
     FROM sentinel_brain_trades GROUP BY account_id ORDER BY MAX(close_time) DESC LIMIT 15`,
   sql`SELECT COUNT(*)::int AS count FROM sentinel_brain_candles`,
-  sql`SELECT id,account_id,symbol,timeframe,candles_used,coverage,analysis,created_at
+  sql`SELECT id,account_id,symbol,timeframe,candles_used,coverage,analysis,version,created_at
     FROM sentinel_brain_runs ORDER BY created_at DESC LIMIT 6`,
   sql`SELECT account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,
     imported_at FROM sentinel_brain_imports ORDER BY imported_at DESC LIMIT 15`,
@@ -282,7 +282,7 @@ async function status(sql){
   accounts:accountRows,forward_by_account_symbol,
   candles:Number(bars[0]?.count||0),
   runs:runs.map(x=>({id:x.id,account_id:x.account_id,symbol:x.symbol,timeframe:x.timeframe,
-   candles:x.candles_used,date:x.created_at,quality:x.analysis?.quality,portfolio:x.analysis?.portfolio,
+   candles:x.candles_used,date:x.created_at,version:x.version,quality:x.analysis?.quality,portfolio:x.analysis?.portfolio,
    paper_schedule:x.analysis?.paper_schedule,forward_quality:x.analysis?.forward_quality,
    strategies:x.analysis?.strategies?.map(s=>({
     id:s.strategy_id,status:s.status,trades:s.oos.trades,expectancy_r:s.oos.expectancy_r,
