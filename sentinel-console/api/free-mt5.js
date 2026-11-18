@@ -148,10 +148,32 @@ module.exports=async(req,res)=>{
     if(!rows.length)return reply(res,200,{ok:true,provider:"TickerAll",configured:false,accounts:[]});
     const token=await tokenFor(sql);
     const fetched=await request("/v1/accounts",token);
-    const accounts=(Array.isArray(fetched)?fetched:fetched?.accounts||[])
-       .map(minimalAccount).filter(Boolean);
+    const roster=Array.isArray(fetched)?fetched:(fetched?.accounts||[]);
+    // Never expose or request financial details for non-demo accounts.
+    const demos=roster.filter(a=>a?.broker==="mt5"&&a?.isDemo===true).slice(0,5);
+    const accounts=await Promise.all(demos.map(async (a)=>{
+      const base=minimalAccount(a);
+      base.verified=false;
+      base.verificationError=a.hot?"PENDING_BROKER_SNAPSHOT":"BROKER_SESSION_COLD";
+      if(!a.hot||!/^acc_[A-Za-z0-9_-]{3,100}$/.test(String(a.id||"")))return base;
+      try{
+        const account=await request("/v1/accounts/"+a.id,token);
+        const snap=snapshot(account);
+        if(snap.isDemo&&snap.online){
+          base.verified=true;
+          base.snapshot=snap;
+          base.verificationError=null;
+        } else {
+          base.verificationError=account?.status==="offline"?"BROKER_SNAPSHOT_OFFLINE":"BROKER_SNAPSHOT_UNVERIFIED";
+        }
+      }catch(err){
+        const code=String(err?.message||"BROKER_SNAPSHOT_FAILED");
+        base.verificationError=/^(TICKERALL_[A-Z0-9_]+|BROKER_[A-Z0-9_]+)$/.test(code)?code:"BROKER_SNAPSHOT_FAILED";
+      }
+      return base;
+    }));
     return reply(res,200,{ok:true,provider:"TickerAll",configured:true,accounts,
-       generatedAt:new Date().toISOString(),subscriptionCost:"$0 demo/free plan"});
+      generatedAt:new Date().toISOString(),subscriptionCost:"$0 demo/free plan"});
   }
   const token=await tokenFor(sql);
   if(action==="connect"){
