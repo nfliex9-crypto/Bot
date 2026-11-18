@@ -43,6 +43,7 @@ class BookObserver:
                 self.subscribed.add(symbol)
             levels = self.mt5.market_book_get(symbol)
             if not levels:
+                self.history.pop(symbol, None)
                 return BookInsight("BROKER_DOM_EMPTY")
             bids, asks = [], []
             buy_type=getattr(self.mt5,"BOOK_TYPE_BUY",1)
@@ -81,8 +82,9 @@ class BookObserver:
             # 5 real snapshots over at least 20 seconds, consistent sign;
             # still observational, not a claim of fill or predictive edge.
             persist=0
-            if len(recent)>=5 and recent[-1][0]-recent[0][0]>=20:
-                signs=[1 if v>=.15 else -1 if v<=-.15 else 0 for _,v in recent[-5:]]
+            last_five=recent[-5:]
+            if len(last_five)==5 and last_five[-1][0]-last_five[0][0]>=20:
+                signs=[1 if v>=.15 else -1 if v<=-.15 else 0 for _,v in last_five]
                 if all(x==signs[0] and x!=0 for x in signs):
                     persist=signs[0]
             return BookInsight("BROKER_DOM_OBSERVED",imbalance=round(im,5),

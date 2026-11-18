@@ -41,6 +41,16 @@ class OrderflowTests(unittest.TestCase):
         self.assertEqual(BookObserver(p).inspect("XAUUSD").status,"BROKER_DOM_CROSSED")
         p.entries=[S(type=1,price=99,volume_dbl=-1),S(type=2,price=100,volume_dbl=1)]
         self.assertEqual(BookObserver(p).inspect("XAUUSD").status,"BROKER_DOM_INVALID_LEVEL")
+    def test_last_five_must_span_20_seconds_not_earlier_samples(self):
+        p=Provider();clock=[0.0];book=BookObserver(p,clock=lambda:clock[0])
+        for t in [0,10,20,30,40,41,42,43,44]:
+            clock[0]=t
+            r=book.inspect("XAUUSD")
+        self.assertEqual(r.status,"BROKER_DOM_OBSERVED")
+        self.assertEqual(r.persistent_side,0)
+        p.entries=[]
+        self.assertEqual(book.inspect("XAUUSD").status,"BROKER_DOM_EMPTY")
+        self.assertEqual(book.history.get("XAUUSD"),None)
     def test_read_order_book_never_sends_any_order(self):
         p=Provider();p.order_send=lambda r:self.fail("Must not create orders")
         book=BookObserver(p)
