@@ -30,13 +30,18 @@ function selectJob(symbols,previous,now=new Date(),minRefreshMs=2*3600000){
  }]));
  return jobs.map((x,i)=>{
   const prior=unique.get(x.symbol+"|"+x.timeframe);
-  return {...x,index:i,last:prior?.last??0,status:prior?.status??"NEVER"};
+  return {...x,index:i,last:prior?.last??0,status:prior?.status??"NEVER",
+    hours:prior?.status==="ERROR"?Math.min(x.hours,x.timeframe==="M15"?168:360):x.hours};
  }).filter(x=>!x.last||!Number.isFinite(x.last)||
     now.getTime()-x.last>=(["ERROR","NO_CLOSED_BROKER_CANDLES"].includes(x.status)?30*60000:minRefreshMs))
  .sort((a,b)=>(a.last-b.last)||(a.index-b.index))[0]||null;
 }
 function selectableJobs(symbols){
- return symbols.flatMap(symbol=>["M15","H1"].map(timeframe=>({symbol,timeframe,hours:LOOKBACK_HOURS[timeframe]})));
+ return symbols.flatMap(symbol=>["M15","H1"].map(timeframe=>({
+  symbol,timeframe,
+  hours:/^(?:XAUUSD|GOLD|NAS100|US100|USTEC)/i.test(symbol)?
+    (timeframe==="M15"?336:720):LOOKBACK_HOURS[timeframe]
+ })));
 }
 function normalizeBatch(payload,{timeframe,now=new Date()}={}){
  if(!Object.hasOwn(TF_MS,timeframe))throw Error("INVALID_BROKER_TIMEFRAME");
