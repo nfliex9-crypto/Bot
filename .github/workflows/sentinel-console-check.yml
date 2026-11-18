@@ -22,6 +22,8 @@ jobs:
           node --check sentinel-console/api/free-mt5.js
           node --check sentinel-console/free-ui.js
           node --check sentinel-console/brain/broker-ingestion.js
+          node --check sentinel-console/brain/quote-observer.js
+          node --test sentinel-console/tests/quote-observer.test.cjs
           node --test sentinel-console/tests/broker-ingestion.test.cjs
           node --check sentinel-console/brain/broker-hypotheses.js
           node --test sentinel-console/tests/broker-hypotheses.test.cjs
