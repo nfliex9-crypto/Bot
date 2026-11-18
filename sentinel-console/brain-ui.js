@@ -3,7 +3,7 @@
 window.SentinelBrain=(()=>{
  let view={data:null,symbols:[],symbol:"",timeframe:"M15",hours:720,loading:false,stage:"",error:"",
   lastImport:null,lastTrades:null,lastEvaluation:null};
- let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],public_research:[],market_imports:[],broker_candles:[],error:null};
+ let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],public_research:[],market_imports:[],broker_candles:[],broker_hypotheses:[],error:null};
  const msg={
   DEMO_ACCOUNT_REQUIRED:"الربط لا يخص حساب MT5 Demo مؤكد.",
   BROKER_SESSION_COLD:"جلسة MT5 بردت؛ افتح MT5 وأعد تنشيطها قبل الاستيراد.",
@@ -102,6 +102,15 @@ window.SentinelBrain=(()=>{
       '</tbody></table></div>'+
      '<div class="panel-pad"><p class="small subtle">وجود شموع بدون سبريد تاريخي لا يعني اكتمال الاختبار بعد التكاليف. الاستراتيجيات تبقى للبحث ولا تتحول تلقائياً إلى صفقات.</p>'+
      (imports.filter(x=>x.status==="ERROR").length?'<div class="notice">بعض طلبات الوسيط تأخرت أو فشلت. العامل يبدّل الأسواق ويحاول لاحقاً بدون تعطيل الاستيراد الآخر.</div>':"")+'</div>');
+  }
+  if(autonomy.broker_hypotheses?.length){
+   const ideas=autonomy.broker_hypotheses||[];
+   html+=panel("MT5 Strategy Ideas","بحث من شموع الوسيط، لكن تكاليف التنفيذ التاريخية غير مكتملة",
+    '<div class="panel-pad"><div class="key-value"><span>فرضيات تم توليدها</span><strong>'+
+      num(ideas.reduce((n,x)=>n+Number(x.idea_count||0),0),0)+'</strong></div>'+
+      ideas.slice(0,8).map(x=>'<div class="key-value"><span>'+esc(x.symbol)+' / '+esc(x.timeframe)+
+       ' · '+num(x.candle_count,0)+' شمعة</span><strong>'+num(x.idea_count,0)+' فكرة · UNVERIFIED</strong></div>').join("")+
+    '<div class="notice info" style="margin-top:12px"><strong>ممنوع التداول من هذه النتائج</strong><span class="notice-small">تكاليف الصفقة تقديرية لغياب سبريد الوسيط التاريخي. المكافأة 0 والتنفيذ الآلي غير مفعّل.</span></div></div>');
   }
   if(autonomy.candidates?.length){
    html+=panel("Strategy Evolution / Leaderboard","مكافآت التجارب لا تزيد حجم المخاطرة",
