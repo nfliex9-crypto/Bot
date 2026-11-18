@@ -34,7 +34,7 @@ test("unknown, stale, crossed, zero-sized and untrusted source levels fail close
 });
 test("persistence requires 20 fresh sequential same-venue snapshots over time",()=>{
  const now=Date.UTC(2026,10,18,15,0);
- const series=Array.from({length:20},(_,i)=>base(now-2400+i*100));
+ const series=Array.from({length:20},(_,i)=>base(now-2400+i*120));
  assert.equal(book.studyPersistence(series.slice(1),{now}).status,"INSUFFICIENT_SNAPSHOTS");
  assert.equal(book.studyPersistence(series,{now}).status,"PERSISTENCE_OBSERVED_NOT_PROVEN");
  assert.equal(book.studyPersistence([...series.slice(0,19),base(now+5000)],{now}).status,"INVALID_SEQUENCE_OR_STALE");
