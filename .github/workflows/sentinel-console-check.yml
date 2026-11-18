@@ -22,6 +22,7 @@ jobs:
           node --check sentinel-console/api/free-mt5.js
           node --check sentinel-console/free-ui.js
           node --test sentinel-console/tests/free-mt5.test.cjs
+          node --test sentinel-console/tests/ui-contract.test.cjs
           node --check sentinel-bridge/api/mt5.js
       - name: Unit test Windows agent core under mocked MT5
         run: |
@@ -71,3 +72,18 @@ jobs:
             }
           }
           Write-Host "Parsed $($files.Count) PowerShell scripts"
+
+  console-sso-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Production UI and API require Vercel login
+        run: |
+          set -euo pipefail
+          for path in / '/api/free-mt5?action=status'; do
+            status=$(curl -sS --max-time 20 -o /tmp/sso-body -D /tmp/sso-headers -w '%{http_code}' "https://sentinel-mt5-console.vercel.app$path")
+            echo "Unauthenticated $path => $status"
+            if [ "$status" != "302" ] && [ "$status" != "401" ] && [ "$status" != "403" ]; then
+              echo "::error::Console is not protected by Vercel Authentication"
+              exit 1
+            fi
+          done
