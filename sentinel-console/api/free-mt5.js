@@ -11,13 +11,23 @@ const safe = (s,n=100)=>String(s??"").slice(0,n);
 const reply=(res,status,body)=>{
  res.setHeader("Cache-Control","private, no-store, max-age=0");
  res.setHeader("X-Content-Type-Options","nosniff");
+ res.setHeader("Cross-Origin-Resource-Policy","same-origin");
+ res.setHeader("Referrer-Policy","no-referrer");
  return res.status(status).json(body);
 };
-const same=(a,b)=>{
- if(!a||!b||typeof a!=="string"||typeof b!=="string")return false;
- const x=Buffer.from(a),y=Buffer.from(b);
- return x.length===y.length&&crypto.timingSafeEqual(x,y);
-};
+// Authentication is enforced by Vercel's project-level "All Deployments" SSO.
+// A dedicated server-side flag and strict origin checks fail closed if misconfigured.
+function protectedRequest(req){
+ if(process.env.SENTINEL_VERCEL_SSO!=="enabled")return false;
+ const host=String(req.headers.host||"").toLowerCase();
+ if(!/^sentinel-mt5-console(?:-[a-z0-9-]+)?\.vercel\.app$/.test(host))return false;
+ if(req.method!=="GET"){
+   const origin=String(req.headers.origin||"");
+   if(origin && origin!=="https://"+host)return false;
+   if(req.headers["sec-fetch-site"]==="cross-site")return false;
+ }
+ return true;
+}
 function db(){
  if(!process.env.DATABASE_URL)throw Error("NOT_CONFIGURED");
  return neon(process.env.DATABASE_URL);
@@ -41,7 +51,7 @@ function decrypt(value){
  return Buffer.concat([dec.update(Buffer.from(parts[2],"base64")),dec.final()]).toString("utf8");
 }
 async function request(path,token,method="GET",body=null){
- if(!/^\/(?:v1\/accounts(?:\/[A-Za-z0-9_-]+)?|v1\/sessions)$/.test(path))throw Error("INVALID_PATH");
+ if(!/^\/(?:v1\/accounts(?:\/[A-Za-z0-9_-]+)?(?:\/(?:symbols|history))?|v1\/sessions)$/.test(path))throw Error("INVALID_PATH");
  const headers={Authorization:"Bearer "+token,Accept:"application/json"};
  if(body!==null)headers["Content-Type"]="application/json";
  if(method!=="GET")headers["Idempotency-Key"]=crypto.randomUUID();
@@ -55,6 +65,8 @@ async function request(path,token,method="GET",body=null){
  let data={};
  try{data=await response.json()}catch(_){}
  if(!response.ok){
+  const reason=String(data?.code||data?.error||"").slice(0,64);
+  if(reason==="BROKER_AUTH_FAILED"||reason==="FREE_TIER_LIVE_REJECTED"||reason==="FORBIDDEN")throw Error(reason);
   if(response.status===401||response.status===403)throw Error("TICKERALL_KEY_REJECTED");
   if(response.status===429)throw Error("TICKERALL_RATE_LIMIT");
   if(response.status===409)throw Error(safe(data.code||data.error||"BROKER_SESSION_COLD",75));
@@ -103,12 +115,13 @@ module.exports=async(req,res)=>{
  const action=String(req.query?.action||"");
  const methods={
   status:"GET",saveKey:"POST",forgetKey:"POST",
-  connect:"POST",inspect:"POST",disconnect:"POST"
+  connect:"POST",inspect:"POST",disconnect:"POST",
+  symbols:"POST",history:"POST"
  };
  if(!Object.prototype.hasOwnProperty.call(methods,action))return reply(res,404,{ok:false,error:"UNKNOWN_ACTION"});
  if(req.method!==methods[action])return reply(res,405,{ok:false,error:"METHOD_NOT_ALLOWED"});
- if(!same(req.headers["x-console-key"],process.env.DASHBOARD_ACCESS_KEY))
-    return reply(res,401,{ok:false,error:"UNAUTHORIZED"});
+ if(!protectedRequest(req))
+    return reply(res,403,{ok:false,error:"CONSOLE_PROTECTION_REQUIRED"});
  if(JSON.stringify(req.body||"").length>5000)return reply(res,413,{ok:false,error:"REQUEST_TOO_LARGE"});
  let sql;
  try{sql=db();encryptionKey()}catch(_){return reply(res,503,{ok:false,error:"BRIDGE_NOT_CONFIGURED"})}
@@ -165,7 +178,20 @@ module.exports=async(req,res)=>{
   const accountId=String(req.body?.accountId||"");
   if(!/^acc_[A-Za-z0-9_-]{3,100}$/.test(accountId))
     return reply(res,400,{ok:false,error:"INVALID_ACCOUNT_ID"});
-  if(action==="inspect"){
+  if(["inspect","symbols","history"].includes(action)){
+    // Verify the exact account ID is bound to a demo on this key before reading.
+    const all=await request("/v1/accounts",token);
+    const owned=(Array.isArray(all)?all:all?.accounts||[])
+      .find(a=>a.id===accountId&&a.broker==="mt5"&&a.isDemo===true);
+    if(!owned)return reply(res,403,{ok:false,error:"NOT_A_VERIFIED_DEMO_ACCOUNT"});
+    if(action==="symbols"){
+      const data=await request("/v1/accounts/"+accountId+"/symbols",token);
+      return reply(res,200,{ok:true,data});
+    }
+    if(action==="history"){
+      const data=await request("/v1/accounts/"+accountId+"/history",token);
+      return reply(res,200,{ok:true,data});
+    }
     const account=await request("/v1/accounts/"+accountId,token);
     const state=snapshot(account);
     if(!state.isDemo)return reply(res,403,{ok:false,error:"NOT_A_VERIFIED_DEMO_ACCOUNT"});
@@ -182,7 +208,7 @@ module.exports=async(req,res)=>{
   }
  }catch(e){
   const code=safe(e?.message||"UNKNOWN",75);
-  const known=new Set(["TICKERALL_TOKEN_MISSING","TICKERALL_KEY_REJECTED",
+  const known=new Set(["BROKER_AUTH_FAILED","FREE_TIER_LIVE_REJECTED","FORBIDDEN","TICKERALL_TOKEN_MISSING","TICKERALL_KEY_REJECTED",
     "TICKERALL_RATE_LIMIT","TICKERALL_UNREACHABLE","BROKER_ACCOUNT_NOT_HOT",
     "BROKER_SESSION_COLD","FREE_TIER_LIVE_REJECTED"]);
   return reply(res,known.has(code)?422:502,{ok:false,error:known.has(code)?code:"PROVIDER_ERROR"});
