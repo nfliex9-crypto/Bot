@@ -21,17 +21,32 @@ function selectMarkets(payload,now=new Date()){
  return PRIORITY.filter(x=>!weekend||x.name==="btc")
   .map(x=>catalog.find(s=>x.re.test(s))).filter(Boolean).slice(0,4);
 }
+/* Small first requests prime slow MT5 symbols. A successful compact window
+ * expands gradually, so a 25-second timeout cannot monopolize gold/NAS.
+ * All source-quality checks still apply; short history is never a strategy edge.
+ */
+function adaptiveHours(job,prior){
+ const heavy=/^(?:XAUUSD|GOLD|NAS100|US100|USTEC)/i.test(job.symbol);
+ if(!heavy)return prior?.status==="ERROR"?Math.min(job.hours,168):job.hours;
+ if(!prior||["ERROR","NO_CLOSED_BROKER_CANDLES"].includes(prior.status))return 24;
+ const stored=Number(prior.stored)||0;
+ if(stored<20)return 24;
+ if(stored<150)return 72;
+ if(stored<350)return 168;
+ return job.hours;
+}
 function selectJob(symbols,previous,now=new Date(),minRefreshMs=2*3600000){
  const records=Array.isArray(previous)?previous:[];
  const jobs=selectableJobs(symbols);
  const unique=new Map(records.map(r=>[String(r.symbol)+"|"+String(r.timeframe),{
    last:new Date(r.attempted_at??r.imported_at).getTime(),
-   status:String(r.status||"UNKNOWN")
+   status:String(r.status||"UNKNOWN"),
+   stored:Number(r.stored_rows??r.provider_count??0)
  }]));
  return jobs.map((x,i)=>{
   const prior=unique.get(x.symbol+"|"+x.timeframe);
   return {...x,index:i,last:prior?.last??0,status:prior?.status??"NEVER",
-    hours:prior?.status==="ERROR"?Math.min(x.hours,x.timeframe==="M15"?168:360):x.hours};
+    hours:adaptiveHours(x,prior)};
  }).filter(x=>!x.last||!Number.isFinite(x.last)||
     now.getTime()-x.last>=(["ERROR","NO_CLOSED_BROKER_CANDLES"].includes(x.status)?30*60000:minRefreshMs))
  .sort((a,b)=>(a.last-b.last)||(a.index-b.index))[0]||null;
@@ -76,4 +91,4 @@ function normalizeBatch(payload,{timeframe,now=new Date()}={}){
   accepted:n.bars.length
  };
 }
-module.exports={selectMarkets,selectJob,selectableJobs,normalizeBatch,LOOKBACK_HOURS};
+module.exports={selectMarkets,selectJob,selectableJobs,adaptiveHours,normalizeBatch,LOOKBACK_HOURS};

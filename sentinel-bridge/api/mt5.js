@@ -2,14 +2,15 @@
 // Public HTTPS ingress for Windows MT5 agents only. No dashboard, admin, or trading endpoints.
 // Auth: one-time 20-char code (15 min) then 256-bit agent token. All writes scoped to the paired device.
 const crypto=require("node:crypto");
+const {normalizeUpload}=require("../native-ingest.js");
 const {neon}=require("@neondatabase/serverless");
 const sha=s=>crypto.createHash("sha256").update(s).digest("hex");
 const respond=(res,status,body)=>{res.setHeader("Cache-Control","no-store");res.setHeader("X-Content-Type-Options","nosniff");return res.status(status).json(body)};
 const shorten=(x,max=80)=>String(x||"").slice(0,max);
 module.exports=async(req,res)=>{
  const action=String(req.query.action||"");
- if(req.method!=="POST"||!["claim","heartbeat"].includes(action))return respond(res,404,{ok:false,error:"NOT_FOUND"});
- if(Buffer.byteLength(JSON.stringify(req.body||{}))>8192)return respond(res,413,{ok:false,error:"PAYLOAD_TOO_LARGE"});
+ if(req.method!=="POST"||!["claim","heartbeat","candles"].includes(action))return respond(res,404,{ok:false,error:"NOT_FOUND"});
+ if(Buffer.byteLength(JSON.stringify(req.body||{}))>(action==="candles"?131072:8192))return respond(res,413,{ok:false,error:"PAYLOAD_TOO_LARGE"});
  if(!process.env.DATABASE_URL)return respond(res,503,{ok:false,error:"BRIDGE_NOT_CONFIGURED"});
  const sql=neon(process.env.DATABASE_URL);
  try{
@@ -30,6 +31,45 @@ module.exports=async(req,res)=>{
   const token=req.headers["x-mt5-agent-token"];
   if(!/^[0-9a-f-]{36}$/i.test(id)||typeof token!=="string"||!/^[0-9a-f]{64}$/.test(token))
    return respond(res,401,{ok:false,error:"INVALID_AGENT_AUTH"});
+  if(action==="candles"){
+    // Live paired DEMO heartbeat is a prerequisite; the uploaded history itself
+    // remains explicitly unverified and NEVER gains order/reward permissions.
+    const active=await sql`SELECT account_last4 FROM sentinel_mt5_agents
+      WHERE agent_id=${id} AND token_hash=${sha(token)} AND trade_mode='demo'
+      AND connection_state='connected' AND last_seen_at>NOW()-INTERVAL '90 seconds'
+      LIMIT 1`;
+    if(active.length!==1)return respond(res,403,{ok:false,error:"FRESH_DEMO_HEARTBEAT_REQUIRED"});
+    if(String(req.body?.account_last4||"")!==String(active[0].account_last4||""))
+     return respond(res,403,{ok:false,error:"ACCOUNT_MISMATCH"});
+    let upload;
+    try{upload=normalizeUpload(req.body||{},{now:Date.now()})}
+    catch(err){return respond(res,422,{ok:false,error:"INVALID_NATIVE_CANDLE_UPLOAD"})}
+    const account="native-demo-"+id;
+    const {symbol,timeframe,bars}=upload;
+    const rows=JSON.stringify(bars.map(b=>({
+      bar_time:b.time,open:b.open,high:b.high,low:b.low,close:b.close,
+      spread:b.spread,tick_volume:b.tick_volume
+    })));
+    await sql`INSERT INTO sentinel_brain_candles
+     (account_id,symbol,timeframe,bar_time,open,high,low,close,spread,tick_volume)
+     SELECT ${account},${symbol},${timeframe},r.bar_time,r.open,r.high,r.low,r.close,
+       r.spread,r.tick_volume FROM jsonb_to_recordset(${rows}::jsonb)
+       AS r(bar_time timestamptz,open numeric,high numeric,low numeric,
+       close numeric,spread numeric,tick_volume numeric)
+     ON CONFLICT(account_id,symbol,timeframe,bar_time) DO UPDATE SET
+       open=EXCLUDED.open,high=EXCLUDED.high,low=EXCLUDED.low,close=EXCLUDED.close,
+       spread=EXCLUDED.spread,tick_volume=EXCLUDED.tick_volume,fetched_at=NOW()`;
+    await sql`INSERT INTO sentinel_brain_imports
+     (account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,stop_reason,imported_at)
+     VALUES(${account},${symbol},${timeframe},24,${bars.length},'local_unverified',true,'LOCAL_NATIVE_DEMO_EXPORT',NOW())
+     ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET
+       provider_count=GREATEST(sentinel_brain_imports.provider_count,EXCLUDED.provider_count),
+       coverage='local_unverified',truncated=true,stop_reason='LOCAL_NATIVE_DEMO_EXPORT',
+       imported_at=NOW()`;
+    return respond(res,202,{ok:true,source:"LOCAL_MT5_DEMO_TERMINAL",symbol,timeframe,
+      accepted:bars.length,unverified:true,orders_executed:0,
+      note:"Native broker bars stored separately; not verified or eligible for order execution."});
+  }
   const b=req.body||{};
   const mode=b.trade_mode==="demo"?"demo":"unknown";
   const connected=mode==="demo"&&b.connection_state==="connected";

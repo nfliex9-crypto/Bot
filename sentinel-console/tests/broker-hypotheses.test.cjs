@@ -18,10 +18,12 @@ test("real MT5 OHLC without broker spreads generates ONLY unverified hypotheses"
  const x=hypotheses.proxyHypotheses(data,{symbol:"EURUSD",timeframe:"M15",
   coverage:"complete",missingSpreadRatio:1});
  assert.equal(x.status,"OHLC_HYPOTHESES_ONLY");
- assert.equal(x.hypotheses.length,16);
+ assert.ok(x.hypotheses.length>16&&x.hypotheses.length<=24);
  assert.equal(x.assumptions.broker_spread_verified,false);
  assert.equal(x.assumptions.commission_verified,false);
  assert.equal(x.reward_points,0);
+ assert.deepEqual(x.hypotheses,hypotheses.proxyHypotheses(data,{symbol:"EURUSD",timeframe:"M15",coverage:"complete",missingSpreadRatio:1}).hypotheses);
+ assert.equal(new Set(x.hypotheses.map(h=>h.id)).size,x.hypotheses.length);
  assert.equal(x.execution_enabled,false);
  assert.ok(x.hypotheses.every(c=>c.status==="UNVERIFIED_BROKER_COST_HYPOTHESIS"&&
  c.reward_points===0&&c.execution_enabled===false));
@@ -38,7 +40,7 @@ test("stored MT5 hypotheses stay separate from verified broker strategy candidat
  const out=await hypotheses.recordBrokerHypotheses(sql,{
   account:"acc_unit_demo",symbol:"EURUSD",timeframe:"M15",batch
  });
- assert.equal(out.count,16);
+ assert.ok(out.count>16&&out.count<=24);
  assert.equal(out.reward_points,0);
  assert.equal(out.execution_enabled,false);
  assert.ok(calls.some(c=>c.query.includes("sentinel_autonomy_broker_hypotheses")));

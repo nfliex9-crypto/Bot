@@ -2,9 +2,9 @@
 /* MT5 OHLC hypotheses with UNVERIFIED execution costs.
  * Does not override the broker-verification gate or create any orders.
  */
-const {scoreFamily}=require("./strategy-factory.js");
+const {scoreFamily,seeds}=require("./strategy-factory.js");
 const {fingerprint}=require("./provenance.js");
-function proxyHypotheses(bars,{symbol,timeframe,coverage,missingSpreadRatio}={}){
+function proxyHypotheses(bars,{symbol,timeframe,coverage,missingSpreadRatio,datasetId}={}){
  if(!Array.isArray(bars)||bars.length<900||coverage!=="complete")
   return {status:"NOT_ELIGIBLE",hypotheses:[],reward_points:0,execution_enabled:false};
  // Explore only: 5 basis points of price as an assumed price-unit spread,
@@ -14,7 +14,11 @@ function proxyHypotheses(bars,{symbol,timeframe,coverage,missingSpreadRatio}={})
  const hypothetical=bars.map(bar=>({
   ...bar,spread:bar.spread!==null&&bar.spread>0?bar.spread:bar.close*spreadAssumptionBps/10000
  }));
- const research=scoreFamily(hypothetical,{coverage:"complete",truncated:false});
+ // Reproducible bounded challengers per immutable dataset. These NEVER earn
+ // rewards when broker transaction-cost evidence is missing.
+ const batchId=datasetId||fingerprint(bars,{symbol,timeframe,coverage}).id;
+ const research=scoreFamily(hypothetical,{coverage:"complete",truncated:false,
+  parents:seeds(),cycleId:batchId});
  return {
   status:"OHLC_HYPOTHESES_ONLY",
   symbol,timeframe,
@@ -41,7 +45,8 @@ async function recordBrokerHypotheses(sql,{account,symbol,timeframe,batch}){
     batch.coverage!=="complete"||batch.quality?.rejected_rows||batch.quality?.duplicate_rows)
   return {status:"NOT_ELIGIBLE",count:0};
  const report=proxyHypotheses(batch.bars,{symbol,timeframe,coverage:batch.coverage,
-  missingSpreadRatio:batch.quality.missing_spread_ratio});
+  missingSpreadRatio:batch.quality.missing_spread_ratio,
+  datasetId:fingerprint(batch.bars,{symbol,timeframe,coverage:batch.coverage}).id});
  const identity=fingerprint(batch.bars,{
   provider:"TickerAll MT5 Demo native OHLC",
   symbol,timeframe,coverage:batch.coverage

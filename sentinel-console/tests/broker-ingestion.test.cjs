@@ -46,7 +46,18 @@ test("heavy gold and NAS100 histories use smaller windows, timeouts back off to 
  ];
  const retry=ingest.selectJob(["XAUUSD"],prior,new Date("2026-11-18T11:45:00Z"));
  assert.equal(retry.timeframe,"M15");
- assert.equal(retry.hours,168);
+ assert.equal(retry.hours,24);
+});
+test("slow broker windows expand only after successful compact snapshots",()=>{
+ const now=new Date("2026-11-18T15:00:00Z");
+ for(const [stored_rows,expected] of [[0,24],[30,72],[220,168],[700,336]]){
+  const job=ingest.selectJob(["XAUUSD"],[{symbol:"XAUUSD",timeframe:"M15",
+    attempted_at:"2026-11-18T12:00:00Z",status:"STORED_RESEARCH_BLOCKED",stored_rows},
+   {symbol:"XAUUSD",timeframe:"H1",attempted_at:"2026-11-18T14:50:00Z",status:"ERROR"}],now);
+  assert.equal(job.hours,expected);
+ }
+ assert.equal(ingest.adaptiveHours({symbol:"USTECH100M",timeframe:"H1",hours:720},
+  {status:"ERROR",stored:0}),24);
 });
 test("provider Unix seconds become closed UTC bars, and open candle is excluded",()=>{
  const now=new Date("2026-11-18T12:07:00Z");

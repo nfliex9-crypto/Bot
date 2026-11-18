@@ -131,7 +131,7 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
    symbols=selectMarkets(await fetcher(API+"/v1/accounts/"+demo.id+"/symbols",{Authorization:"Bearer "+token}),now);
   }catch(e){notes.symbol_error=clean(e.message)}
   if(symbols.length){
-    const prior=await sql`SELECT symbol,timeframe,attempted_at,status FROM sentinel_autonomy_import_attempts
+    const prior=await sql`SELECT symbol,timeframe,attempted_at,status,stored_rows FROM sentinel_autonomy_import_attempts
       WHERE account_id=${demo.id} ORDER BY attempted_at ASC`;
     const job=broker.selectJob(symbols,prior,now);
     notes.broker_symbols=symbols;
@@ -176,21 +176,23 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
       notes.broker_imports="UP_TO_DATE";
       results.push({status:"HISTORY_REFRESH_NOT_DUE"});
     }
-    try{
-      // A single genuine quote per cycle; stamped when received, never backfilled.
-      const eligible=symbols.filter(x=>/^[A-Za-z0-9._-]{2,24}$/.test(x));
-      if(eligible.length){
-        const pos=Math.floor(now.getTime()/900000)%eligible.length;
-        const symbol=eligible[pos];
+    // Capture independent *current* bid/ask observations from each eligible
+    // symbol in parallel; do not backfill these into historic candle spreads.
+    const eligible=symbols.filter(x=>/^[A-Za-z0-9._-]{2,24}$/.test(x)).slice(0,4);
+    const observations=await Promise.all(eligible.map(async symbol=>{
+      try{
         const quote=await fetcher(API+"/v1/accounts/"+demo.id+"/symbols/"+
           encodeURIComponent(symbol)+"/quote",{Authorization:"Bearer "+token});
-        notes.quote=await recordQuote(sql,{accountId:demo.id,symbol,raw:quote,now:new Date()});
-      }
-    }catch(e){notes.quote={status:"UNAVAILABLE",reason:clean(e.message)}}
+        return await recordQuote(sql,{accountId:demo.id,symbol,raw:quote,now:new Date()});
+      }catch(e){return {symbol,status:"UNAVAILABLE",reason:clean(e.message)}}
+    }));
+    notes.quotes=observations;
+    notes.quote=observations.find(x=>x.status==="OBSERVED")||observations[0]||null;
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
    const cached=await sql`SELECT account_id,symbol,timeframe,MAX(bar_time) AS last_bar
-    FROM sentinel_brain_candles GROUP BY account_id,symbol,timeframe ORDER BY MAX(bar_time) DESC LIMIT 8`;
+    FROM sentinel_brain_candles WHERE account_id NOT LIKE 'native-demo-%'
+    GROUP BY account_id,symbol,timeframe ORDER BY MAX(bar_time) DESC LIMIT 8`;
    for(const row of cached)try{
     const bars=await cacheBars(sql,row.account_id,row.symbol,row.timeframe);
     if(bars.length<900)continue;

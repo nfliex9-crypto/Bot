@@ -68,6 +68,7 @@ test("worker refuses unauthorized external endpoints and never uses order endpoi
  await assert.rejects(()=>worker.fetchJSON("https://api.tickerall.com/v1/accounts/abcd/orders"),/SOURCE_NOT_ALLOWLISTED/);
  const src=require("node:fs").readFileSync(require("node:path").join(__dirname,"../worker/runner.js"),"utf8");
  assert.doesNotMatch(src,/(?:\+["']\/orders|\/positions\/|method:\s*["']POST["'])/);
+ assert.match(src,/account_id NOT LIKE 'native-demo-%'/);
 });
 test("empty worker state is honest and produces no phantom trades",async()=>{
  const saved=process.env.MT5_CLOUD_ENCRYPTION_KEY;
