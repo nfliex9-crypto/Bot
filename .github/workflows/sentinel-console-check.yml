@@ -25,6 +25,7 @@ jobs:
           node --check sentinel-console/api/brain.js
           node --check sentinel-console/brain-ui.js
           node --test sentinel-console/tests/brain.test.cjs
+          node --test sentinel-console/tests/brain-api.test.cjs
           node --test sentinel-console/tests/free-mt5.test.cjs
           node --test sentinel-console/tests/ui-contract.test.cjs
           node --check sentinel-bridge/api/mt5.js
