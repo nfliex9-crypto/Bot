@@ -180,8 +180,9 @@ window.FreeMT5UI=(()=>{
    }
   }catch(e){toast(friendly(e.message),"error");}
  }
- function init(){sync(true)}
+ async function init(){await sync(true);if(!stateMT.configured&&state.page==="overview")navigate("mt5")}
  setInterval(()=>{if(document.visibilityState==="visible"&&["mt5","overview"].includes(state.page))sync(true)},45000);
  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&["mt5","overview"].includes(state.page))sync(true)});
  return {render,sync,init,action,summary};
 })();
+window.FreeMT5UI.init();
