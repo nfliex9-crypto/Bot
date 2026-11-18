@@ -131,7 +131,7 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
    symbols=selectMarkets(await fetcher(API+"/v1/accounts/"+demo.id+"/symbols",{Authorization:"Bearer "+token}),now);
   }catch(e){notes.symbol_error=clean(e.message)}
   if(symbols.length){
-    const prior=await sql`SELECT symbol,timeframe,attempted_at,status FROM sentinel_autonomy_import_attempts
+    const prior=await sql`SELECT symbol,timeframe,attempted_at,status,stored_rows FROM sentinel_autonomy_import_attempts
       WHERE account_id=${demo.id} ORDER BY attempted_at ASC`;
     const job=broker.selectJob(symbols,prior,now);
     notes.broker_symbols=symbols;
