@@ -20,7 +20,7 @@ function decrypt(cipher,key){
 async function fetchJSON(url,headers={}){
  const u=new URL(url);
  if(u.protocol!=="https:"||!((u.hostname==="api.tickerall.com"&&/^\/v1\/accounts(?:\/[A-Za-z0-9_-]{3,128}(?:\/(?:symbols|candles|history))?)?$/.test(u.pathname))||(u.hostname==="api.crossref.org"&&u.pathname==="/works")||(u.hostname==="data-api.binance.vision"&&u.pathname==="/api/v3/klines"&&u.searchParams.get("symbol")==="BTCUSDT"&&u.searchParams.get("interval")==="1h"&&u.searchParams.get("limit")==="1000"&&[...u.searchParams.keys()].length===3)))throw Error("SOURCE_NOT_ALLOWLISTED");
- const response=await fetch(u,{headers:{Accept:"application/json",...headers},redirect:"error",cache:"no-store",signal:AbortSignal.timeout(12000)});
+ const response=await fetch(u,{headers:{Accept:"application/json",...headers},redirect:"error",cache:"no-store",signal:AbortSignal.timeout(u.pathname.endsWith("/candles")?25000:12000)});
  if(!response.ok)throw Error((u.hostname==="api.tickerall.com"?"BROKER_HTTP_":"RESEARCH_HTTP_")+response.status);
  return response.json();
 }
@@ -40,6 +40,29 @@ async function saveBars(sql,account,symbol,tf,source){
  ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET provider_count=EXCLUDED.provider_count,coverage=EXCLUDED.coverage,
  truncated=EXCLUDED.truncated,stop_reason=EXCLUDED.stop_reason,imported_at=NOW()`;
  return {...batch,bars};
+}
+
+async function recordAttempt(sql,account,symbol,tf,result){
+ const status=String(result.status||"UNKNOWN").slice(0,50);
+ const error=String(result.error||result.reason||"").slice(0,100);
+ const coverage=result.coverage||null;
+ const missing=Number.isFinite(result.missing_spread_ratio)?result.missing_spread_ratio:null;
+ const received=Number.isInteger(result.received)?result.received:null;
+ const stored=Number.isInteger(result.stored)?result.stored:null;
+ const excluded=Number.isInteger(result.closed_bar_excluded)?result.closed_bar_excluded:null;
+ await sql`INSERT INTO sentinel_autonomy_import_attempts
+ (account_id,symbol,timeframe,attempted_at,last_success_at,status,provider_rows,stored_rows,
+ coverage,missing_spread_ratio,open_bar_excluded,error_code)
+ VALUES(${account},${symbol},${tf},NOW(),
+ CASE WHEN ${status!=="ERROR"} THEN NOW() ELSE NULL END,
+ ${status},${received},${stored},${coverage},${missing},${excluded},${error})
+ ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET
+ attempted_at=NOW(),
+ last_success_at=CASE WHEN EXCLUDED.status!='ERROR' THEN NOW()
+   ELSE sentinel_autonomy_import_attempts.last_success_at END,
+ status=EXCLUDED.status,provider_rows=EXCLUDED.provider_rows,stored_rows=EXCLUDED.stored_rows,
+ coverage=EXCLUDED.coverage,missing_spread_ratio=EXCLUDED.missing_spread_ratio,
+ open_bar_excluded=EXCLUDED.open_bar_excluded,error_code=EXCLUDED.error_code`;
 }
 async function cacheBars(sql,account,symbol,tf){
  const rows=await sql`SELECT bar_time,open,high,low,close,spread,tick_volume
@@ -105,32 +128,38 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
    symbols=selectMarkets(await fetcher(API+"/v1/accounts/"+demo.id+"/symbols",{Authorization:"Bearer "+token}),now);
   }catch(e){notes.symbol_error=clean(e.message)}
   if(symbols.length){
-    const prior=await sql`SELECT symbol,timeframe,imported_at FROM sentinel_brain_imports
-      WHERE account_id=${demo.id} ORDER BY imported_at ASC`;
+    const prior=await sql`SELECT symbol,timeframe,attempted_at,status FROM sentinel_autonomy_import_attempts
+      WHERE account_id=${demo.id} ORDER BY attempted_at ASC`;
     const job=broker.selectJob(symbols,prior,now);
     notes.broker_symbols=symbols;
     if(job){
       const {symbol,timeframe:tf,hours}=job;
+      let attempt={symbol,tf,status:"UNKNOWN"};
       try{
         const url=API+"/v1/accounts/"+demo.id+"/candles?"+
           new URLSearchParams({symbol,timeframe:tf,hours:String(hours)});
         const response=await fetcher(url,{Authorization:"Bearer "+token});
         const batch=await saveBars(sql,demo.id,symbol,tf,response);
         if(!batch.bars.length){
-          results.push({symbol,tf,status:"NO_CLOSED_BROKER_CANDLES",
-            received:batch.quality.raw_provider_rows,coverage:batch.coverage});
+          attempt={symbol,tf,status:"NO_CLOSED_BROKER_CANDLES",
+            received:batch.quality.raw_provider_rows,coverage:batch.coverage};
         }else if(!batch.safeForResearch){
-          results.push({symbol,tf,status:"STORED_RESEARCH_BLOCKED",
-            stored:batch.bars.length,coverage:batch.coverage,
+          attempt={symbol,tf,status:"STORED_RESEARCH_BLOCKED",
+            received:batch.quality.raw_provider_rows,stored:batch.bars.length,coverage:batch.coverage,
             missing_spread_ratio:batch.quality.missing_spread_ratio,
             truncated:batch.truncated,closed_bar_excluded:batch.quality.open_bar_excluded,
-            reason:"BROKER_DATA_QUALITY_GATE"});
+            reason:"BROKER_DATA_QUALITY_GATE"};
         }else{
           const evaluation=await assess(sql,{account:demo.id,symbol,tf,bars:batch.bars,
             coverage:batch.coverage,truncated:batch.truncated,cycleId:id,now});
-          results.push({...evaluation,stored:batch.bars.length,coverage:batch.coverage});
+          attempt={...evaluation,received:batch.quality.raw_provider_rows,stored:batch.bars.length,
+            coverage:batch.coverage,missing_spread_ratio:batch.quality.missing_spread_ratio,
+            closed_bar_excluded:batch.quality.open_bar_excluded};
         }
-      }catch(e){results.push({symbol,tf,status:"ERROR",error:clean(e.message)})}
+      }catch(e){attempt={symbol,tf,status:"ERROR",error:clean(e.message)}}
+      results.push(attempt);
+      try{await recordAttempt(sql,demo.id,symbol,tf,attempt)}
+      catch(e){notes.attempt_record_error=clean(e.message)}
     }else{
       notes.broker_imports="UP_TO_DATE";
       results.push({status:"HISTORY_REFRESH_NOT_DUE"});
