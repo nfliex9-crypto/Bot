@@ -9,11 +9,12 @@ import sys
 import time
 import unittest
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from sentinel_trader.config import Settings
 from sentinel_trader.journal import Journal
 from sentinel_trader.strategy import Signal, decide, ema, atr
 from sentinel_trader.trader import Trader, ACTIVATION, floor_volume, key_for
+from sentinel_trader.brain_gate import TRIAL_FLAG
 
 
 def settings(folder,**overrides):
@@ -102,8 +103,10 @@ class Tests(unittest.TestCase):
     def test_demo_sends_single_bound_order_then_refuses_duplicate(self):
         old=os.environ.get("SENTINEL_ENABLE_DEMO_TRADING")
         os.environ["SENTINEL_ENABLE_DEMO_TRADING"]=ACTIVATION
+        old_trial=os.environ.get("SENTINEL_UNVERIFIED_DEMO_TRIAL")
+        os.environ["SENTINEL_UNVERIFIED_DEMO_TRIAL"]=TRIAL_FLAG
         try:
-            t=self.build(mode="demo_execution")
+            t=self.build(mode="demo_execution",strategy_policy="demo_trial")
             first=t.step("EURUSD")
             self.assertEqual(first["status"],"BROKER_ACK_AWAITING_RECONCILIATION")
             self.assertEqual(len(self.mt5.sent),1)
@@ -121,12 +124,16 @@ class Tests(unittest.TestCase):
         finally:
             if old is None:os.environ.pop("SENTINEL_ENABLE_DEMO_TRADING",None)
             else:os.environ["SENTINEL_ENABLE_DEMO_TRADING"]=old
+            if old_trial is None:os.environ.pop("SENTINEL_UNVERIFIED_DEMO_TRIAL",None)
+            else:os.environ["SENTINEL_UNVERIFIED_DEMO_TRIAL"]=old_trial
     def test_unknown_response_blocks_future_submissions_even_after_restart(self):
         old=os.environ.get("SENTINEL_ENABLE_DEMO_TRADING")
         os.environ["SENTINEL_ENABLE_DEMO_TRADING"]=ACTIVATION
+        old_trial=os.environ.get("SENTINEL_UNVERIFIED_DEMO_TRIAL")
+        os.environ["SENTINEL_UNVERIFIED_DEMO_TRIAL"]=TRIAL_FLAG
         try:
             self.mt5.response=None
-            t=self.build(mode="demo_execution")
+            t=self.build(mode="demo_execution",strategy_policy="demo_trial")
             self.assertEqual(t.step("EURUSD")["status"],"BROKER_OUTCOME_UNKNOWN")
             self.assertEqual(len(self.mt5.sent),1)
             new=Trader(t.cfg,self.mt5,self.journal,clock=lambda:self.now)
@@ -137,6 +144,8 @@ class Tests(unittest.TestCase):
         finally:
             if old is None:os.environ.pop("SENTINEL_ENABLE_DEMO_TRADING",None)
             else:os.environ["SENTINEL_ENABLE_DEMO_TRADING"]=old
+            if old_trial is None:os.environ.pop("SENTINEL_UNVERIFIED_DEMO_TRIAL",None)
+            else:os.environ["SENTINEL_UNVERIFIED_DEMO_TRIAL"]=old_trial
     def test_foreign_positions_or_orders_block(self):
         t=self.build()
         self.mt5.positions=[S(magic=23456,symbol="XAUUSD")]

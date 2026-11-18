@@ -26,3 +26,11 @@
 - Apply `schema.sql` on Neon before deploying both Vercel projects; no schema changes were applied during development.
 - Deployment remains intentionally disabled until the full system review is finished, per user instructions.
 - Actual MT5 broker operation and end-to-end console telemetry are **not** verified by offline mock tests. Results of research signals do not imply trade profitability.
+
+## Brain/Order Book research integration (V2, development only)
+
+The independent trader's default policy is now `verified_only`: **no DEMO submission without an explicit, reviewed Sentinel research candidate**. A separate `demo_trial` opt-in exists for an operator who knowingly wants an unvalidated *DEMO-only* forward experiment. This does not mean a winning strategy was found. The trader does not issue real-account orders.
+
+`orderbook_mode=observe` records real MT5 broker DOM if available; `confirm` optionally demands 5 consistent snapshots spanning at least 20 seconds, but **does not create entries**. MT5 CFD depth does not equal centralized exchange liquidity. Research decisions are journaled locally in SQLite and may be viewed in the Sentinel dashboard after a future separately verified telemetry deployment.
+
+See `SENTINEL-TRADER-BRAIN-V2.md` in the console directory for the full scope and remaining work.

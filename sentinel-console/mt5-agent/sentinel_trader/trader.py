@@ -17,6 +17,8 @@ from typing import Any
 from .config import Settings
 from .journal import Journal
 from .strategy import Signal, decide
+from .brain_gate import approval
+from .orderflow import BookObserver, BookInsight
 
 ACTIVATION = "YES_I_AUTHORIZE_SENTINEL_DEMO_ONLY"
 
@@ -59,6 +61,7 @@ class Trader:
         self.clock=clock or time.time
         self.account=None
         self.init_done=False
+        self.book=BookObserver(mt5,clock=self.clock)
 
     def connect(self):
         self.cfg.validate()
@@ -78,6 +81,7 @@ class Trader:
         return account
 
     def disconnect(self):
+        self.book.close()
         if self.init_done:
             self.mt5.shutdown()
         self.init_done=False
@@ -212,40 +216,66 @@ class Trader:
             return {"symbol":symbol,"status":"DAILY_DRAWDOWN_LOCK"}
         if len(positions)>=self.cfg.max_positions or any(str(getattr(p,"symbol",""))==symbol for p in positions):
             return {"symbol":symbol,"status":"POSITION_CAP_OR_SYMBOL_BUSY"}
+        # DOM is an observation of broker-provided resting orders only.
+        # This is deliberately independent of OHLC signals and never triggers orders.
+        book=self.book.inspect(symbol) if self.cfg.orderbook_mode!="off" else BookInsight("NOT_REQUESTED")
+        details={"symbol":symbol,"orderbook_status":book.status,
+                 "book_samples":book.samples,"book_persistent_side":book.persistent_side}
+        if book.imbalance is not None:
+            details["book_imbalance"]=book.imbalance
         signal=self.observe(symbol)
         if signal is None:
-            return {"symbol":symbol,"status":"NO_SIGNAL_OR_STALE_MARKET"}
+            return {**details,"status":"NO_SIGNAL_OR_STALE_MARKET"}
+        if signal.symbol!=symbol or signal.side not in (-1,1) or signal.family not in ("trend_pullback","donchian_breakout"):
+            return {**details,"status":"INVALID_STRATEGY_SIGNAL"}
         oid=key_for(self.cfg.allowed_login,signal)
-        result={"symbol":symbol,"status":"RESEARCH_SIGNAL","strategy":signal.family,
+        result={**details,"status":"RESEARCH_SIGNAL","strategy":signal.family,
                 "side":"LONG" if signal.side==1 else "SHORT","closed_bar":signal.bar_time,
                 "signal_id":oid[:20],"order_submissions":0,"confirmed_fills":0}
-        if not self.enabled():
+        verdict=approval(self.cfg,signal,self.clock())
+        result["brain_status"]=verdict.status
+        result["research_evidence"]=verdict.evidence
+        def finish():
+            self.journal.record_decision(oid,self.cfg.allowed_login,symbol,signal.family,
+                signal.side,signal.bar_time,verdict.status,book.status,result["status"])
             return result
+        if not self.enabled():
+            return finish()
+        if not verdict.allowed:
+            result["status"]="BRAIN_EVIDENCE_NOT_APPROVED"
+            return finish()
+        signal_age=self.clock()-(signal.bar_time+900)
+        if signal_age < 0 or signal_age > self.cfg.max_signal_age_seconds:
+            result["status"]="SIGNAL_TOO_OLD_FOR_ENTRY"
+            return finish()
+        if self.cfg.orderbook_mode=="confirm" and book.persistent_side != signal.side:
+            result["status"]="BROKER_DOM_CONFIRMATION_MISSING"
+            return finish()
         if (not getattr(terminal,"trade_allowed",False) or not getattr(current,"trade_allowed",False)):
             result["status"]="MT5_TRADING_DISABLED"
-            return result
+            return finish()
         info=self.mt5.symbol_info(symbol)
         tick=self.mt5.symbol_info_tick(symbol)
         if info is None or tick is None or int(getattr(info,"trade_mode",0))!=int(self.mt5.SYMBOL_TRADE_MODE_FULL):
             result["status"]="SYMBOL_NOT_FULLY_TRADABLE"
-            return result
+            return finish()
         request,reason=self._request(signal,current,tick,info)
         if request is None:
             result["status"]=reason
-            return result
+            return finish()
         if not self.journal.reserve(oid,self.cfg.allowed_login,symbol,signal.family,signal.bar_time,signal.side):
             result["status"]="DUPLICATE_SIGNAL_IDEMPOTENT_SKIP"
-            return result
+            return finish()
         try:
             check=self.mt5.order_check(request)
         except Exception:
             self.journal.mark(oid,"PREFLIGHT_REJECTED","ORDER_CHECK_FAILED")
             result["status"]="ORDER_CHECK_FAILED"
-            return result
+            return finish()
         if check is None or int(getattr(check,"retcode",-1))!=0:
             self.journal.mark(oid,"PREFLIGHT_REJECTED","ORDER_CHECK_REJECTED")
             result["status"]="ORDER_CHECK_REJECTED"
-            return result
+            return finish()
         # Confirm account has not switched between observation and submission.
         verification=self.mt5.account_info()
         if (verification is None or int(getattr(verification,"login",0))!=self.cfg.allowed_login or
@@ -253,7 +283,7 @@ class Trader:
             int(getattr(verification,"trade_mode",-1))!=int(self.mt5.ACCOUNT_TRADE_MODE_DEMO)):
             self.journal.mark(oid,"NOT_SENT","DEMO_IDENTITY_CHANGED_BEFORE_ORDER")
             result["status"]="DEMO_IDENTITY_CHANGED_BEFORE_ORDER"
-            return result
+            return finish()
         self.journal.mark(oid,"SUBMITTING","INTENT_DURABLE_BEFORE_ORDER_SEND")
         try:
             outcome=self.mt5.order_send(request)
@@ -261,11 +291,11 @@ class Trader:
             # An exception during order_send may mean broker placed the order.
             self.journal.mark(oid,"UNKNOWN","RECONCILIATION_REQUIRED")
             result["status"]="BROKER_OUTCOME_UNKNOWN"
-            return result
+            return finish()
         if outcome is None:
             self.journal.mark(oid,"UNKNOWN","NO_BROKER_RESPONSE")
             result["status"]="BROKER_OUTCOME_UNKNOWN"
-            return result
+            return finish()
         retcode=int(getattr(outcome,"retcode",-1))
         if retcode==int(self.mt5.TRADE_RETCODE_DONE):
             self.journal.mark(oid,"ACKNOWLEDGED","BROKER_ACK_NEEDS_RECONCILIATION",str(getattr(outcome,"order","")))
@@ -277,7 +307,7 @@ class Trader:
         else:
             self.journal.mark(oid,"UNKNOWN","AMBIGUOUS_RETCODE_"+str(retcode))
             result["status"]="BROKER_OUTCOME_UNKNOWN"
-        return result
+        return finish()
 
     def cycle(self) -> dict:
         if self.account is None:
@@ -289,10 +319,12 @@ class Trader:
             except Exception as exc:
                 states.append({"symbol":symbol,"status":"STEP_EXCEPTION","code":type(exc).__name__})
         output={"service":"SentinelIndependentTrader","mode":self.cfg.mode,
-            "execution_armed":self.enabled(),"account_type":"MT5_DEMO",
+            "execution_armed":self.enabled(),"strategy_policy":self.cfg.strategy_policy,
+            "orderbook_mode":self.cfg.orderbook_mode,"account_type":"MT5_DEMO",
             "account_last4":str(self.cfg.allowed_login)[-4:],
             "timestamp":datetime.fromtimestamp(self.clock(),timezone.utc).isoformat(),
-            "symbols":states,"not_grok":True}
+            "symbols":states,"not_grok":True,
+            "local_decision_records":len(self.journal.recent_decisions(self.cfg.allowed_login,100))}
         path=Path(self.cfg.status_path)
         path.parent.mkdir(parents=True,exist_ok=True)
         tmp=path.with_suffix(".tmp")

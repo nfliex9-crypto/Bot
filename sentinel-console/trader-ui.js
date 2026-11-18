@@ -11,10 +11,10 @@ window.SentinelTrader=(()=>{
   if(!snapshot?.ok||!snapshot.trader?.length)return top+`<section class="trader-panel"><strong>لا يوجد بوت Sentinel مستقل متصل حالياً.</strong><p>لا توجد صفقات أو أرصدة افتراضية للعرض.</p></section>`;
   return top+snapshot.trader.map(device=>{
    const fresh=device.status==="DEMO_TELEMETRY_FRESH";
-   const instruments=(device.symbols||[]).map(s=>`<tr><td>${esc(s.symbol)}</td><td>${esc(s.status)}</td><td>${esc(s.strategy||"—")}</td><td>${esc(s.side||"—")}</td><td>${esc(s.order_submissions||0)}</td></tr>`).join("");
+   const instruments=(device.symbols||[]).map(s=>`<tr><td>${esc(s.symbol)}</td><td>${esc(s.status)}</td><td>${esc(s.strategy||"—")}</td><td>${esc(s.side||"—")}</td><td>${esc(s.brain_status||"—")}</td><td>${esc(s.orderbook_status||"—")}${s.book_imbalance===undefined?"":` (${esc(s.book_imbalance)})`}</td><td>${esc(s.order_submissions||0)}</td></tr>`).join("");
    return `<section class="trader-panel"><div class="trader-status-line"><strong>${fresh?"متصل — Demo":"غير متصل / بيانات قديمة"}</strong><span>حساب Demo •••• ${esc(device.account_last4)}</span></div>
-    <div class="trader-metadata">وضع المحرك: ${esc(device.mode)} | تفعيل محلي: ${device.execution_armed?"Demo enabled":"غير مفعل"}</div>
-    <table class="trader-table"><thead><tr><th>الرمز</th><th>الحالة</th><th>الاستراتيجية</th><th>الاتجاه</th><th>طلبات أُرسلت</th></tr></thead><tbody>${instruments||'<tr><td colspan="5">ما في بيانات إشارات جديدة</td></tr>'}</tbody></table>
+    <div class="trader-metadata">وضع المحرك: ${esc(device.mode)} | سياسة العقل: ${esc(device.strategy_policy||"—")} | عمق السوق: ${esc(device.orderbook_mode||"—")} | تفعيل محلي: ${device.execution_armed?"Demo enabled":"غير مفعل"}</div>
+    <table class="trader-table"><thead><tr><th>الرمز</th><th>الحالة</th><th>الاستراتيجية</th><th>الاتجاه</th><th>قرار العقل</th><th>Order Book</th><th>طلبات أُرسلت</th></tr></thead><tbody>${instruments||'<tr><td colspan="7">ما في بيانات إشارات جديدة</td></tr>'}</tbody></table>
     <p class="trader-muted">لا يوجد تأكيد لصفقات مكتملة من هذه الشاشة. لا يمكن إصدار أوامر تداول من الموقع.</p></section>`;
   }).join("");
  }

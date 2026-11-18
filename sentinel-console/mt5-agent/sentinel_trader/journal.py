@@ -30,6 +30,15 @@ class Journal:
             PRIMARY KEY(account,utc_day)
           );
           CREATE INDEX IF NOT EXISTS idx_intent_account_symbol ON intent(account,symbol,status);
+          CREATE TABLE IF NOT EXISTS research_decision (
+            id TEXT PRIMARY KEY, account INTEGER NOT NULL, symbol TEXT NOT NULL,
+            family TEXT NOT NULL, side INTEGER NOT NULL, bar_time INTEGER NOT NULL,
+            brain_status TEXT NOT NULL, book_status TEXT NOT NULL,
+            status TEXT NOT NULL, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL,
+            reviewed_as_execution INTEGER NOT NULL DEFAULT 0
+          );
+          CREATE INDEX IF NOT EXISTS idx_research_decision_account
+          ON research_decision(account,bar_time);
         """)
 
     def close(self):
@@ -58,6 +67,30 @@ class Journal:
             self.db.execute("INSERT OR IGNORE INTO baseline(account,utc_day,start_equity) VALUES(?,?,?)",(account,utc_day,equity))
             row=self.db.execute("SELECT start_equity FROM baseline WHERE account=? AND utc_day=?",(account,utc_day)).fetchone()
         return float(row[0])
+
+    def record_decision(self, oid: str, account: int, symbol: str, family: str,
+                        side: int, bar_time: int, brain_status: str,
+                        book_status: str, status: str):
+        # A signal is NOT a broker order or deal. No P&L is inferred here.
+        if not oid or not symbol or not family or not status or side not in (-1,1):
+            raise ValueError("INVALID_RESEARCH_DECISION")
+        now=int(time.time())
+        with self.db:
+            self.db.execute("""INSERT INTO research_decision
+            (id,account,symbol,family,side,bar_time,brain_status,book_status,status,first_seen,last_seen)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+            brain_status=excluded.brain_status,book_status=excluded.book_status,
+            status=excluded.status,last_seen=excluded.last_seen""",
+            (oid,account,symbol,family,side,bar_time,brain_status[:90],book_status[:90],
+             status[:90],now,now))
+
+    def recent_decisions(self, account: int, limit: int=30) -> list[dict]:
+        rows=self.db.execute("""SELECT symbol,family,side,bar_time,brain_status,book_status,
+                             status,first_seen,last_seen FROM research_decision
+                             WHERE account=? ORDER BY last_seen DESC LIMIT ?""",
+                             (account,max(1,min(limit,100)))).fetchall()
+        return [dict(zip(("symbol","family","side","bar_time","brain_status",
+                          "book_status","status","first_seen","last_seen"),r)) for r in rows]
 
     def all_intents(self):
         return self.db.execute("SELECT id,symbol,family,bar_time,status,note FROM intent ORDER BY created_at DESC").fetchall()

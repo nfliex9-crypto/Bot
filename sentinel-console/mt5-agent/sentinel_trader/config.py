@@ -24,6 +24,10 @@ class Settings:
     poll_seconds: int
     journal_path: str
     status_path: str
+    strategy_policy: str = "verified_only"
+    approval_path: str = ""
+    orderbook_mode: str = "observe"
+    max_signal_age_seconds: int = 900
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Settings":
@@ -39,7 +43,11 @@ class Settings:
             max_tick_age_seconds=int(cfg["max_tick_age_seconds"]),
             deviation_points=int(cfg["deviation_points"]),
             poll_seconds=int(cfg["poll_seconds"]), journal_path=str(cfg["journal_path"]),
-            status_path=str(cfg["status_path"]))
+            status_path=str(cfg["status_path"]),
+            strategy_policy=str(cfg.get("strategy_policy", "verified_only")),
+            approval_path=str(cfg.get("approval_path", "")),
+            orderbook_mode=str(cfg.get("orderbook_mode", "observe")),
+            max_signal_age_seconds=int(cfg.get("max_signal_age_seconds", 900)))
         result.validate()
         return result
 
@@ -57,5 +65,11 @@ class Settings:
             raise ValueError("INVALID_PORTFOLIO_LIMITS")
         if not (3<=self.max_tick_age_seconds<=60 and 1<=self.deviation_points<=100 and 5<=self.poll_seconds<=300):
             raise ValueError("INVALID_RUNTIME_LIMITS")
+        if self.strategy_policy not in ("verified_only", "demo_trial"):
+            raise ValueError("INVALID_STRATEGY_POLICY")
+        if self.orderbook_mode not in ("off", "observe", "confirm"):
+            raise ValueError("INVALID_ORDERBOOK_MODE")
+        if not (60 <= self.max_signal_age_seconds <= 900):
+            raise ValueError("INVALID_MAX_SIGNAL_AGE")
         if not self.journal_path or not self.status_path:
             raise ValueError("STATUS_AND_JOURNAL_REQUIRED")

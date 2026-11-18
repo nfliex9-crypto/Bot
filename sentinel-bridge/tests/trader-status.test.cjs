@@ -19,3 +19,23 @@ test("reject forged, stale, oversized or unrecognized status payloads",()=>{
   {...example(),symbols:Array.from({length:9},()=>example().symbols[0])},
  ])assert.equal(normalize(input,now),null);
 });
+
+test("research decisions and DOM diagnostics are bounded, never execution claims",()=>{
+ const sample=example();
+ sample.strategy_policy="verified_only";
+ sample.orderbook_mode="observe";
+ sample.symbols[0].brain_status="NO_APPROVED_SENTINEL_BRAIN_CANDIDATE";
+ sample.symbols[0].orderbook_status="BROKER_DOM_OBSERVED";
+ sample.symbols[0].book_samples=8;
+ sample.symbols[0].book_imbalance=.33;
+ const r=normalize(sample,now);
+ assert.equal(r.symbols[0].brain_status,"NO_APPROVED_SENTINEL_BRAIN_CANDIDATE");
+ assert.equal(r.symbols[0].book_imbalance,.33);
+ assert.equal(r.execution_proof,"UNVERIFIED_DEVICE_TELEMETRY_NOT_BROKER_FILL_CONFIRMATION");
+ for(const bad of ["BROKER_FILLED","ORDER_NOW"]){
+  const x=JSON.parse(JSON.stringify(sample));x.symbols[0].brain_status=bad;
+  assert.equal(normalize(x,now),null);
+ }
+ const invalid=JSON.parse(JSON.stringify(sample));invalid.symbols[0].book_imbalance=4;
+ assert.equal(normalize(invalid,now),null);
+});

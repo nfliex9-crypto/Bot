@@ -14,10 +14,13 @@ def safe_payload(state: dict) -> dict:
     symbols=[]
     for s in state.get("symbols",[])[:8]:
         if not isinstance(s,dict):continue
-        symbols.append({k:s[k] for k in ("symbol","status","strategy","side","closed_bar","order_submissions")
+        symbols.append({k:s[k] for k in ("symbol","status","strategy","side","closed_bar","order_submissions",
+                             "brain_status","research_evidence","orderbook_status","book_samples",
+                             "book_imbalance","book_persistent_side")
                         if k in s and type(s[k]) in (str,int,float)})
     return {"source":"SENTINEL_INDEPENDENT_TRADER", "account_last4":str(state.get("account_last4","")),
             "mode":state.get("mode"),"execution_armed":state.get("execution_armed") is True,
+            "strategy_policy":state.get("strategy_policy"),"orderbook_mode":state.get("orderbook_mode"),
             "timestamp":state.get("timestamp"),"symbols":symbols}
 
 
