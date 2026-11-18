@@ -38,7 +38,7 @@ const strategyList=[
 const getSave=()=>{try{return JSON.parse(localStorage.getItem(STORE)||"{}")}catch(_){return {}}};
 const saved=getSave();
 const state={
- page:"overview",preview:saved.preview!==false,connected:false,key:sessionStorage.getItem("sentinel_console_key")||"",
+ page:"overview",preview:false,connected:false,key:"",
  remote:{},errors:{},strategyDraft:saved.strategyDraft||Object.fromEntries(strategyList.map(s=>[s.id,{enabled:s.id!=="ORDER_FLOW",score:s.score}])),
  riskDraft:saved.riskDraft||{risk:.5,maxDaily:3,maxPortfolio:2,minConfidence:65,tradeLimit:3},
  search:"",strategySearch:"",strategyGroup:"ALL",tradeFilter:"ALL",symbolFilter:"ALL",
@@ -104,19 +104,21 @@ async function refresh(silent=false){
 function renderNav(){byId("nav").innerHTML=nav.map(n=>'<button class="nav-item '+(state.page===n[0]?"active":"")+'" data-nav="'+n[0]+'"><span class="nav-icon">'+n[2]+'</span><span>'+n[1]+'</span></button>').join("")}
 function renderHeader(){
  const n=nav.find(n=>n[0]===state.page);byId("breadcrumb").textContent=n?.[1]||"";
- byId("modeBadge").className="mode-indicator"+(live()?" connected":"");
- byId("modeBadge").innerHTML='<span class="mode-dot"></span>'+(live()?esc(backendMode())+" / CONNECTED":state.preview?"SAMPLE VIEW":"DISCONNECTED");
- byId("connectorMini").innerHTML='<span class="socket '+(live()?"live":"")+'"></span><div><strong>Strategy API</strong><small>'+(live()?"متصل بواجهة البوت":"غير متصل بوسيط التداول")+'</small></div><span class="mini-chevron">↗</span>';
- byId("footStatus").textContent=live()?"REMOTE API / "+backendMode():"ISOLATED CONTROL / SAMPLE";
- byId("footTimestamp").textContent=state.lastSync?"Last sync "+dateFmt(state.lastSync)+" UTC":"No verified broker feed";
+ const mt=window.FreeMT5UI?.summary()||{},ok=Boolean(mt.verified);
+ byId("modeBadge").className="mode-indicator"+(ok?" connected":"");
+ byId("modeBadge").innerHTML='<span class="mode-dot"></span>'+(ok?"MT5 DEMO / VERIFIED":mt.configured?"MT5 / NOT VERIFIED":"SETUP REQUIRED");
+ byId("connectorMini").innerHTML='<span class="socket '+(ok?"live":"")+'"></span><div><strong>MT5 / Demo</strong><small>'+(ok?"Broker connected":"ربط الحساب")+'</small></div><span class="mini-chevron">↗</span>';
+ byId("footStatus").textContent=ok?"BROKER DEMO / VERIFIED":"SENTINEL / NO VERIFIED ACCOUNT";
+ byId("footTimestamp").textContent=mt.lastSync?"Last check "+dateFmt(mt.lastSync)+" UTC":"Awaiting provider connection";
 }
 function render(){renderNav();renderHeader();renderPage()}
 function heading(k,title,description,actions=""){return '<div class="page-heading"><div><div class="eyebrow">'+k+'</div><h1>'+title+'</h1><p>'+description+'</p></div><div class="head-buttons">'+actions+'</div></div>'}
 function button(label,action,klass="",disabled=false){return '<button class="btn '+klass+'" data-action="'+action+'" '+(disabled?"disabled":"")+'>'+label+'</button>'}
 function statusNotice(){
- if(state.preview)return '<div class="notice"><span style="font-size:20px">◇</span><div><strong>وضع المعاينة — بيانات توضيحية فقط</strong><div class="notice-small">الأرقام المعروضة ليست أسعاراً أو صفقات MT5. أزرار التداول غير متاحة حتى يتم الاتصال بمصدر حقيقي.</div></div>'+button("إعداد الاتصال","open-connect","btn-sm")+'</div>';
- if(!state.connected)return '<div class="notice"><strong>البوت غير متصل</strong> لا توجد بيانات موثقة بعد.</div>';
- return '<div class="notice success"><strong>API CONNECTED</strong><span class="notice-small">المصدر متصل، لكن هذا لا يثبت اتصال منصة MT5 بالوسيط؛ افتح قسم MT5 Cloud Bridge للتحقق من حساب Demo.</span></div>';
+ const c=window.FreeMT5UI?.summary()||{};
+ if(c.verified)return '<div class="notice success"><strong>MT5 Demo متصل</strong><span class="notice-small">الحساب مؤكد عبر مزود الاتصال.</span></div>';
+ if(c.configured)return '<div class="notice info"><strong>TickerAll متصل</strong><span class="notice-small">اكمل ربط حساب MT5 Demo.</span>'+button("إدارة الحساب","nav-mt5","btn-sm")+'</div>';
+ return '<div class="notice info"><strong>Sentinel جاهز</strong><span class="notice-small">اربط حساب MT5 Demo لمتابعة البيانات الحقيقية.</span>'+button("ربط MT5","nav-mt5","btn-sm btn-primary")+'</div>';
 }
 function kpi(label,value,sub,color="#7ca1f5",cls=""){return '<article class="kpi" style="--color:'+color+'"><div class="kpi-caption">'+label+'<span class="kpi-icon">◈</span></div><div class="kpi-value '+cls+'">'+value+'</div><div class="kpi-delta">'+sub+'</div></article>'}
 function simpleChart(series,locked=false){
@@ -138,19 +140,30 @@ function panel(title,sub,content,actions=""){return '<section class="panel"><div
 function mockSignalMarkup(items){return items.length?items.map(s=>'<div class="feed-item"><div class="feed-line"></div><div class="feed-body"><div class="action-strip"><strong><span class="mono">'+esc(s.symbol)+'</span> · '+esc(s.direction||"neutral")+'</strong><span class="tag '+(String(s.status)==="executed"?"mint":"")+'">'+esc(s.status||"pending")+'</span></div><p>'+esc(s.rejection_reason||("AI confidence "+percent(s.ai_confidence)+" • "+(s.session||"—")) )+'</p><time>'+dateFmt(s.created_at)+'</time></div></div>').join(""):empty("لا إشارات","ستظهر أحدث إشارات البوت مع أسباب الرفض والتنفيذ.")}
 function parseEquity(){if(state.preview)return mockSeries();let v=state.remote.equity?.curve||state.remote.equity?.equity_curve||[];return Array.isArray(v)?v.map((p,i)=>({date:p.date||p.time||i,value:p.equity??p.balance??p.value})).filter(p=>Number.isFinite(Number(p.value))):[]}
 function overview(){
- const p=state.preview,ov=state.remote.overview||{},tod=ov.today||{};
- const base=p?sampleTrades:trades();
- const totals=p?sampleTrades.filter(t=>t.status==="closed").reduce((a,t)=>a+Number(t.pnl||0),0):Number(tod.pnl);
- const totalCount=p?sampleTrades.length:tod.trades;
- const openCount=p?base.filter(t=>t.status==="open").length:tod.open_trades;
- const equity=p?5511.2:state.remote.equity?.final_equity;
- let actions=button("↻ تحديث البيانات","refresh","btn-sm")+button("⌁ MT5 مجاني","nav-mt5","btn-sm btn-primary");
- let html=heading("MISSION CONTROL / 01","لوحة القيادة الرئيسية","مراقبة البوت، حالة التداول، ومعلومات الأداء من مصدر واحد.",actions)+statusNotice();
- html+='<div class="grid kpi-grid">'+kpi("رصيد الحساب / Equity",money(equity),"EQUITY • "+(p?"SAMPLE":"BROKER / API"),"#4ce3bd")+kpi("P&L اليوم",money(totals),"TODAY / CLOSED TRADES",totals>=0?"#4ce3bd":"#ff748f",totals>=0?"pos":"neg")+kpi("الصفقات",num(totalCount,0),"RECORDED TRADES","#799dff")+kpi("المراكز المفتوحة",num(openCount,0),"OPEN POSITIONS","#ad8cff")+'</div>';
- html+='<div class="content-grid">'+panel("منحنى رأس المال","EQUITY PERFORMANCE / FROM TRADE HISTORY",simpleChart(parseEquity(),p)+'<div class="chart-foot"><span class="equity-label">EQUITY CURVE</span><span>'+ (p?"ILLUSTRATIVE DATA":esc(state.lastSync?"UPDATED "+dateFmt(state.lastSync):"NO DATA"))+'</span></div>','<span class="tag '+(p?"amber":"mint")+'">'+(p?"SAMPLE":"CONNECTED")+'</span>')+panel("عمليات التحكم","التحكم متاح فقط عبر API متصل وبوضع Demo/Paper",'<div class="command-grid">'+[
- ["▶","تشغيل البوت","start","green"],["Ⅱ","إيقاف مؤقت","pause","warn"],["↗","استئناف العمل","resume","green"],["■","إيقاف البوت","stop","danger"]
- ].map(c=>'<button class="command '+c[3]+'" data-command="'+c[2]+'" '+(!canTrade()?"disabled":"")+'><span class="cmd-icon">'+c[0]+'</span><span>'+c[1]+'<small>'+c[2].toUpperCase()+'</small></span></button>').join("")+'</div><div class="row-summary"><div class="summary-box"><strong class="mono">'+esc(backendState().toUpperCase())+'</strong><small>BOT STATE</small></div><div class="summary-box"><strong>'+esc(backendMode())+'</strong><small>MODE</small></div><div class="summary-box"><strong>'+ (live()?"API":"—")+'</strong><small>CONNECTIVITY</small></div></div>')+'</div>';
- html+='<div class="content-grid">'+panel("آخر الصفقات","LATEST DEALS / ALL RESULTS",tradeTable(base.slice(0,5)),button("كل الصفقات","nav-trades","btn-sm btn-quiet"))+panel("تغذية الإشارات","RECENT SIGNAL ACTIVITY",'<div class="list-feed">'+mockSignalMarkup(signals().slice(0,5))+'</div>',button("سجل الإشارات","nav-signals","btn-sm btn-quiet"))+'</div>';return html;
+ const mt=window.FreeMT5UI?.summary()||{},ok=Boolean(mt.verified);
+ let html=heading("SENTINEL / OPERATIONS","مركز التحكم","حالة الحساب المباشرة وأدوات متابعة النظام.",
+ button("↻ تحديث","free-status","btn-sm")+button("⌁ إدارة MT5","nav-mt5","btn-primary btn-sm"));
+ html+=statusNotice();
+ if(!mt.configured)html+='<div class="connect-hero"><div class="hero-kicker"><span class="live-spark"></span> CONNECTION READY</div><h2>جاهز لربط أول حساب تداول</h2><p>ربط سحابي مجاني لحساب MT5 Demo، بدون Windows أو MetaApi.</p><div class="connect-actions">'+button("ربط حساب MT5","nav-mt5","btn-primary")+'</div></div>';
+ html+='<div class="grid kpi-grid">'+
+  kpi("الرصيد",ok?money(mt.balance,mt.currency||"USD"):"—","BROKER BALANCE","#46e3bb")+
+  kpi("Equity",ok?money(mt.equity,mt.currency||"USD"):"—","VERIFIED EQUITY","#799dff")+
+  kpi("مراكز مفتوحة",ok?num(mt.positions.length,0):"—","MT5 POSITIONS","#ab8cff")+
+  kpi("حالة الاتصال",ok?"CONNECTED":mt.configured?"PENDING":"OFFLINE","CLOUD BRIDGE",ok?"#46e3bb":"#ffca80")+'</div>';
+ const positions=ok?mt.positions:[];
+ const positionTable=positions.length?'<div class="table-wrap"><table class="table"><thead><tr><th>الرمز</th><th>الاتجاه</th><th>الحجم</th><th>P&L</th></tr></thead><tbody>'+
+  positions.map(p=>'<tr><td class="mono">'+esc(p.symbol)+'</td><td>'+esc(p.side)+'</td><td class="mono">'+num(p.volume,3)+'</td><td class="mono">'+(p.profit==null?"—":money(p.profit,mt.currency||"USD"))+'</td></tr>').join("")+'</tbody></table></div>':
+  empty("لا توجد مراكز موثقة","ستظهر المراكز الفعلية بعد ربط MT5 Demo.");
+ html+='<div class="content-grid">'+panel("مراكز MT5","BROKER POSITIONS / READ ONLY",positionTable,button("فتح MT5","nav-mt5","btn-sm btn-quiet"))+
+ panel("حالة النظام","LIVE INFRASTRUCTURE",'<div class="panel-pad">'+[
+  ["TickerAll API",mt.configured?"CONFIGURED":"NOT CONNECTED"],
+  ["MT5 Demo",ok?"VERIFIED":"NOT VERIFIED"],
+  ["Trading engine","NOT DEPLOYED"],
+  ["Auto execution","DISABLED"],
+  ["Account type","DEMO ONLY"]
+ ].map(x=>'<div class="key-value"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join("")+'</div>')+'</div>';
+ html+=panel("منحنى رأس المال","بانتظار سجل حقيقي للقيم الزمنية",empty("لا يوجد سجل Equity تاريخي بعد","ما منعرض رسوم أو أرقام صناعية."));
+ return html;
 }
 function tradesView(){
  let list=trades();
@@ -212,18 +225,21 @@ function logsView(){
  '<div class="notice info" style="margin-top:17px"><strong>Logs Scope</strong><span>سجل MetaApi موجود في قسم MT5 Cloud Bridge؛ سجل تنفيذ محرك التداول يحتاج خدمة تشغيل مستقلة.</span></div>';
 }
 function settingsView(){
- return heading("SYSTEM CONNECTIVITY / 09","الربط وإعدادات النظام","طبقة التحكم معزولة عن مستودع التداول الرئيسي والصفقات الحقيقية.",button("↻ اختبر الاتصال","connect","btn-sm"))+statusNotice()+
- '<div class="content-grid">'+panel("حالة الاتصال","SECURE SERVER-SIDE PROXY",'<div class="panel-pad">'+[
- ["Console status",live()?"CONNECTED":"OFFLINE / SAMPLE"],
- ["Remote bot mode",backendMode()],
- ["Bot state",backendState()],
- ["Last sync",state.lastSync?dateFmt(state.lastSync)+" UTC":"—"],
- ["Remote API",state.connected?"VERIFIED":"NOT VERIFIED"]
- ].map(x=>'<div class="key-value"><span>'+x[0]+'</span><strong>'+esc(x[1])+'</strong></div>').join("")+'<div style="margin-top:18px">'+button("إدارة رمز الدخول","open-connect","btn-sm")+'</div></div>')+
- panel("متطلبات الربط على Vercel","Variable names only — never put broker secrets in browser",'<div class="panel-pad"><div class="code-block">DASHBOARD_ACCESS_KEY = (private console key)\nBOT_API_URL = https://your-private-bot-api.example\nBOT_API_TOKEN = (optional backend API token)</div><p class="small subtle" style="margin-top:14px">يجب تأمين backend نفسه وعدم تعريض FastAPI بدون Authentication. أوامر التحكم ترفض الوضع LIVE حتى بعد الاتصال.</p><div style="margin-top:16px">'+button(state.preview?"إخفاء بيانات العرض التجريبي":"تفعيل بيانات العرض التجريبي","toggle-preview","btn-sm")+'</div></div>')+'</div>'+
- panel("قدرات API الحالية","الوظائف المؤكدة من كود مستودع Bot",'<div class="panel-pad"><div class="grid inspector-grid">'+[
- ["Bot controls","Start / Stop / Pause / Resume"],["Portfolio","Trades / Signals / Equity"],["Research","Synthetic Backtest API"],["AI","Train / Reload / Registry"],["Config","Read only — no live patch endpoint"],["MT5 execution","Cloud MT5 connected separately; strategy worker not deployed"]
- ].map(x=>'<div class="info-block"><strong>'+x[0]+'</strong>'+x[1]+'</div>').join("")+'</div></div>');
+ const c=window.FreeMT5UI?.summary()||{};
+ return heading("SYSTEM / 09","إعدادات النظام","حالة Sentinel ومصادر البيانات.",button("ربط MT5","nav-mt5","btn-primary btn-sm"))+
+ '<div class="content-grid">'+
+ panel("حالة الخدمات","ACTUAL STATUS",'<div class="panel-pad">'+[
+  ["Dashboard access","VERCEL SSO"],
+  ["TickerAll API",c.configured?"READY":"NOT CONNECTED"],
+  ["MT5 Demo",c.verified?"VERIFIED":"NOT VERIFIED"],
+  ["Strategy worker","NOT RUNNING"],
+  ["Auto execution","DISABLED"]
+ ].map(x=>'<div class="key-value"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join("")+'</div>')+
+ panel("الأدوات","LOCAL RESEARCH ONLY",'<div class="panel-pad">'+
+ '<p class="subtle">إعدادات الاستراتيجيات والمخاطر ما زالت مسودات محلية، بدون تأثير على محرك التداول.</p>'+
+ button("الاستراتيجيات","nav-strategies","btn-sm")+
+ button("المخاطر","nav-risk","btn-sm")+
+ button("Backtest","nav-backtest","btn-sm")+'</div>')+'</div>';
 }
 function mt5View(){return window.FreeMT5UI?.render()||heading("FREE MT5","الربط المجاني","جاري تحميل MT5 Bridge...")}
 function renderPage(){
@@ -235,13 +251,11 @@ function renderPage(){
  default:h=overview();}}catch(e){h=heading("DISPLAY ERROR","تعذّر عرض الصفحة",esc(e.message));eventLog("render-error",e.message)}
  byId("page").innerHTML=h;
 }
-function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.status(true);state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
+function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
-function openConnect(){
- showModal("إعداد الاتصال الآمن",'<div class="info-block"><strong>متصل بأي حساب؟</strong>هذا الموقع لا يدخل إلى MT5 مباشرة؛ يتصل بواجهة البوت عبر Proxy آمن على Vercel. Cloud MT5 Bridge يعمل بشكل مستقل، ومحرك الاستراتيجيات يحتاج API منفصلة.</div><div class="field" style="margin-top:19px"><label>Sentinel Console Access Key</label><input class="input mono" type="password" id="consoleKey" placeholder="Enter private dashboard key" value="'+esc(state.key)+'"></div><p class="small subtle">رمز اللوحة يُحفظ في sessionStorage ضمن جلسة المتصفح فقط. لا تستخدم هنا كلمة مرور MT5.</p>',
- button("إلغاء","close-modal","btn-sm")+button("حفظ واختبار الاتصال","save-connect","btn-primary btn-sm"));
-}
+function openConnect(){navigate("mt5");}
+
 function editStrategy(id){
  const s=strategyList.find(x=>x.id===id);if(!s)return;const d=state.strategyDraft[id]||{score:s.score,enabled:true};
  showModal("ضبط "+s.name,'<p class="subtle">'+s.ar+'</p><div class="field"><label>الحد الأدنى للـScore</label><input type="range" id="strategyScoreSlider" min="50" max="95" step="1" style="accent-color:#50e1bb;width:100%" value="'+d.score+'"><div class="mono" id="sliderValue" style="text-align:center;font-size:23px;color:var(--mint)">'+d.score+'</div></div><div class="info-block" style="margin-top:13px">هذا الإعداد للمسودة فقط؛ لا يؤثر على التنفيذ الفعلي.</div>',
@@ -313,11 +327,11 @@ function localBacktest(bars,balance,spreadPct){
 async function act(action){
  if(action.startsWith("free-")){await window.FreeMT5UI?.action(action);return}
  if(action.startsWith("nav-")){navigate(action.slice(4));return}
- if(action==="refresh"){if(state.preview){toast("هذه معاينة. لا يوجد مصدر حي للتحديث.");return}await refresh();return}
+ if(action==="refresh"){await window.FreeMT5UI?.sync();return}
  if(action==="open-connect"){openConnect();return}
  if(action==="close-modal"){closeModal();return}
- if(action==="connect"){await connect();return}
- if(action==="save-connect"){state.key=byId("consoleKey")?.value.trim()||"";sessionStorage.setItem("sentinel_console_key",state.key);closeModal();await connect();return}
+ if(action==="connect"){navigate("mt5");return}
+ if(action==="save-connect"){closeModal();navigate("mt5");return}
  if(action==="toggle-preview"){state.preview=!state.preview;save();render();return}
  if(action==="save-strategy"){let id=byId("modalRoot").dataset.edit;state.strategyDraft[id].score=Number(byId("strategyScoreSlider").value);save();closeModal();renderPage();toast("تم حفظ استراتيجية في المسودة","success");return}
  if(action==="export-strategies"){exportConfig("strategies");return}
@@ -363,13 +377,13 @@ document.addEventListener("input",e=>{
  if(t.id==="tradeSearch"){state.search=t.value;let pos=t.selectionStart;renderPage();let input=byId("tradeSearch");input.focus();input.setSelectionRange(pos,pos)}
  if(t.id==="strategySearch"){state.strategySearch=t.value;let pos=t.selectionStart;renderPage();let input=byId("strategySearch");input.focus();input.setSelectionRange(pos,pos)}
 });
-byId("refreshBtn").onclick=()=>{if(state.preview)toast("الواجهة في وضع المعاينة");else refresh()};
-byId("connectBtn").onclick=openConnect;
-byId("connectorMini").onclick=openConnect;
+byId("refreshBtn").onclick=()=>window.FreeMT5UI?.sync();
+byId("connectBtn").onclick=()=>navigate("mt5");
+byId("connectorMini").onclick=()=>navigate("mt5");
 byId("mobileMenu").onclick=()=>byId("sidebar").classList.toggle("open");
 function clockTick(){byId("clock").textContent=new Date().toLocaleTimeString("en-GB",{timeZone:"UTC",hour12:false})+" UTC"}
 clockTick();setInterval(clockTick,1000);
 setInterval(()=>{if(state.connected&&!state.preview)refresh(true)},25000);
 eventLog("system","Sentinel isolated dashboard initialized");
 render();
-if(state.key){connect()}
+sessionStorage.removeItem("sentinel_console_key");
