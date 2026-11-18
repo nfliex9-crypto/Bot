@@ -9,6 +9,7 @@ Module._load=function(name){
 const worker=require("../worker/runner.js");
 Module._load=oldLoad;
 const radar=require("../brain/research-radar.js");
+const publicFeed=require("../brain/public-feed.js");
 const crypto=require("node:crypto");
 function fixture(n=1200,{missingSpread=false}={}){
  const bars=[];let close=1900;
@@ -98,4 +99,23 @@ test("Crossref radar stores bibliographic metadata only; does not invent researc
  assert.match(r.items[0].source_url,/doi.org/);
  assert.equal(r.items[0].source_kind,"BIBLIOGRAPHIC_METADATA_NOT_VERIFIED_STRATEGY");
  assert.equal(r.not_used_for_orders,true);
+});
+
+test("public BTC klines preserve the actual exchange source and reject the unclosed bar",()=>{
+ const now=new Date("2026-11-18T12:30:00.000Z");
+ const base=Date.UTC(2026,9,1);
+ const rows=Array.from({length:1000},(_,i)=>{
+   const t=base+i*3600000;
+   return [t,"62000","62050","61950","62010","120",t+3600000-1,"ignored",40];
+ });
+ rows[999][6]=now.getTime()+3600000;
+ const normalized=publicFeed.parseKlines(rows,now);
+ assert.equal(normalized.bars.length,999);
+ assert.equal(normalized.quality.accepted,999);
+ assert.equal(normalized.quality.broker_spread_known,false);
+ assert.ok(normalized.bars.every(b=>b.spread===null));
+});
+test("public source rejects forged Binance symbols or trading URLs before requesting",async()=>{
+ await assert.rejects(()=>worker.fetchJSON("https://data-api.binance.vision/api/v3/klines?symbol=ETHUSDT&interval=1h&limit=1000"),/SOURCE_NOT_ALLOWLISTED/);
+ await assert.rejects(()=>worker.fetchJSON("https://data-api.binance.vision/api/v3/order?symbol=BTCUSDT"),/SOURCE_NOT_ALLOWLISTED/);
 });
