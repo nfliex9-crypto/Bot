@@ -206,7 +206,7 @@ async function evaluation(sql,id,req){
  return {run_id:runId,symbol,timeframe,evidence:results,mode:"RESEARCH_ONLY",orders_executed:0};
 }
 async function status(sql){
- const [trades,bars,runs,imports]=await Promise.all([
+ const [trades,bars,runs,imports,tagged]=await Promise.all([
   sql`SELECT account_id,COUNT(*)::int AS all_count,
     COUNT(*) FILTER(WHERE complete)::int AS completed,
     COUNT(*) FILTER(WHERE complete AND strategy_id IS NOT NULL)::int AS attributed,
@@ -218,8 +218,20 @@ async function status(sql){
   sql`SELECT id,account_id,symbol,timeframe,candles_used,coverage,analysis,created_at
     FROM sentinel_brain_runs ORDER BY created_at DESC LIMIT 6`,
   sql`SELECT account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,
-    imported_at FROM sentinel_brain_imports ORDER BY imported_at DESC LIMIT 15`
+    imported_at FROM sentinel_brain_imports ORDER BY imported_at DESC LIMIT 15`,
+  sql`SELECT account_id,close_time,broker_profit,complete,strategy_id,risk_amount,tagged_at
+    FROM sentinel_brain_trades WHERE strategy_id IS NOT NULL ORDER BY close_time DESC LIMIT 2000`
  ]);
+ const grouped=new Map();
+ for(const t of tagged){
+   const group=grouped.get(t.account_id)||[];
+   group.push({closeTime:t.close_time,brokerProfit:t.broker_profit,
+     complete:t.complete,strategyId:t.strategy_id,riskAmount:t.risk_amount,
+     taggedAt:t.tagged_at});
+   grouped.set(t.account_id,group);
+ }
+ const forward_by_account={};
+ for(const [id,group] of grouped)forward_by_account[id]=selector.assessForward(group);
  const accountRows=trades.map(x=>({account_id:x.account_id,
     real_trades:Number(x.all_count||0),completed_trades:Number(x.completed||0),
     attributed_trades:Number(x.attributed||0),wins:Number(x.wins||0),
@@ -229,10 +241,11 @@ async function status(sql){
   real_trades:accountRows.reduce((n,a)=>n+a.real_trades,0),
   completed_trades:accountRows.reduce((n,a)=>n+a.completed_trades,0),
   attributed_trades:accountRows.reduce((n,a)=>n+a.attributed_trades,0),
-  accounts:accountRows,
+  accounts:accountRows,forward_by_account,
   candles:Number(bars[0]?.count||0),
   runs:runs.map(x=>({id:x.id,account_id:x.account_id,symbol:x.symbol,timeframe:x.timeframe,
    candles:x.candles_used,date:x.created_at,portfolio:x.analysis?.portfolio,
+   paper_schedule:x.analysis?.paper_schedule,forward_quality:x.analysis?.forward_quality,
    strategies:x.analysis?.strategies?.map(s=>({
     id:s.strategy_id,status:s.status,trades:s.oos.trades,expectancy_r:s.oos.expectancy_r,
     stress_expectancy_r:s.double_costs.expectancy_r,reason:s.reason
