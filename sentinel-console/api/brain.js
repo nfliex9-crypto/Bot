@@ -171,13 +171,16 @@ async function candlesSync(sql,id,token,request){
 async function evaluation(sql,id,req){
  const symbol=symbolName(req.symbol),timeframe=String(req.timeframe||"M15").toUpperCase();
  if(!TF.has(timeframe))throw Error("INVALID_TIMEFRAME");
- const [importRows,barRows,tradeRows]=await Promise.all([
+ const [importRows,barRows,tradeRows,taggedRows]=await Promise.all([
   sql`SELECT coverage,truncated,stop_reason,provider_count
     FROM sentinel_brain_imports WHERE account_id=${id} AND symbol=${symbol} AND timeframe=${timeframe}`,
   sql`SELECT bar_time,open,high,low,close,spread,tick_volume FROM sentinel_brain_candles
     WHERE account_id=${id} AND symbol=${symbol} AND timeframe=${timeframe}
     ORDER BY bar_time DESC LIMIT 10000`,
-  sql`SELECT COUNT(*)::int AS count FROM sentinel_brain_trades WHERE account_id=${id} AND complete=true`
+  sql`SELECT COUNT(*)::int AS count FROM sentinel_brain_trades WHERE account_id=${id} AND complete=true`,
+  sql`SELECT close_time,broker_profit,complete,strategy_id,risk_amount,tagged_at
+      FROM sentinel_brain_trades WHERE account_id=${id} AND strategy_id IS NOT NULL
+      ORDER BY close_time DESC LIMIT 2000`
  ]);
  const meta=importRows[0];
  if(!meta||barRows.length<320)throw Error("IMPORT_HISTORY_FIRST");
@@ -189,6 +192,12 @@ async function evaluation(sql,id,req){
  }));
  const results=brain.research(bars,{coverage:meta.coverage,
   truncated:meta.truncated||Number(meta.provider_count)>10000,stopReason:meta.stop_reason});
+ const forward=selector.assessForward(taggedRows.map(t=>({
+    closeTime:t.close_time,brokerProfit:t.broker_profit,complete:t.complete,
+    strategyId:t.strategy_id,riskAmount:t.risk_amount,taggedAt:t.tagged_at
+ })));
+ results.forward_quality=forward.quality;
+ results.paper_schedule=selector.scheduleResearch(results,forward);
  const runId=crypto.randomUUID(),quality=JSON.stringify(results.quality),analysis=JSON.stringify(results);
  await sql`INSERT INTO sentinel_brain_runs
  (id,account_id,symbol,timeframe,candles_used,historical_trades_seen,coverage,data_quality,analysis)
