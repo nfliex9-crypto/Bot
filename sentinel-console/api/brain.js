@@ -220,7 +220,7 @@ async function evaluation(sql,id,req){
   spread:b.spread===null?null:Number(b.spread),
   tickVolume:b.tick_volume===null?null:Number(b.tick_volume)
  }));
- const results=brain.research(bars,{coverage:meta.coverage,
+ const results=brain.research(bars,{coverage:meta.coverage,timeframe,
   truncated:meta.truncated||Number(meta.provider_count)>10000,stopReason:meta.stop_reason});
  const forward=selector.assessForward(taggedRows.map(t=>({
     closeTime:t.close_time,openTime:t.open_time,ticket:t.ticket,symbol:t.symbol,
