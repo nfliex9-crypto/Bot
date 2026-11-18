@@ -54,3 +54,22 @@ test("broker ONLINE can precede balance snapshot without generating fake zero",(
  assert.match(overview,/mt\.financialsReady&&mt\.equity!=null/);
  assert.doesNotMatch(ui,/section\("Verified",3/);
 });
+
+test("AI page triggers bounded broker-history catch-up without always-on execution",()=>{
+ const ui=file("brain-ui.js"),app=file("app.js");
+ assert.match(ui,/async function maybeAutoSync/);
+ assert.match(ui,/lastAutoAttempt/);
+ assert.match(ui,/6\*3600\*1000/);
+ assert.match(ui,/call\("syncTrades"/);
+ assert.match(ui,/call\("syncCandles"/);
+ assert.match(ui,/call\("evaluate"/);
+ assert.match(app,/SentinelBrain\?\.maybeAutoSync/);
+ assert.doesNotMatch(ui,/placeOrder|order_send|place_order/);
+});
+test("forward learning is scoped by symbol and market-regime evidence is visible",()=>{
+ const ui=file("brain-ui.js");
+ assert.match(ui,/forward_by_account_symbol/);
+ assert.match(ui,/Market Regime Lab/);
+ assert.match(ui,/active_days/);
+ assert.match(ui,/recent_mean_r/);
+});
