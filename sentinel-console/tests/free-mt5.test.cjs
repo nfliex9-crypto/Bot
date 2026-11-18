@@ -21,17 +21,27 @@ const handler=require("../api/free-mt5.js");
 Module._load=orig;
 process.env.DATABASE_URL="postgresql://mock";
 process.env.MT5_CLOUD_ENCRYPTION_KEY="ac".repeat(32);
-process.env.DASHBOARD_ACCESS_KEY="unit-test-only-secret-abcdefghijklmnop";
+process.env.SENTINEL_VERCEL_SSO="enabled";
 function mockRes(){return {statusCode:0,body:null,setHeader(){return this},status(x){this.statusCode=x;return this},json(x){this.body=x;return this}}}
 async function call(method,action,body,auth=true){
  const res=mockRes();
- await handler({method,query:{action},headers:auth?{"x-console-key":process.env.DASHBOARD_ACCESS_KEY}:{},body},res);
+ await handler({method,query:{action},headers:auth?{"host":"sentinel-mt5-console.vercel.app","origin":"https://sentinel-mt5-console.vercel.app"}:{"host":"malicious.example","origin":"https://malicious.example"},body},res);
  return res;
 }
-test("only authorized keys can access the bridge",async()=>{
+test("only SSO-protected deployment origins can access the bridge",async()=>{
  queries=[];
  let r=await call("GET","status",{},false);
- assert.equal(r.statusCode,401);assert.equal(queries.length,0);
+ assert.equal(r.statusCode,403);assert.equal(queries.length,0);
+});
+test("SSO flag missing rejects request even on same host",async()=>{
+ const old=process.env.SENTINEL_VERCEL_SSO;
+ delete process.env.SENTINEL_VERCEL_SSO;
+ try {assert.equal((await call("GET","status")).statusCode,403)}
+ finally {process.env.SENTINEL_VERCEL_SSO=old}
+});
+test("cross-site POST cannot modify the MT5 connection",async()=>{
+ const r=await call("POST","forgetKey",{},false);
+ assert.equal(r.statusCode,403);
 });
 test("returns genuine not-configured status, no fake account data",async()=>{
  stored="";
