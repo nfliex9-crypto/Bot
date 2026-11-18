@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles-v2.css">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -24,10 +25,10 @@
     <div class="main-shell">
       <header class="topbar">
         <div class="topbar-title"><button class="mobile-menu icon-button" id="mobileMenu" aria-label="القائمة">☰</button><div class="breadcrumbs"><span>WORKSPACE</span><span class="slash">/</span><strong id="breadcrumb">نظرة عامة</strong></div></div>
-        <div class="topbar-actions"><span class="mode-indicator" id="modeBadge"><span class="mode-dot"></span> SAMPLE VIEW</span><span class="utc-clock" id="clock">--:--:-- UTC</span><button class="icon-button" id="refreshBtn" aria-label="تحديث" title="تحديث">↻</button><button class="top-connect" id="connectBtn"><span class="connect-button-dot"></span> الاتصال بالبوت</button><div class="avatar">S</div></div>
+        <div class="topbar-actions"><span class="mode-indicator" id="modeBadge"><span class="mode-dot"></span> CONNECTING</span><span class="utc-clock" id="clock">--:--:-- UTC</span><button class="icon-button" id="refreshBtn" aria-label="تحديث" title="تحديث">↻</button><button class="top-connect" id="connectBtn"><span class="connect-button-dot"></span> ربط MT5</button><div class="avatar">S</div></div>
       </header>
       <div class="scroll-area"><main class="page" id="page"><div class="loading-screen"><div class="loader-ring"></div><p>Preparing Sentinel Console...</p></div></main></div>
-      <footer class="statusbar"><span><span class="status-led"></span><span id="footStatus">CONTROL PLANE / STANDBY</span></span><span id="footTimestamp">No broker connection</span><span>BUILD 2026.11 · ENCRYPTED GATEWAY</span></footer>
+      <footer class="statusbar"><span><span class="status-led"></span><span id="footStatus">CONTROL PLANE / STANDBY</span></span><span id="footTimestamp">No broker connection</span><span>SENTINEL · PROTECTED BY VERCEL</span></footer>
     </div>
   </div>
   <div id="modalRoot"></div><div id="toastRoot" aria-live="polite"></div>
