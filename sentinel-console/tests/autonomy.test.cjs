@@ -1,7 +1,13 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
 const factory=require("../brain/strategy-factory.js");
+const Module=require("node:module"),oldLoad=Module._load;
+Module._load=function(name){
+ if(name==="@neondatabase/serverless")return {neon:()=>{throw Error("TEST_CANNOT_ACCESS_REAL_DB")}};
+ return oldLoad.apply(this,arguments);
+};
 const worker=require("../worker/runner.js");
+Module._load=oldLoad;
 const radar=require("../brain/research-radar.js");
 const crypto=require("node:crypto");
 function fixture(n=1200,{missingSpread=false}={}){
