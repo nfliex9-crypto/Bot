@@ -97,7 +97,7 @@ window.SentinelBrain=(()=>{
   const tradeMemory=view.data?.trade_memory_by_account?.[account()?.id];
   if(tradeMemory?.overall?.trades>0){
    const rows=(tradeMemory.by_symbol||[]).slice(0,10);
-   html+=panel("Broker Pattern Memory","كل الصفقات المكتملة حتى بدون وسم استراتيجية · تحليل سوقي لا يغيّر صفقات البوت",
+   html+=panel("Broker Pattern Memory","الصفقات المكتملة المستوردة (حتى آخر 5000) ولو بلا وسم استراتيجية · تحليل لا يغيّر صفقات البوت",
     '<div class="table-wrap"><table class="table"><thead><tr><th>Symbol</th><th>Trades</th><th>Broker P/L</th><th>Recent mean</th><th>Research</th></tr></thead><tbody>'+
     rows.map(x=>'<tr><td class="mono">'+esc(x.name)+'</td><td class="mono">'+num(x.trades,0)+'</td>'+
      '<td class="mono">'+fx(x.broker_reported_profit)+'</td><td class="mono">'+fx(x.recent_mean_broker_profit)+'</td><td>'+badgeFor(x.status)+'</td></tr>').join("")+
