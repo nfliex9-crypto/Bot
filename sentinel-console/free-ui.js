@@ -69,7 +69,8 @@ window.FreeMT5UI=(()=>{
     }
     if(!silent)toast("تم تحديث حالة الحساب","success");
   }catch(e){stateMT.error=e.message;if(!silent)toast(e.message,"error");}
-  finally{stateMT.loading=false;renderHeader();if(state.page==="mt5"||state.page==="overview")renderPage();}
+  finally{stateMT.loading=false;renderHeader();if(state.page==="mt5"||state.page==="overview")renderPage();
+    if(state.page==="ai"&&window.SentinelBrain?.maybeAutoSync)void window.SentinelBrain.maybeAutoSync();}
  }
  function section(label,num,content,done=false){
   return '<div class="step-card '+(done?"complete":"")+'"><div class="step-index">'+num+'</div><div class="step-text"><div class="step-label">'+label+'</div>'+content+'</div>'+(done?'<span class="step-check">✓</span>':"")+'</div>';
