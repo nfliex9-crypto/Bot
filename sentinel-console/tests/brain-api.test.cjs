@@ -171,3 +171,10 @@ test("evaluation SQL must isolate forward outcomes by symbol before learning",()
  assert.match(source,/history_may_be_truncated/);
  assert.doesNotMatch(source,/placeOrder|order_send|place_order/);
 });
+
+test("research run persists explicit model version for auditable selection",()=>{
+ const fs=require("node:fs"),path=require("node:path");
+ const src=fs.readFileSync(path.join(__dirname,"../api/brain.js"),"utf8");
+ assert.match(src,/analysis,version\)/);
+ assert.match(src,/\$\{brain\.VERSION\}/);
+});
