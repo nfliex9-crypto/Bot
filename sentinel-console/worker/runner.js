@@ -190,7 +190,8 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
    const cached=await sql`SELECT account_id,symbol,timeframe,MAX(bar_time) AS last_bar
-    FROM sentinel_brain_candles GROUP BY account_id,symbol,timeframe ORDER BY MAX(bar_time) DESC LIMIT 8`;
+    FROM sentinel_brain_candles WHERE account_id NOT LIKE 'native-demo-%'
+    GROUP BY account_id,symbol,timeframe ORDER BY MAX(bar_time) DESC LIMIT 8`;
    for(const row of cached)try{
     const bars=await cacheBars(sql,row.account_id,row.symbol,row.timeframe);
     if(bars.length<900)continue;
