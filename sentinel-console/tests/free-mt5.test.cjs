@@ -78,18 +78,45 @@ test("invalid broker credentials rejected before reaching provider",async()=>{
  const r=await call("POST","connect",{account:"notanumber",password:"pwd",server:"Test"});
  assert.equal(r.statusCode,400);
 });
-test("account list blocks real accounts and never renders their balances",async()=>{
+test("server status verifies Demo from broker snapshot and excludes real accounts",async()=>{
  const old=global.fetch;
- global.fetch=async()=>new Response(JSON.stringify([
-  {id:"acc_DEMO_1",broker:"mt5",server:"Demo",accountNumber:"****1234",isDemo:true,status:"CONNECTED",hot:true},
-  {id:"acc_REAL_1",broker:"mt5",server:"Real",accountNumber:"****9999",isDemo:false,status:"CONNECTED",hot:true}
- ]),{status:200});
+ global.fetch=async(url)=>{
+  const u=String(url);
+  if(u.endsWith("/v1/accounts"))return new Response(JSON.stringify([
+   {id:"acc_DEMO_1",broker:"mt5",server:"MetaQuotes-Demo",accountNumber:"****2925",isDemo:true,status:"CONNECTED",hot:true},
+   {id:"acc_REAL_1",broker:"mt5",server:"Real",accountNumber:"****9999",isDemo:false,status:"CONNECTED",hot:true}
+  ]),{status:200});
+  assert.ok(u.endsWith("/v1/accounts/acc_DEMO_1"));
+  return new Response(JSON.stringify({
+   id:"acc_DEMO_1",broker:"mt5",server:"MetaQuotes-Demo",isDemo:true,status:"online",
+   account:{accountType:"demo",balance:5000,equity:5003,currency:"USD"},
+   positions:[]
+  }),{status:200});
+ };
  try{
   const r=await call("GET","status");
   assert.equal(r.statusCode,200);
-  assert.equal(r.body.accounts.length,2);
-  assert.equal(r.body.accounts[0].blocked,false);
-  assert.equal(r.body.accounts[1].blocked,true);
+  assert.equal(r.body.accounts.length,1);
+  assert.equal(r.body.accounts[0].verified,true);
+  assert.equal(r.body.accounts[0].snapshot.balance,5000);
+  assert.equal(r.body.accounts[0].verificationError,null);
+ }finally{global.fetch=old}
+});
+test("hot provider session without snapshot shows reason, never fake balance",async()=>{
+ const old=global.fetch;
+ global.fetch=async(url)=>{
+  const u=String(url);
+  if(u.endsWith("/v1/accounts"))return new Response(JSON.stringify([
+   {id:"acc_DEMO_1",broker:"mt5",server:"MetaQuotes-Demo",accountNumber:"****2925",isDemo:true,status:"CONNECTED",hot:true}
+  ]),{status:200});
+  return new Response(JSON.stringify({code:"BROKER_ACCOUNT_NOT_HOT"}),{status:409});
+ };
+ try{
+  const r=await call("GET","status");
+  assert.equal(r.statusCode,200);
+  assert.equal(r.body.accounts[0].verified,false);
+  assert.equal(r.body.accounts[0].verificationError,"BROKER_ACCOUNT_NOT_HOT");
+  assert.equal(r.body.accounts[0].snapshot,undefined);
  }finally{global.fetch=old}
 });
 test("transient password is forwarded to TickerAll, not database",async()=>{
