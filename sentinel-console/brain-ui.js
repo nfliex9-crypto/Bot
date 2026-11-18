@@ -37,7 +37,7 @@ window.SentinelBrain=(()=>{
  const badgeFor=status=>{
   if(status==="PAPER_CANDIDATE"||status==="BOOST_PAPER_RESEARCH_2X")
    return '<span class="tag mint">'+esc(status)+'</span>';
-  if(["PAUSE_RESEARCH","PAUSE_PAPER_RESEARCH","PAUSE_PAPER_RESEARCH_DRIFT","AVOID_PAPER","DATA_INCOMPLETE","COST_DATA_WEAK"].includes(status))return '<span class="tag red">'+esc(status)+'</span>';
+  if(["PAUSE_RESEARCH","PAUSE_PAPER_RESEARCH","PAUSE_PAPER_RESEARCH_DRIFT","AVOID_PAPER","AVOID_PAPER_EXPERIMENTS","DATA_INCOMPLETE","COST_DATA_WEAK"].includes(status))return '<span class="tag red">'+esc(status)+'</span>';
   return '<span class="tag amber">'+esc(status)+'</span>';
  };
  const percentCount=(n,d)=>d>0?((n/d)*100).toFixed(1)+"%":"—";
@@ -94,6 +94,20 @@ window.SentinelBrain=(()=>{
       button("سجل الصفقات فقط","brain-trades","btn-sm",running||!isOnline())+
       button("إعادة تقييم الموجود","brain-evaluate","btn-sm",running||!view.symbol)+
     '</div></div>')+'</div>';
+  const tradeMemory=view.data?.trade_memory_by_account?.[account()?.id];
+  if(tradeMemory?.overall?.trades>0){
+   const rows=(tradeMemory.by_symbol||[]).slice(0,10);
+   html+=panel("Broker Pattern Memory","كل الصفقات المكتملة حتى بدون وسم استراتيجية · تحليل سوقي لا يغيّر صفقات البوت",
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Symbol</th><th>Trades</th><th>Broker P/L</th><th>Recent mean</th><th>Research</th></tr></thead><tbody>'+
+    rows.map(x=>'<tr><td class="mono">'+esc(x.name)+'</td><td class="mono">'+num(x.trades,0)+'</td>'+
+     '<td class="mono">'+fx(x.broker_reported_profit)+'</td><td class="mono">'+fx(x.recent_mean_broker_profit)+'</td><td>'+badgeFor(x.status)+'</td></tr>').join("")+
+    '</tbody></table></div>');
+   const sessions=(tradeMemory.by_session||[]).filter(x=>x.trades>0);
+   html+=panel("Session Memory","الأداء بحسب جلسة الدخول UTC، أو الإغلاق إذا كان وقت الدخول غير متوفر",
+    '<div class="panel-pad">'+sessions.map(x=>
+      '<div class="key-value"><span>'+esc(x.name)+' · '+num(x.trades,0)+' trades</span><strong>'+fx(x.broker_reported_profit)+' · '+esc(x.status)+'</strong></div>'
+    ).join("")+'<div class="small subtle" style="margin-top:12px">الأرقام من P/L الوسيط؛ قد لا تشمل كل الرسوم. لا يمكن استنتاج استراتيجية الصفقة من نتيجتها.</div></div>');
+  }
   const importRow=view.data?.imports?.find(x=>x.account_id===account()?.id&&x.symbol===view.symbol&&x.timeframe===view.timeframe);
   if(importRow)html+='<div class="notice '+(importRow.truncated?"":"success")+'"><strong>تغطية بيانات الشموع: '+esc(importRow.coverage)+'</strong><span class="notice-small">'+num(importRow.provider_count,0)+' شمعة · '+esc(importRow.timeframe)+' · '+(importRow.truncated?"تاريخ غير مكتمل — لا ترقية":"تم فحص سجل المصدر")+'</span></div>';
   html+=panel("Strategy Selector","نتائج خارج العينة بعد التكاليف · أفضل المرشحين فقط للتجربة الورقية",
