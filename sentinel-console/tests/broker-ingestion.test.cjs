@@ -65,7 +65,8 @@ test("rejects timestamps in the future while preserving valid historical rows",(
  const result=ingest.normalizeBatch({coverage:"complete",truncated:false,candles:rows},
   {timeframe:"M15",now});
  assert.equal(result.safeForResearch,false);
- assert.equal(result.quality.open_bar_excluded,2);
+ assert.equal(result.quality.open_bar_excluded,1);
+ assert.equal(result.quality.bad_timestamps,1);
  assert.equal(result.quality.missing_spread_ratio,0);
 });
 
