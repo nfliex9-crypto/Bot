@@ -44,6 +44,7 @@ async function request(path,token,method="GET",body=null){
  if(!/^\/(?:v1\/accounts(?:\/[A-Za-z0-9_-]+)?|v1\/sessions)$/.test(path))throw Error("INVALID_PATH");
  const headers={Authorization:"Bearer "+token,Accept:"application/json"};
  if(body!==null)headers["Content-Type"]="application/json";
+ if(method!=="GET")headers["Idempotency-Key"]=crypto.randomUUID();
  let response;
  try{
    response=await fetch(PROVIDER+path,{
@@ -150,7 +151,13 @@ module.exports=async(req,res)=>{
     const data=await request("/v1/sessions",token,"POST",{
       broker:"mt5",server,account,password,terminalType:"MOBILE"
     });
-    if(data?.isDemo!==true)return reply(res,403,{ok:false,error:"DEMO_ONLY_CONNECTION_REQUIRED"});
+    if(data?.isDemo!==true){
+      // The provider may accept real logins on paid accounts; never retain that session.
+      if(/^acc_[A-Za-z0-9_-]{3,100}$/.test(String(data?.accountId||""))){
+        try{await request("/v1/accounts/"+data.accountId,token,"DELETE");}catch(_){}
+      }
+      return reply(res,403,{ok:false,error:"DEMO_ONLY_CONNECTION_REQUIRED"});
+    }
     return reply(res,200,{ok:true,accountId:safe(data.accountId,100),
       isDemo:true,status:safe(data.status,40),
       expiresAt:data.expiresAt||null});
