@@ -34,5 +34,10 @@
         }
       ]
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "sentinel-console-isolated-v1": false
+    }
+  }
 }
