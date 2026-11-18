@@ -12,7 +12,7 @@ const STRATEGIES=[
  {id:"rsi_mean_reversion",label:"RSI mean reversion",family:"range"},
  {id:"volatility_expansion",label:"Volatility expansion",family:"momentum"}
 ];
-function n(x){const v=Number(x);return Number.isFinite(v)?v:null}
+function n(x){if(x===null||x===undefined||x===""||typeof x==="boolean")return null;const v=Number(x);return Number.isFinite(v)?v:null}
 function mean(xs){return xs.length?xs.reduce((s,x)=>s+x,0)/xs.length:0}
 function std(xs){if(xs.length<2)return 0;const m=mean(xs);return Math.sqrt(xs.reduce((s,v)=>s+(v-m)**2,0)/(xs.length-1))}
 function median(xs){if(!xs.length)return 0;const a=[...xs].sort((x,y)=>x-y),k=a.length>>1;return a.length%2?a[k]:(a[k-1]+a[k])/2}
