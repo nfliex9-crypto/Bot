@@ -21,7 +21,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "sentinel-console-isolated-v1": false
+      "sentinel-console-isolated-v1": false,
+      "sentinel-quant-hardening-20261118": false
     }
   }
 }
