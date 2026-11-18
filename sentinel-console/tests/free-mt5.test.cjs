@@ -45,9 +45,8 @@ test("invalid HTTP methods and unsafe actions rejected",async()=>{
  assert.equal((await call("POST","status",{})).statusCode,405);
  assert.equal((await call("POST","place-order",{})).statusCode,404);
 });
-test("invalid token and broker parameters rejected without provider call",async()=>{
+test("invalid token rejected without provider call",async()=>{
  assert.equal((await call("POST","saveKey",{apiKey:"invalid"})).statusCode,400);
- assert.equal((await call("POST","connect",{account:"notanumber",password:"pwd",server:"Test"})).statusCode,502);
 });
 test("token validated against provider and encrypted at rest",async()=>{
  const old=global.fetch;
@@ -65,7 +64,8 @@ test("token validated against provider and encrypted at rest",async()=>{
   assert.ok(!JSON.stringify(r.body).includes("test_key"));
  }finally{global.fetch=old}
 });
-test("account list blocks real accounts and never renders their balances",async()=>{
+test("invalid broker credentials rejected before reaching provider",async()=>{
+ const r=await call("POST","connect",{account:"notanumber",password:"pwd",server:"Test"});\n assert.equal(r.statusCode,400);\n});\ntest("account list blocks real accounts and never renders their balances",async()=>{
  const old=global.fetch;
  global.fetch=async()=>new Response(JSON.stringify([
   {id:"acc_DEMO_1",broker:"mt5",server:"Demo",accountNumber:"****1234",isDemo:true,status:"CONNECTED",hot:true},
