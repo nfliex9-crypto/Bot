@@ -210,8 +210,10 @@ async function evaluation(sql,id,req){
       ORDER BY close_time DESC LIMIT 2000`
  ]);
  const meta=importRows[0];
- if(!meta||barRows.length<320)throw Error("IMPORT_HISTORY_FIRST");
- const bars=barRows.reverse().map(b=>({
+ const latestRows=meta?barRows.slice(0,Math.min(barRows.length,Math.max(0,Number(meta.provider_count)||0))):[];
+ if(!meta||latestRows.length<320)throw Error("IMPORT_HISTORY_FIRST");
+ // Research only the last provider-confirmed window; never mix in older unverified imports.
+ const bars=latestRows.reverse().map(b=>({
   timestamp:new Date(b.bar_time).getTime(),open:Number(b.open),high:Number(b.high),
   low:Number(b.low),close:Number(b.close),
   spread:b.spread===null?null:Number(b.spread),
