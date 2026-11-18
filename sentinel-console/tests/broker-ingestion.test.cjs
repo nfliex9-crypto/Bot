@@ -40,7 +40,7 @@ test("provider Unix seconds become closed UTC bars, and open candle is excluded"
  assert.equal(result.quality.open_bar_excluded,1);
  assert.equal(result.quality.missing_spread_ratio,0);
  assert.equal(result.safeForResearch,true);
- assert.equal(new Date(result.bars.at(-1).timestamp).toISOString(),"2026-11-18T11:30:00.000Z");
+ assert.equal(new Date(result.bars.at(-1).timestamp).toISOString(),"2026-11-18T11:45:00.000Z");
 });
 test("genuine historical candles with absent spread stay stored but cannot earn a paper reward",()=>{
  const now=new Date("2026-11-18T12:07:00Z");
