@@ -58,7 +58,7 @@ test("weekend broker symbol picker excludes closed FX/gold but retains listed cr
 });
 test("worker refuses unauthorized external endpoints and never uses order endpoints",async()=>{
  await assert.rejects(()=>worker.fetchJSON("https://attacker.example/evil"),/SOURCE_NOT_ALLOWLISTED/);
- await assert.rejects(()=>worker.fetchJSON("https://api.tickerall.com/v1/accounts/abcd/orders"),/BROKER_HTTP_|/);
+ await assert.rejects(()=>worker.fetchJSON("https://api.tickerall.com/v1/accounts/abcd/orders"),/SOURCE_NOT_ALLOWLISTED/);
  const src=require("node:fs").readFileSync(require("node:path").join(__dirname,"../worker/runner.js"),"utf8");
  assert.doesNotMatch(src,/(?:\+["']\/orders|\/positions\/|method:\s*["']POST["'])/);
 });
