@@ -18,7 +18,7 @@ body{background:radial-gradient(ellipse 600px 450px at 70% -18%,#183a4458,transp
 .connect-hero p{font-size:12px;color:#b0c7ce;margin:0 0 20px;max-width:660px;position:relative}
 .hero-kicker{display:flex;align-items:center;gap:9px;color:#7df5d1;direction:ltr;justify-content:flex-end;letter-spacing:1.5px;font:600 10px 'IBM Plex Mono',monospace}
 .live-spark{display:inline-block;background:#63e5ba;width:7px;height:7px;border-radius:50%;box-shadow:0 0 0 4px #63e5ba14;animation:pulse 2.5s infinite}
-.onboarding-path{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;position:relative;margin:17px 0 20px}
+.onboarding-path{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;position:relative;margin:17px 0 20px}
 .step-card{display:flex;align-items:center;gap:11px;position:relative;background:#0c1724a1;border:1px solid #345166;border-radius:11px;padding:15px 13px;min-width:0;transition:.2s;min-height:80px}
 .step-card.complete{background:#13372d8e;border-color:#3c8c72}.step-card:hover{border-color:#66a78f}
 .step-index{flex-shrink:0;width:29px;height:29px;display:grid;place-items:center;border-radius:9px;border:1px solid #536b83;background:#25394c;color:#bdcde0;font:600 12px 'IBM Plex Mono',monospace}
