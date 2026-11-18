@@ -1,5 +1,17 @@
 # Sentinel MT5 Control Center — Standalone / Isolated
 
+## MT5 Demo — free cloud provider (default)
+
+**TickerAll Free is the default provider**, not MetaApi. It offers up to five demo accounts at $0 according to https://tickerall.com/pricing. Setup happens from the Sentinel MT5 page with a TickerAll API key and optional one-time Demo broker credentials, no Windows. The API key is encrypted server-side; broker password is never persisted.
+
+- GET `/api/free-mt5?action=status` returns sanitized provider demo account states.
+- POST `saveKey`, `connect`, `inspect`, `disconnect`, and `forgetKey` require the owner's console key.
+- No trade execution endpoints. No real-account access.
+- The Free plan may cool a connection after idle; fully unattended 24/7 bot execution is **not enabled or guaranteed**.
+
+See [CLOUD-MT5.md](./CLOUD-MT5.md) for provider-specific instructions.
+
+
 Independent premium Arabic RTL web console for **nfliex9-crypto/Bot**. Does not import or alter the running MT5 bot. Deploy separately on Vercel.
 
 ## Actual capabilities
