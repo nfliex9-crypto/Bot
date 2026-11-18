@@ -68,3 +68,54 @@ test("rejects timestamps in the future while preserving valid historical rows",(
  assert.equal(result.quality.open_bar_excluded,2);
  assert.equal(result.quality.missing_spread_ratio,0);
 });
+
+test("scheduled demo worker imports genuine broker candles and reports missing-spread quality without orders",async()=>{
+ const crypto=require("node:crypto"),Module=require("node:module");
+ const oldLoad=Module._load;
+ Module._load=function(request){
+  if(request==="@neondatabase/serverless")return {neon:()=>{throw Error("REAL_DATABASE_FORBIDDEN_IN_TEST")}};
+  return oldLoad.apply(this,arguments);
+ };
+ const worker=require("../worker/runner.js");
+ Module._load=oldLoad;
+ const key="cd".repeat(32),iv=Buffer.alloc(12,7),cipher=crypto.createCipheriv("aes-256-gcm",Buffer.from(key,"hex"),iv);
+ const token="cf_api_unit_fake_abcdefghijklmnop";
+ const bytes=Buffer.concat([cipher.update(token,"utf8"),cipher.final()]);
+ const encrypted=[iv,cipher.getAuthTag(),bytes].map(x=>x.toString("base64")).join(".");
+ const oldKey=process.env.MT5_CLOUD_ENCRYPTION_KEY;
+ process.env.MT5_CLOUD_ENCRYPTION_KEY=key;
+ const queries=[];
+ const now=new Date("2026-11-18T12:07:00Z");
+ async function sql(parts,...values){
+  const query=parts.join("?");queries.push({query,values});
+  if(query.includes("SELECT cipher_value"))return [{cipher_value:encrypted}];
+  if(query.includes("SELECT symbol,timeframe,attempted_at"))return [];
+  if(query.includes("SELECT spec FROM sentinel_autonomy_candidates"))return [];
+  if(query.includes("SELECT MAX(created_at)"))return [{last_run:now}];
+  return [];
+ }
+ const visited=[];
+ async function fetcher(url,headers){
+  visited.push(url);
+  if(url.endsWith("/v1/accounts"))return [{id:"acc_demo_testing_123",isDemo:true,hot:true,status:"CONNECTED",broker:"mt5"}];
+  if(url.endsWith("/symbols"))return {symbols:["XAUUSD","EURUSD","BTCUSD"]};
+  if(url.includes("/candles?"))return {coverage:"complete",truncated:false,candles:sample(now,null)};
+  throw Error("UNEXPECTED_EXTERNAL_SOURCE");
+ }
+ try{
+  const out=await worker.researchCycle(sql,{now,fetcher});
+  assert.equal(out.status,"COMPLETED");
+  assert.equal(out.totals.markets,1);
+  assert.equal(out.totals.candidates,0);
+  assert.equal(out.orders_executed,0);
+  const result=queries.find(x=>x.query.includes("INSERT INTO sentinel_autonomy_import_attempts"));
+  assert.ok(result);
+  assert.ok(queries.some(x=>x.query.includes("INSERT INTO sentinel_brain_candles")));
+  assert.equal(visited.filter(x=>x.includes("/candles?")).length,1);
+  assert.ok(!visited.some(x=>x.includes("/orders")));
+  assert.ok(!JSON.stringify(out).includes(token));
+ }finally{
+  if(oldKey===undefined)delete process.env.MT5_CLOUD_ENCRYPTION_KEY;
+  else process.env.MT5_CLOUD_ENCRYPTION_KEY=oldKey;
+ }
+});
