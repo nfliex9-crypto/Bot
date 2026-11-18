@@ -148,7 +148,7 @@ window.SentinelBrain=(()=>{
  async function maybeAutoSync(){
   const a=account();
   if(!a||!isOnline()||view.loading||state.page!=="ai")return;
-  const now=Date.now(),key="sentinel_brain_auto_v2_"+a.id+"_"+(view.symbol||"default")+"_"+view.timeframe;
+  const now=Date.now(),key="sentinel_brain_auto_v2_"+a.id+"_"+view.timeframe;
   let last=0;
   try{last=Number(localStorage.getItem(key)||0)}catch(_){}
   if(now-last<6*3600*1000||now-lastAutoAttempt<60000)return;
