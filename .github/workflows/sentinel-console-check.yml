@@ -23,6 +23,8 @@ jobs:
           node --check sentinel-console/free-ui.js
           node --check sentinel-console/brain/engine.js
           node --check sentinel-console/brain/selector.js
+          node --check sentinel-console/brain/trade-memory.js
+          node --test sentinel-console/tests/brain-trade-memory.test.cjs
           node --check sentinel-console/api/brain.js
           node --check sentinel-console/brain-ui.js
           node --test sentinel-console/tests/brain.test.cjs
