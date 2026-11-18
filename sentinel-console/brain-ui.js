@@ -194,7 +194,7 @@ window.SentinelBrain=(()=>{
    }
    try{localStorage.setItem(key,String(Date.now()))}catch(_){}
   }catch(e){view.error="Auto-sync: "+e.message}
-  finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+  finally{const error=view.error;view.loading=false;view.stage="";await refresh(true);if(error)view.error=error;renderPage()}
  }
  async function pipeline(){
   const a=account();
@@ -209,7 +209,7 @@ window.SentinelBrain=(()=>{
    view.lastEvaluation=await call("evaluate",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe});
    toast("اكتمل التحليل الحقيقي — بدون أوامر تداول","success");
   }catch(e){view.error=e.message;toast(e.message,"error")}
-  finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+  finally{const error=view.error;view.loading=false;view.stage="";await refresh(true);if(error)view.error=error;renderPage()}
  }
  async function action(cmd){
   if(cmd==="brain-refresh"){await refresh();return}
@@ -220,7 +220,7 @@ window.SentinelBrain=(()=>{
    view.loading=true;view.stage="جلب سجل الصفقات";renderPage();
    try{view.lastTrades=await call("syncTrades",{accountId:a.id});toast("تمت مزامنة سجل MT5","success")}
    catch(e){view.error=e.message;toast(e.message,"error")}
-   finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+   finally{const error=view.error;view.loading=false;view.stage="";await refresh(true);if(error)view.error=error;renderPage()}
    return;
   }
   if(cmd==="brain-evaluate"){
@@ -228,7 +228,7 @@ window.SentinelBrain=(()=>{
    view.loading=true;view.stage="تحليل بيانات سابقة";renderPage();
    try{view.lastEvaluation=await call("evaluate",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe});toast("تم إعادة التقييم","success")}
    catch(e){view.error=e.message;toast(e.message,"error")}
-   finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+   finally{const error=view.error;view.loading=false;view.stage="";await refresh(true);if(error)view.error=error;renderPage()}
   }
  }
  document.addEventListener("change",e=>{
