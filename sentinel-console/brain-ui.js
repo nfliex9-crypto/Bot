@@ -35,8 +35,9 @@ window.SentinelBrain=(()=>{
  }
  const fx=x=>Number.isFinite(Number(x))?Number(x).toFixed(3):"—";
  const badgeFor=status=>{
-  if(status==="PAPER_CANDIDATE")return '<span class="tag mint">PAPER CANDIDATE</span>';
-  if(["PAUSE_RESEARCH","DATA_INCOMPLETE","COST_DATA_WEAK"].includes(status))return '<span class="tag red">'+esc(status)+'</span>';
+  if(status==="PAPER_CANDIDATE"||status==="BOOST_PAPER_RESEARCH_2X")
+   return '<span class="tag mint">'+esc(status)+'</span>';
+  if(["PAUSE_RESEARCH","PAUSE_PAPER_RESEARCH","PAUSE_PAPER_RESEARCH_DRIFT","AVOID_PAPER","DATA_INCOMPLETE","COST_DATA_WEAK"].includes(status))return '<span class="tag red">'+esc(status)+'</span>';
   return '<span class="tag amber">'+esc(status)+'</span>';
  };
  const percentCount=(n,d)=>d>0?((n/d)*100).toFixed(1)+"%":"—";
@@ -86,7 +87,7 @@ window.SentinelBrain=(()=>{
     '<div class="info-block" style="margin-top:14px"><strong>Out-of-sample</strong>اختبار 3 فترات زمنية متتابعة، دخول الشمعة التالية، Stop/Target، تكلفة مضاعفة، ورفض البيانات الناقصة. ما في ربح مضمون.</div>'+
     '<div class="action-strip" style="margin-top:16px">'+
       '<span class="small subtle">'+(running?"جاري: "+esc(view.stage):"جاهز للتحليل")+'</span>'+
-      button(running?"جاري فحص البيانات...":"▶ تحديث البيانات وتدريب الاستراتيجيات","brain-pipeline","btn-primary btn-sm",running||!isOnline()||!view.symbol)+
+      button(running?"جاري فحص البيانات...":"▶ استيراد وتحليل الاستراتيجيات","brain-pipeline","btn-primary btn-sm",running||!isOnline()||!view.symbol)+
       '</div>'+
     '<div class="action-strip" style="margin-top:10px">'+
       button("↻ الرموز","brain-symbols","btn-sm",running||!isOnline())+
@@ -99,12 +100,21 @@ window.SentinelBrain=(()=>{
     strategyTable(latest),
     latest?'<span class="tag">'+esc(latest.symbol)+' · '+esc(latest.timeframe)+' · '+dateFmt(latest.date)+'</span>':'<span class="tag">AWAITING RESEARCH</span>');
   if(latest)html+='<div class="info-block" style="margin-top:16px"><strong>حالات القرار</strong>PAPER_CANDIDATE: مرشح ورقي فقط · PAUSE_RESEARCH: مستبعد بحثياً · INSUFFICIENT: سجل صغير · DATA_INCOMPLETE: بيانات ناقصة. لا توجد صفقات آلية من هذا المختبر.</div>';
-  const forward=view.data?.forward_by_account?.[account()?.id];
+  if(latest?.strategies?.length){
+   const regimeRows=latest.strategies.flatMap(s=>
+     Object.entries(s.regimes||{}).filter(([,v])=>v.trades>=12)
+      .map(([regime,v])=>({strategy:s.id,regime,...v})));
+   html+=panel("Market Regime Lab","نتائج مستقلة حسب اتجاه السوق أو تذبذبه؛ لا ترقية بدون عينة كافية",
+    regimeRows.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Strategy</th><th>Regime</th><th>Trades</th><th>2× Cost R</th><th>Decision</th></tr></thead><tbody>'+
+    regimeRows.map(x=>'<tr><td class="mono">'+esc(x.strategy)+'</td><td>'+esc(x.regime)+'</td><td class="mono">'+num(x.trades,0)+'</td><td class="mono">'+fx(x.double_cost_expectancy_r)+'</td><td>'+badgeFor(x.status)+'</td></tr>').join("")+'</tbody></table></div>':
+    empty("عينات الأنظمة السوقية غير كافية","يلزم سجل شموع أوسع لاختبار الاتجاه والتذبذب بصورة مستقلة."));
+  }
+  const forward=view.data?.forward_by_account_symbol?.[account()?.id]?.[view.symbol];
   const forwardRows=(forward?.strategy_results||[]).filter(x=>x.metrics.count>0);
-  html+=panel("Forward Learner","تعلّم من صفقات موسومة عند فتحها، قبل معرفة نتائجها",
-    forwardRows.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Strategy</th><th>حالة التعلّم</th><th>Forward Trades</th><th>Mean R</th><th>Research Weight</th></tr></thead><tbody>'+
+  html+=panel("Forward Learner · "+esc(view.symbol||"—"),"تعلّم منفصل لكل رمز، من صفقات موسومة عند فتحها، قبل معرفة نتائجها",
+    forwardRows.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Strategy</th><th>حالة التعلّم</th><th>Forward Trades</th><th>Days</th><th>Recent R</th><th>Research Weight</th></tr></thead><tbody>'+
       forwardRows.map(f=>'<tr><td class="mono">'+esc(f.strategy_id)+'</td><td>'+badgeFor(f.status)+'</td>'+
-       '<td class="mono">'+num(f.metrics.count,0)+'</td><td class="mono">'+fx(f.metrics.mean_r)+'</td>'+
+       '<td class="mono">'+num(f.metrics.count,0)+'</td><td class="mono">'+num(f.metrics.active_days,0)+'</td><td class="mono">'+fx(f.metrics.recent_mean_r)+'</td>'+
        '<td class="mono">'+f.relative_research_multiplier+'×</td></tr>').join("")+'</tbody></table></div>':
       empty("بانتظار صفقات موسومة مسبقاً","نحفظ كل صفقات MT5 لكن لا ننسب استراتيجية من الربح والخسارة. عند ربط محرك التنفيذ سيتم تسجيل هوية الاستراتيجية فور فتح الصفقة."));
   if(latest?.paper_schedule?.allocations?.length){
