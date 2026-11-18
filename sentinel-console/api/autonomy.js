@@ -28,9 +28,12 @@ module.exports=async(req,res)=>{
    sql`SELECT symbol,timeframe,status,provider_rows,stored_rows,coverage,missing_spread_ratio,
        open_bar_excluded,error_code,attempted_at,last_success_at
        FROM sentinel_autonomy_import_attempts ORDER BY attempted_at DESC LIMIT 16`,
-   sql`SELECT symbol,timeframe,COUNT(*)::int AS candle_count,
-       COUNT(spread)::int AS candles_with_spread,MAX(bar_time) AS newest_closed_bar
-       FROM sentinel_brain_candles GROUP BY symbol,timeframe ORDER BY symbol,timeframe LIMIT 24`,
+   sql`SELECT account_id,symbol,timeframe,COUNT(*)::int AS candle_count,
+       COUNT(spread)::int AS candles_with_spread,MAX(bar_time) AS newest_closed_bar,
+       CASE WHEN account_id LIKE 'native-demo-%' THEN 'LOCAL_MT5_DEMO_UNVERIFIED'
+       ELSE 'TICKERALL_DEMO_HISTORY' END AS source_type
+       FROM sentinel_brain_candles GROUP BY account_id,symbol,timeframe
+       ORDER BY symbol,timeframe LIMIT 24`,
    sql`SELECT symbol,timeframe,candle_count,missing_spread_ratio,
        jsonb_array_length(analysis->'hypotheses')::int AS idea_count,
        generated_at FROM sentinel_autonomy_broker_hypotheses
