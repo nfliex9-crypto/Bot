@@ -154,8 +154,15 @@ module.exports=async(req,res)=>{
     const accounts=await Promise.all(demos.map(async (a)=>{
       const base=minimalAccount(a);
       base.verified=false;
-      base.verificationError=a.hot?"PENDING_BROKER_SNAPSHOT":"BROKER_SESSION_COLD";
-      if(!a.hot||!/^acc_[A-Za-z0-9_-]{3,100}$/.test(String(a.id||"")))return base;
+      base.online=Boolean(a.hot===true&&String(a.status||"").toUpperCase()==="CONNECTED");
+      // Provider's own Demo + CONNECTED fields confirm broker connectivity.
+      // Separate the financial snapshot: it can lag behind the live connection.
+      base.verificationError=base.online?"PENDING_BROKER_SNAPSHOT":"BROKER_SESSION_COLD";
+      if(!/^[A-Za-z0-9_-]{3,128}$/.test(String(a.id||""))){
+        base.verificationError="INVALID_PROVIDER_ACCOUNT_ID";
+        return base;
+      }
+      if(!base.online)return base;
       try{
         const account=await request("/v1/accounts/"+a.id,token);
         const snap=snapshot(account);
@@ -188,7 +195,7 @@ module.exports=async(req,res)=>{
     });
     if(data?.isDemo!==true){
       // The provider may accept real logins on paid accounts; never retain that session.
-      if(/^acc_[A-Za-z0-9_-]{3,100}$/.test(String(data?.accountId||""))){
+      if(/^[A-Za-z0-9_-]{3,128}$/.test(String(data?.accountId||""))){
         try{await request("/v1/accounts/"+data.accountId,token,"DELETE");}catch(_){}
       }
       return reply(res,403,{ok:false,error:"DEMO_ONLY_CONNECTION_REQUIRED"});
@@ -198,7 +205,7 @@ module.exports=async(req,res)=>{
       expiresAt:data.expiresAt||null});
   }
   const accountId=String(req.body?.accountId||"");
-  if(!/^acc_[A-Za-z0-9_-]{3,100}$/.test(accountId))
+  if(!/^[A-Za-z0-9_-]{3,128}$/.test(accountId))
     return reply(res,400,{ok:false,error:"INVALID_ACCOUNT_ID"});
   if(["inspect","symbols","history"].includes(action)){
     // Verify the exact account ID is bound to a demo on this key before reading.
