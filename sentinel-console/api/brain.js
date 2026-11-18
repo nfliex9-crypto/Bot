@@ -7,6 +7,7 @@
 const crypto=require("node:crypto");
 const {neon}=require("@neondatabase/serverless");
 const brain=require("../brain/engine.js");
+const {fingerprint}=require("../brain/provenance.js");
 const selector=require("../brain/selector.js");
 const {tradeMemory}=require("../brain/trade-memory.js");
 const API="https://api.tickerall.com";
@@ -223,6 +224,7 @@ async function evaluation(sql,id,req){
  }));
  const results=brain.research(bars,{coverage:meta.coverage,timeframe,
   truncated:meta.truncated||Number(meta.provider_count)>10000,stopReason:meta.stop_reason});
+ results.dataset=fingerprint(bars,{symbol,timeframe,coverage:meta.coverage});
  const forward=selector.assessForward(taggedRows.map(t=>({
     closeTime:t.close_time,openTime:t.open_time,ticket:t.ticket,symbol:t.symbol,
     brokerProfit:t.broker_profit,complete:t.complete,
@@ -294,10 +296,12 @@ async function status(sql){
   accounts:accountRows,forward_by_account_symbol,trade_memory_by_account,
   candles:Number(bars[0]?.count||0),
   runs:runs.map(x=>({id:x.id,account_id:x.account_id,symbol:x.symbol,timeframe:x.timeframe,
-   candles:x.candles_used,date:x.created_at,version:x.version,quality:x.analysis?.quality,portfolio:x.analysis?.portfolio,
+   candles:x.candles_used,date:x.created_at,version:x.version,quality:x.analysis?.quality,
+   dataset:x.analysis?.dataset,portfolio:x.analysis?.portfolio,
    paper_schedule:x.analysis?.paper_schedule,forward_quality:x.analysis?.forward_quality,
    strategies:x.analysis?.strategies?.map(s=>({
     id:s.strategy_id,status:s.status,trades:s.oos.trades,expectancy_r:s.oos.expectancy_r,
+    integrity:s.integrity,
     stress_expectancy_r:s.double_costs.expectancy_r,regimes:s.regimes||{},reason:s.reason
    }))||[]})),
   imports:imports,execution_enabled:false,worker_running:false};
