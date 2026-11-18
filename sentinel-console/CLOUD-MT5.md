@@ -1,66 +1,36 @@
-# Sentinel MT5 — Cloud Bridge (No Windows)
+# Sentinel — MT5 Demo Bridge, Zero Subscription
 
-## Architecture
+**Provider:** TickerAll Free (https://tickerall.com/pricing)
 
-- **Sentinel web app:** isolated Vercel project; protected owner's UI, status, and configuration
-- **MetaApi:** maintains the MT5 terminal connection in its managed cloud
-- **Neon:** linked account metadata and AES-256-GCM encrypted MetaApi API token
-- **Windows:** not required for this integration. The old Windows agent remains a legacy optional path, not used by the cloud UI.
-- **Trading engine:** separate from the connection. Not yet running or connected to this cloud bridge.
+This is the default MT5 integration. It requires **no Windows laptop**, no MetaApi paid account, and no subscription for MT5 Demo under the provider's current published Free terms (up to 5 demo accounts).
 
-## Connect from a phone or browser
+## How to use
 
-1. Open https://app.metaapi.cloud/accounts and sign up or sign in.
-2. Add an **MT5 Demo** account using MetaApi's own broker connection interface; deploy it there. (Do not enter the MT5 password into Sentinel.)
-3. In MetaApi's account/API access area, copy the MetaApi API token authorized to read the connected account.
-4. Open Sentinel → MT5 Cloud Bridge → **ربط مفتاح MetaApi**. Paste the token into the **website form**, not ChatGPT. It is verified against MetaApi, then encrypted server-side and never shown again.
-5. Click **اكتشاف الحسابات** and choose your MT5 Demo account.
-6. Click refresh. Only when the provider returns `ACCOUNT_TRADE_MODE_DEMO` and `connectionStatus=CONNECTED` will Sentinel show **VERIFIED DEMO**.
+1. Sign up at https://tickerall.com/sign-up (Free plan; no card).
+2. Open the **API keys** section inside your TickerAll dashboard and create an API key. For connecting broker sessions the key must have permission to create sessions; a provider read-only key may not support that operation.
+3. In Sentinel, open **MT5 مجاني**, paste the TickerAll API key in the secure form. Sentinel validates it with TickerAll and saves only its AES-256-GCM encrypted copy in Neon.
+4. Add a **DEMO MT5** account. Supply the broker server, demo login and demo password to the secure form. Sentinel forwards them to TickerAll once; it does not save the broker password. Alternatively connect your demo directly through the TickerAll dashboard and click Refresh in Sentinel.
+5. See verified demo status and actual account data. LIVE accounts are blocked by Sentinel. Free-tier live API connections are also rejected by TickerAll according to their docs.
 
-## Features implemented
+## Engineering
 
-- Discover provider-registered MT5 accounts via official MetaApi Provisioning API.
-- Link/unlink an MT5 account without revealing the broker password to Sentinel.
-- Verify the *actual account type* via official REST account-information endpoint, never the server name.
-- Read Demo account balance/equity (only after broker type verified).
-- Show the provider deployment and connection status.
-- Client/server admin access controls with no public endpoint exposing account data.
-- Encrypt MetaApi token in Neon using a separate server environment key.
-- Invalidate stale connected status after 2 minutes without a fresh verification.
-- Remove/rotate token from settings; linked entries persist but cannot refresh until token is restored.
+- Backend `api/free-mt5.js` only permits TickerAll `/v1/accounts`, `/v1/accounts/:id`, and `/v1/sessions`, with strict action allowlisting and private console authentication.
+- Does **not** implement trade/close/modify endpoints, even for demo. The bridge reads account info, verifies Demo account type, and allows connecting/disconnecting demo sessions.
+- API key is encrypted at rest using `MT5_CLOUD_ENCRYPTION_KEY`; no broker password persistence.
+- Account balance/equity only appear after the provider confirms Demo.
+- Provider is a **third party**. Its published free offer and account limits are not guaranteed to remain unchanged.
+- The former MetaApi implementation remains in `api/cloud.js` but is **not loaded by the UI**. No MetaApi account or subscription is created by Sentinel.
 
-## Provider API sources
+## Important limitations
 
-- Account list: https://metaapi.cloud/docs/provisioning/api/account/readAccounts/
-- Account state: https://metaapi.cloud/docs/provisioning/api/account/readAccount/
-- Account information: https://metaapi.cloud/docs/client/restApi/api/readTradingTerminalState/readAccountInformation/
+**Free Demo accounts are not equivalent to an always-hot 24/7 paid terminal.** The Free plan can cool an idle session; per TickerAll's docs the warm window lasts a limited time and you can reconnect by POST /v1/sessions. Because neither the provider on Free nor Sentinel stores the demo broker password, unattended rewarming may require re-entering credentials.
 
-Endpoints are allowlisted; arbitrary upstream URLs cannot be supplied. Currently supports provider client regions new-york/vint-hill and london only. For unsupported regions, Sentinel reports `UNSUPPORTED_METAAPI_REGION` instead of fabricating a connection.
+**The strategy engine is separate and still not deployed.** This account link alone does not automatically trade, run an EA, or guarantee uptime. Future continuous trading requires a worker service plus resilient idempotent execution with Demo-only safeguards; zero cost for a genuinely uninterrupted server is not guaranteed.
 
-## Continuity / limitations
+## Official source references
 
-MetaApi hosts the MT5 terminal independently of the customer's laptop, but it is a third-party service subject to outages, account expiration, quotas, and pricing. A 100% uptime guarantee is not possible.
+- https://tickerall.com/pricing
+- https://tickerall.com/docs
+- https://tickerall.com/faq
 
-**Important:** A cloud account connection is not an actively running trading bot. Vercel serverless functions only run during requests; no continuous strategy loop, order placement, or MT5 execution engine has been attached. For unattended continuous trading, deploy a separately monitored worker (e.g. Railway) which uses an approved Demo-only MetaApi execution adapter and reliable order state reconciliation.
-
-**Current cloud integration is READ ONLY.** The UI has no trade-creation endpoint. It does not silently trade on LIVE/REAL accounts.
-
-## Environment
-
-In the Sentinel Vercel project, protect these server-side secrets:
-
-- `DATABASE_URL`
-- `DASHBOARD_ACCESS_KEY`
-- `MT5_CLOUD_ENCRYPTION_KEY` (32-byte key encoded in 64 hex characters)
-
-Never commit them to GitHub or expose them in client HTML/JS.
-
-## Testing
-
-```sh
-node --check sentinel-console/api/cloud.js
-node --check sentinel-console/cloud-ui.js
-node --test sentinel-console/tests/cloud.test.cjs
-```
-
-This tests the handler and crypto with mocks. Verification against an actual user's MetaApi account requires their own explicit credential connection in the site.
+No MetaApi trial or Cloud-g2 plan is required. Ignore the paid MetaApi flow.
