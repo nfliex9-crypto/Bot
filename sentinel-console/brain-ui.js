@@ -57,7 +57,7 @@ window.SentinelBrain=(()=>{
   const pnl=mem?.recorded_broker_profit;
   const total=(view.data?.candles||0);
   let html=heading("SENTINEL / INTELLIGENCE","العقل المتعلّم","تغذية من صفقات MT5 والشموع التاريخية. فحص خارج العيّنة وترتيب بحثي للاستراتيجيات.",
-    button("↻ تحديث","brain-refresh","btn-sm",running)+button("فتح MT5","nav-mt5","btn-sm",running));
+    button("↻ تحديث","brain-refresh","btn-sm",running)+button("↓ تصدير Evidence JSON","brain-export","btn-sm",running||!latest)+button("فتح MT5","nav-mt5","btn-sm",running));
   html+='<div class="notice info"><strong>RESEARCH MODE · NO ORDERS</strong><span class="notice-small">النتائج تُستخدم لاستبعاد الاستراتيجيات الضعيفة من التجارب وترشيح الأفضل للتداول الورقي، بدون مضاعفة اللوت أو تفعيل تداول تلقائي.</span></div>';
   if(!account())html+='<div class="notice"><strong>لا يوجد حساب Demo مرتبط</strong><span class="notice-small">اربط حساب MT5 عبر TickerAll قبل الاستيراد.</span>'+button("ربط MT5","nav-mt5","btn-sm btn-primary")+'</div>';
   else if(!isOnline())html+='<div class="notice"><strong>اتصال MT5 غير نشط</strong><span class="notice-small">فعّل جلسة TickerAll قبل تحميل سجل الصفقات والشموع.</span></div>';
@@ -215,6 +215,30 @@ window.SentinelBrain=(()=>{
   finally{const error=view.error;view.loading=false;view.stage="";await refresh(true);if(error)view.error=error;renderPage()}
  }
  async function action(cmd){
+  if(cmd==="brain-export"){
+   const current=activeRuns()[0];
+   if(!current){toast("لا يوجد تحليل حقيقي لتصديره","error");return}
+   const exportPayload={
+    format:"sentinel-perspective-compatible-evidence-v1",
+    exported_at:new Date().toISOString(),
+    source:"Sentinel broker-verified research",
+    symbol:current.symbol,timeframe:current.timeframe,
+    dataset:current.dataset||null,quality:current.quality||null,
+    research_mode:"READ_ONLY_NO_EXECUTION",
+    strategies:(current.strategies||[]).map(x=>({
+     strategy_id:x.id,status:x.status,oos_trades:x.trades,
+     expectancy_r:x.expectancy_r,double_cost_expectancy_r:x.stress_expectancy_r,
+     independent_days:x.integrity?.sample_days??null,
+     adjusted_lower_bound_r:x.integrity?.lower_bound_r??null,
+     adjusted_confidence:x.integrity?.effective_confidence??null,
+     decision:x.status==="PAPER_CANDIDATE"?"RESEARCH_ONLY":"NO_PROMOTION"
+    }))
+   };
+   const filename="sentinel-quant-evidence-"+String(current.symbol||"market").replace(/[^A-Za-z0-9._-]/g,"_")+"-"+String(current.timeframe||"TF")+".json";
+   fileDownload(filename,JSON.stringify(exportPayload,null,2),"application/json");
+   toast("تم تصدير بيانات البحث للتحليل والمقارنة","success");
+   return;
+  }
   if(cmd==="brain-refresh"){await refresh();return}
   if(cmd==="brain-symbols"){await symbols();return}
   if(cmd==="brain-pipeline"){await pipeline();return}
