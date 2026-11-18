@@ -1,0 +1,18 @@
+{
+  "mode": "research",
+  "allowed_login": 0,
+  "allowed_server": "",
+  "blocked_logins": [563722],
+  "symbols": ["XAUUSD", "EURUSD", "USTECH100M", "BTCUSD"],
+  "magic": 82618011,
+  "risk_per_trade_pct": 0.25,
+  "max_daily_drawdown_pct": 1.5,
+  "max_positions": 2,
+  "max_lots": 0.20,
+  "max_spread_bps": 8.0,
+  "max_tick_age_seconds": 15,
+  "deviation_points": 15,
+  "poll_seconds": 20,
+  "journal_path": "state/sentinel_trader.sqlite",
+  "status_path": "state/status.json"
+}

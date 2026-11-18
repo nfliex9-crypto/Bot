@@ -1,0 +1,12 @@
+.trader-panel{padding:22px 24px;border:1px solid #243650;background:#111b2c;border-radius:16px;margin:0 0 16px;color:#dce8fa}
+.trader-panel h2{font-size:22px;margin:8px 0 6px;color:#f5f8ff}
+.trader-panel p{font-size:14px;line-height:1.8;color:#a9b8ce;margin:8px 0}
+.trader-eyebrow{font-size:11px;letter-spacing:2px;color:#7aa9ec;font-weight:700}
+.trader-alert{padding-top:8px;font-size:13px;color:#b6c7dd}
+.trader-status-line{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.trader-status-line strong{font-size:16px}
+.trader-metadata,.trader-muted{font-size:12px;color:#9fadc3;margin:10px 0}
+.trader-table{width:100%;border-collapse:collapse;margin-top:15px;font-size:12px;min-width:490px}
+.trader-table th,.trader-table td{padding:10px 9px;border-bottom:1px solid #29384e;text-align:right}
+.trader-table th{color:#90a9cc;font-weight:600}
+@media(max-width:630px){.trader-panel{padding:14px;overflow-x:auto}}
