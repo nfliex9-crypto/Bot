@@ -8,7 +8,13 @@ window.FreeMT5UI=(()=>{
   TICKERALL_KEY_REJECTED:"مفتاح TickerAll غير صالح أو لا يملك صلاحية الدخول.",
   INVALID_TICKERALL_API_KEY:"صيغة المفتاح غير صحيحة. انسخه كما هو من TickerAll.",
   TICKERALL_RATE_LIMIT:"الخدمة استقبلت طلبات كثيرة. أعد المحاولة بعد قليل.",
-  TICKERALL_UNREACHABLE:"تعذّر الوصول إلى TickerAll حالياً.",
+  TICKERALL_UNREACHABLE:"الاتصال بـ TickerAll تعذّر مؤقتاً. حاول إعادة تسجيل الدخول بعد قليل.",
+  TICKERALL_SESSION_TIMEOUT:"جلسة MT5 تأخرت بالاستجابة لأكثر من 25 ثانية. تحقّق من حالة الحساب على TickerAll قبل إعادة المحاولة.",
+  TICKERALL_NETWORK_FAILURE:"انقطع اتصال خادم Sentinel بخدمة TickerAll. لا يعني ذلك خطأ بكلمة مرور MT5.",
+  BROKER_UNREACHABLE:"TickerAll متاح، لكن سيرفر MT5 لدى الوسيط لم يستجب. حاول لاحقاً.",
+  TICKERALL_REQUEST_VALIDATION:"TickerAll رفض بيانات طلب الربط. راجع اسم السيرفر ورقم حساب Demo.",
+  BROKER_ACCOUNT_HELD_BY_ANOTHER_KEY:"الحساب مربوط بمفتاح TickerAll مختلف. استخدم المفتاح الذي يملك حسابك.",
+  BROKER_ACCOUNT_ALREADY_LINKED:"هذا الحساب مرتبط بمستخدم آخر على TickerAll؛ لا يمكن فتح اتصال ثانٍ قبل تحريره.",
   BROKER_AUTH_FAILED:"رفض الوسيط بيانات الحساب. تأكد من رقم الديمو وكلمة المرور والسيرفر.",
   FREE_TIER_LIVE_REJECTED:"الخطة المجانية لا تسمح بربط الحساب الحقيقي. اختر Demo.",
   DEMO_ONLY_CONNECTION_REQUIRED:"الحساب ليس Demo. لم يتم ربطه.",
@@ -87,7 +93,7 @@ window.FreeMT5UI=(()=>{
   section("MT5 Demo",2,'<span class="step-meta">'+(connected()?"حساب Demo ONLINE":a?"تم العثور على الحساب":"أضف حسابك التجريبي")+'</span>',connected())+
   '</div>'+
   '<div class="connect-actions">'+
-   (!stateMT.configured?button("ربط TickerAll API","free-key","btn-primary"):!a?button("ربط حساب MT5 Demo","free-connect","btn-primary"):button("تحديث حالة الحساب","free-status","btn-primary"))+
+   (!stateMT.configured?button("ربط TickerAll API","free-key","btn-primary"):!a?button("ربط حساب MT5 Demo","free-connect","btn-primary"):!connected()?button("إعادة تسجيل دخول MT5 Demo","free-connect","btn-primary"):button("تحديث حالة الحساب","free-status","btn-primary"))+
    '<a class="btn btn-soft" target="_blank" rel="noopener noreferrer" href="https://tickerall.com/dashboard">فتح TickerAll <span aria-hidden="true">↗</span></a>'+
   '</div></div>';
  }
@@ -102,8 +108,8 @@ window.FreeMT5UI=(()=>{
    kpi("المراكز",financial?num(d.positions?.length||0,0):"—","OPEN POSITIONS","#ab8cff")+
    kpi("الحالة",ok?"ONLINE":a.hot?"ACTIVE":"IDLE","CLOUD SESSION",a.hot?"#4ce3bd":"#ffca80")+
   '</div><div class="panel-pad" style="padding-top:0"><div class="action-strip">'+
-   '<span class="small subtle">'+(ok?"بيانات الحساب مؤكدة":ok?"الحساب متصل · قراءة الرصيد قيد التحديث":a.verificationError?friendly(a.verificationError):"بانتظار قراءة بيانات الوسيط")+'</span>'+
-   '<div class="head-buttons">'+button("فحص الحساب","free-inspect:"+a.id,"btn-sm")+
+   '<span class="small subtle">'+(financial?"البيانات متزامنة مع الوسيط":ok?"الاتصال نشط · الرصيد قيد التحديث":a.verificationError?friendly(a.verificationError):"بانتظار حالة الحساب")+'</span>'+
+   '<div class="head-buttons">'+(!ok?button("إعادة تسجيل الدخول","free-connect","btn-sm btn-primary"):"")+button("فحص الحساب","free-inspect:"+a.id,"btn-sm")+
    button("سجل الصفقات","free-history:"+a.id,"btn-sm")+
    button("الرموز","free-symbols:"+a.id,"btn-sm")+
    button("فصل الحساب","free-disconnect:"+a.id,"btn-sm btn-danger")+'</div></div>'+
