@@ -81,6 +81,33 @@ async function verifyDemo(token,id){
  if(!a.hot)throw Error("BROKER_SESSION_COLD");
  return a;
 }
+async function tagOpenPosition(sql,id,token,body){
+ await verifyDemo(token,id);
+ const ticket=String(body.ticket||"").trim(),strategyId=String(body.strategyId||"").trim();
+ const riskAmount=Number(body.riskAmount);
+ if(!/^[0-9]{1,24}$/.test(ticket)||!selector.ALLOWED.has(strategyId)||
+   !Number.isFinite(riskAmount)||riskAmount<=0||riskAmount>1000000)
+   throw Error("INVALID_PRETRADE_TAG");
+ // Check the broker position is actually OPEN *now*, in a DEMO terminal.
+ const snapshot=await provider("/v1/accounts/"+id,token);
+ if(snapshot?.isDemo!==true||snapshot?.account?.accountType!=="demo"||snapshot?.status!=="online")
+   throw Error("DEMO_ACCOUNT_REQUIRED");
+ const p=(snapshot.positions||[]).find(x=>String(x.ticket)===ticket);
+ if(!p)throw Error("POSITION_NOT_OPEN");
+ const opened=Date.parse(String(p.openTime||""));
+ const age=Date.now()-opened;
+ // Retroactive labelling of a known winner would contaminate the learning set.
+ if(!Number.isFinite(age)||age< -20000||age>120000)
+   throw Error("TAG_WINDOW_EXPIRED");
+ const symbol=symbolName(p.symbol);
+ const rows=await sql`INSERT INTO sentinel_brain_order_tags
+  (account_id,ticket,symbol,strategy_id,risk_amount)
+  VALUES(${id},${ticket},${symbol},${strategyId},${riskAmount})
+  ON CONFLICT(account_id,ticket) DO NOTHING RETURNING account_id,ticket,strategy_id,recorded_at`;
+ return {tagged:rows.length===1,strategy_id:rows[0]?.strategy_id||null,
+  reason:rows.length?"RECORDED_BEFORE_CLOSE":"ALREADY_TAGGED",
+  order_submitted:false};
+}
 async function tradeSync(sql,id,token){
  await verifyDemo(token,id);
  const r=await provider("/v1/accounts/"+id+"/history?limit=5000&waitMs=0",token);
@@ -254,7 +281,7 @@ async function status(sql){
 }
 module.exports=async(req,res)=>{
  const action=String(req.query?.action||"");
- const routes={status:"GET",symbols:"POST",syncTrades:"POST",syncCandles:"POST",evaluate:"POST"};
+ const routes={status:"GET",symbols:"POST",tagPosition:"POST",syncTrades:"POST",syncCandles:"POST",evaluate:"POST"};
  if(!Object.hasOwn(routes,action))return reply(res,404,{ok:false,error:"UNKNOWN_ACTION"});
  if(req.method!==routes[action])return reply(res,405,{ok:false,error:"INVALID_METHOD"});
  if(!protect(req))return reply(res,403,{ok:false,error:"PROTECTED_DASHBOARD_REQUIRED"});
@@ -273,6 +300,7 @@ module.exports=async(req,res)=>{
    await verifyDemo(token,id);
    const list=await provider("/v1/accounts/"+id+"/symbols",token);
    return reply(res,200,{ok:true,data:{symbols:Array.isArray(list?.symbols)?list.symbols.slice(0,600):[]}});}
+  if(action==="tagPosition")return reply(res,200,{ok:true,data:await tagOpenPosition(sql,id,token,req.body||{})});
   if(action==="syncTrades")return reply(res,200,{ok:true,data:await tradeSync(sql,id,token)});
   if(action==="syncCandles")return reply(res,200,{ok:true,data:await candlesSync(sql,id,token,req.body||{})});
   return reply(res,404,{ok:false,error:"UNKNOWN_ACTION"});
@@ -281,7 +309,7 @@ module.exports=async(req,res)=>{
   const known=new Set(["DEMO_ACCOUNT_REQUIRED","BROKER_SESSION_COLD","TICKERALL_RATE_LIMIT",
    "TICKERALL_NOT_CONNECTED","TICKERALL_AUTH_FAILED","TICKERALL_UNREACHABLE",
    "INVALID_SYMBOL","INVALID_TIMEFRAME","INVALID_HISTORY_WINDOW","IMPORT_HISTORY_FIRST",
-   "INVALID_ACCOUNT_ID"]);
+   "INVALID_ACCOUNT_ID","INVALID_PRETRADE_TAG","POSITION_NOT_OPEN","TAG_WINDOW_EXPIRED"]);
   if(known.has(code))return reply(res,422,{ok:false,error:code});
   // Do not leak database details, encrypted tokens, provider bodies, or trade history.
   console.error("sentinel_brain_failure",code.replace(/[\r\n]/g,"").slice(0,85));
