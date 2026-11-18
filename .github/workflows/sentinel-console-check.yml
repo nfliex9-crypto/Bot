@@ -2,7 +2,7 @@ name: Sentinel Console Build Checks
 
 on:
   push:
-    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118]
+    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118, sentinel-independent-trader-v1]
   workflow_dispatch:
 
 jobs:
@@ -53,12 +53,18 @@ jobs:
           node --check sentinel-bridge/native-ingest.js
           node --test sentinel-bridge/tests/native-ingest.test.cjs
           node --test sentinel-bridge/tests/native-bridge.test.cjs
+          node --check sentinel-bridge/trader-contract.js
+          node --test sentinel-bridge/tests/trader-status.test.cjs
+          node --check sentinel-console/api/trader.js
+          node --check sentinel-console/trader-ui.js
           node --check sentinel-bridge/api/mt5.js
       - name: Unit test Windows agent core under mocked MT5
         run: |
           python -m py_compile sentinel-console/mt5-agent/agent.py sentinel-console/mt5-agent/export_history.py sentinel-console/mt5-agent/upload_history.py
           python -m unittest discover -s sentinel-console/mt5-agent -p 'test_agent.py' -v
           python -m unittest discover -s sentinel-console/mt5-agent -p 'test_export_history.py' -v
+          python -m unittest discover -s sentinel-console/mt5-agent/sentinel_trader/tests -p 'test_*.py' -v
+          python -m compileall -q sentinel-console/mt5-agent/sentinel_trader
       - name: Assert isolated deployment assets
         run: |
           test -s sentinel-console/index.html
