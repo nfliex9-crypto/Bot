@@ -120,3 +120,45 @@ test("refuses analysis with zero imported broker history",async()=>{
  assert.equal(r.code,422);
  assert.equal(r.body.error,"IMPORT_HISTORY_FIRST");
 });
+
+test("old open positions cannot be retroactively assigned to a winning strategy",async()=>{
+ const previous=global.fetch;
+ dbCalls=[];
+ global.fetch=async(url)=>{
+  if(String(url).endsWith("/v1/accounts"))return new Response(JSON.stringify([
+    {id:"acc_test123",broker:"mt5",isDemo:true,hot:true}
+  ]),{status:200});
+  return new Response(JSON.stringify({
+    id:"acc_test123",isDemo:true,status:"online",account:{accountType:"demo"},
+    positions:[{ticket:991,symbol:"EURUSD",openTime:new Date(Date.now()-3600000).toISOString()}]
+  }),{status:200});
+ };
+ try{
+  const r=await run("tagPosition",{accountId:"acc_test123",ticket:"991",
+    strategyId:"ema_pullback",riskAmount:10});
+  assert.equal(r.code,422);
+  assert.equal(r.body.error,"TAG_WINDOW_EXPIRED");
+  assert.ok(!dbCalls.some(q=>q.q.includes("INSERT INTO sentinel_brain_order_tags")));
+ }finally{global.fetch=previous}
+});
+test("new actual DEMO open position can be attributed immutably without sending orders",async()=>{
+ const previous=global.fetch;dbCalls=[];
+ global.fetch=async(url)=>{
+  if(String(url).endsWith("/v1/accounts"))return new Response(JSON.stringify([
+    {id:"acc_test123",broker:"mt5",isDemo:true,hot:true}
+  ]),{status:200});
+  return new Response(JSON.stringify({
+    id:"acc_test123",isDemo:true,status:"online",account:{accountType:"demo"},
+    positions:[{ticket:991,symbol:"EURUSD",openTime:new Date(Date.now()-10000).toISOString()}]
+  }),{status:200});
+ };
+ try{
+  const r=await run("tagPosition",{accountId:"acc_test123",ticket:"991",
+    strategyId:"ema_pullback",riskAmount:10});
+  assert.equal(r.code,200);
+  assert.equal(r.body.data.order_submitted,false);
+  const insert=dbCalls.find(x=>x.q.includes("INSERT INTO sentinel_brain_order_tags"));
+  assert.ok(insert);
+  assert.ok(insert.q.includes("ON CONFLICT(account_id,ticket) DO NOTHING"));
+ }finally{global.fetch=previous}
+});
