@@ -73,3 +73,11 @@ test("forward learning is scoped by symbol and market-regime evidence is visible
  assert.match(ui,/active_days/);
  assert.match(ui,/recent_mean_r/);
 });
+
+test("research UI distinguishes incomplete source data from verified performance",()=>{
+ const ui=file("brain-ui.js");
+ assert.match(ui,/Data Quality/);
+ assert.match(ui,/missing_spread_ratio/);
+ assert.match(ui,/source_coverage/);
+ assert.match(ui,/time_gap_events/);
+});
