@@ -37,15 +37,17 @@ window.FreeMT5UI=(()=>{
   return result;
  }
  const primary=()=>stateMT.accounts.find(a=>a.isDemo&&a.verified)||stateMT.accounts.find(a=>a.isDemo&&a.hot)||stateMT.accounts.find(a=>a.isDemo)||null;
- const verified=()=>{const a=primary();const d=a?stateMT.details[a.id]:null;return Boolean(a?.verified&&a?.hot&&d?.online&&d?.isDemo)};
+ const connected=()=>{const a=primary();return Boolean(a?.isDemo&&a?.online)};
+ const financialsReady=()=>{const a=primary(),d=a?stateMT.details[a.id]:null;return Boolean(a?.verified&&d?.online&&d?.isDemo)};
  function summary(){
   const a=primary(),d=a?stateMT.details[a.id]:null;
   return {
    configured:stateMT.configured,accounts:stateMT.accounts.length,
    hot:stateMT.accounts.filter(x=>x.isDemo&&x.hot).length,
-   verified:verified(),balance:verified()?d.balance:null,
-   equity:verified()?d.equity:null,currency:verified()?d.currency:null,
-   positions:verified()?(d.positions||[]):[],account:a,
+   verified:connected(),financialsReady:financialsReady(),
+   balance:financialsReady()?d.balance:null,
+   equity:financialsReady()?d.equity:null,currency:financialsReady()?d.currency:null,
+   positions:financialsReady()?(d.positions||[]):[],account:a,
    connection:a?(a.hot?"hot":"cold"):"unlinked",error:stateMT.error,lastSync:stateMT.lastSync
   };
  }
