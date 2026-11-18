@@ -6,6 +6,9 @@
     },
     "api/free-mt5.js": {
       "maxDuration": 30
+    },
+    "api/brain.js": {
+      "maxDuration": 30
     }
   },
   "headers": [
