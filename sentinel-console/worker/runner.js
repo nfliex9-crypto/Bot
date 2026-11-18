@@ -27,7 +27,7 @@ async function fetchJSON(url,headers={}){
 }
 const selectMarkets=broker.selectMarkets;
 
-async function saveBars(sql,account,symbol,tf,source){
+async function saveBars(sql,account,symbol,tf,source,hours=broker.LOOKBACK_HOURS[tf]){
  const batch=broker.normalizeBatch(source,{timeframe:tf,now:new Date()});
  const bars=batch.bars.slice(-10000);
  if(!bars.length)return {...batch,bars:[]};
@@ -37,7 +37,7 @@ async function saveBars(sql,account,symbol,tf,source){
  FROM jsonb_to_recordset(${j}::jsonb) AS r(bar_time timestamptz,open numeric,high numeric,low numeric,close numeric,spread numeric,tick_volume numeric)
  ON CONFLICT(account_id,symbol,timeframe,bar_time) DO UPDATE SET open=EXCLUDED.open,high=EXCLUDED.high,low=EXCLUDED.low,close=EXCLUDED.close,spread=EXCLUDED.spread,tick_volume=EXCLUDED.tick_volume,fetched_at=NOW()`;
  await sql`INSERT INTO sentinel_brain_imports(account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,stop_reason,imported_at)
- VALUES(${account},${symbol},${tf},${tf==="M15"?1440:3000},${bars.length},${String(source.coverage||"unknown")},${source.truncated===true},${String(source.stopReason||"")},NOW())
+ VALUES(${account},${symbol},${tf},${hours},${bars.length},${String(source.coverage||"unknown")},${source.truncated===true},${String(source.stopReason||"")},NOW())
  ON CONFLICT(account_id,symbol,timeframe) DO UPDATE SET provider_count=EXCLUDED.provider_count,coverage=EXCLUDED.coverage,
  truncated=EXCLUDED.truncated,stop_reason=EXCLUDED.stop_reason,imported_at=NOW()`;
  return {...batch,bars};
@@ -140,7 +140,7 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
         const url=API+"/v1/accounts/"+demo.id+"/candles?"+
           new URLSearchParams({symbol,timeframe:tf,hours:String(hours)});
         const response=await fetcher(url,{Authorization:"Bearer "+token});
-        const batch=await saveBars(sql,demo.id,symbol,tf,response);
+        const batch=await saveBars(sql,demo.id,symbol,tf,response,hours);
         if(!batch.bars.length){
           attempt={symbol,tf,status:"NO_CLOSED_BROKER_CANDLES",
             received:batch.quality.raw_provider_rows,coverage:batch.coverage};
