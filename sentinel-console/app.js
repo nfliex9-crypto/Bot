@@ -2,8 +2,8 @@
 "use strict";
 const byId=id=>document.getElementById(id);
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money=(n,currency="USD")=>Number.isFinite(Number(n))?new Intl.NumberFormat("en-US",{style:"currency",currency,maximumFractionDigits:2}).format(Number(n)):"—";
-const num=(n,d=2)=>Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:d}):"—";
+const money=(n,currency="USD")=>(n!==null&&n!==undefined&&n!=="")&&Number.isFinite(Number(n))?new Intl.NumberFormat("en-US",{style:"currency",currency,maximumFractionDigits:2}).format(Number(n)):"—";
+const num=(n,d=2)=>(n!==null&&n!==undefined&&n!=="")&&Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:d}):"—";
 const percent=n=>Number.isFinite(Number(n))?(Number(n)*100).toFixed(2)+"%":"—";
 const dateFmt=v=>v?new Date(v).toLocaleString("en-GB",{timeZone:"UTC",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
 const idName=s=>String(s||"").replace(/_/g," ").toUpperCase();
@@ -166,12 +166,19 @@ function overview(){
  return html;
 }
 function tradesView(){
- let list=trades();
- if(state.tradeFilter!=="ALL")list=list.filter(x=>String(x.status||"").toLowerCase()===state.tradeFilter.toLowerCase());
- if(state.search)list=list.filter(x=>Object.values(x).join(" ").toLowerCase().includes(state.search.toLowerCase()));
- return heading("TRADING DESK / 02","مركز الصفقات","استعراض الصفقات المفتوحة والمغلقة ومراجعة تفاصيل التنفيذ.",button("↻ تحديث","refresh","btn-sm"))+statusNotice()+'<div class="filterbar"><input class="input short" id="tradeSearch" placeholder="بحث برمز أو استراتيجية..." value="'+esc(state.search)+'"><select class="input select short" id="tradeFilter"><option value="ALL">جميع الحالات</option><option value="open" '+(state.tradeFilter==="open"?"selected":"")+'>OPEN</option><option value="closed" '+(state.tradeFilter==="closed"?"selected":"")+'>CLOSED</option></select><span class="tag">'+list.length+' RECORDS</span></div>'+panel("سجل الصفقات الكامل","لا توجد أزرار فتح صفقات يدوية بدون بروتوكول تنفيذ آمن",tradeTable(list))+'<div class="info-block" style="margin-top:17px"> <strong>التنفيذ على MT5</strong>واجهة البوت الحالية تسمح بعرض الصفقات، لكنها لا توفر Endpoint معتمداً لإغلاق مركز يدوي أو تعديل SL/TP. لذلك لا نزعم إمكانية إدارة الأوامر اليدوية هنا قبل إضافة واجهة تنفيذ مصادَق عليها.</div>';
+ const mt=window.FreeMT5UI?.summary()||{},positions=mt.verified?mt.positions||[]:[];
+ const rows=positions.length?'<div class="table-wrap"><table class="table"><thead><tr><th>الرمز</th><th>الاتجاه</th><th>الحجم</th><th>P&L</th></tr></thead><tbody>'+
+ positions.map(p=>'<tr><td class="mono">'+esc(p.symbol)+'</td><td><span class="direction '+(p.side==="BUY"?"long":"short")+'">'+esc(p.side||"—")+'</span></td><td class="mono">'+num(p.volume,3)+'</td><td class="mono '+(p.profit>=0?"pos":"neg")+'">'+(p.profit==null?"—":money(p.profit,mt.currency||"USD"))+'</td></tr>').join("")+'</tbody></table></div>':
+ empty("لا توجد صفقات مفتوحة موثقة","يظهر سجل الحساب الفعلي بعد ربط MT5 Demo والتحقق من الاتصال.");
+ return heading("TRADING DESK / 02","الصفقات والمراكز","عرض مباشر لحساب MT5 Demo دون بيانات تجريبية.",
+ button("↻ تحديث","free-status","btn-sm")+button("إدارة الحساب","nav-mt5","btn-primary btn-sm"))+
+ statusNotice()+panel("المراكز المفتوحة","FROM CONNECTED MT5 DEMO",rows)+
+ '<div class="info-block" style="margin-top:15px">يمكن عرض سجل الصفقات المغلقة من صفحة MT5 بعد الربط. فتح وإغلاق الصفقات آلياً يتطلب تشغيل محرك الاستراتيجيات بشكل مستقل.</div>';
 }
-function signalsView(){const list=signals();return heading("INTELLIGENCE FEED / 03","الإشارات والتحليلات","السجل الفعلي للقرارات، الثقة، وأسباب القبول أو الرفض.",button("↻ تحديث","refresh","btn-sm"))+statusNotice()+panel("سجل القرارات","SIGNAL TRACE / VERIFIED WHEN CONNECTED",'<div class="table-wrap"><table class="table"><thead><tr><th>SYMBOL</th><th>الاتجاه</th><th>CONFIDENCE</th><th>STATUS</th><th>H1 / M15</th><th>REASON</th><th>UTC</th></tr></thead><tbody>'+(list.length?list.map(s=>'<tr><td class="mono">'+esc(s.symbol)+'</td><td>'+esc(s.direction)+'</td><td class="mono">'+percent(s.ai_confidence)+'</td><td><span class="tag '+(s.status==="executed"?"mint":"")+'">'+esc(s.status)+'</span></td><td class="mono">'+esc(s.h1_bias||"—")+' / '+esc(s.m15_trend||"—")+'</td><td>'+esc(s.rejection_reason||"—")+'</td><td class="mono">'+dateFmt(s.created_at)+'</td></tr>').join(""):'<tr><td colspan="7">'+empty("سجل فارغ","لم تصل إشارات بعد.")+'</td></tr>')+'</tbody></table></div>')+'<div class="info-block" style="margin-top:16px"><strong>Reason Codes</strong>TREND_ALIGNED · HTF_CONFLICT · BREAKOUT_CONFIRMED · LIQUIDITY_SWEPT · SPREAD_HIGH · RR_TOO_LOW. تظهر الرموز الحقيقية عندما يسجلها البوت في الـAPI.</div>';
+function signalsView(){
+ return heading("INTELLIGENCE / 03","الإشارات والقرارات","تظهر الإشارات عندما يتم تشغيل محرك التداول وربطه بالواجهة.",
+ button("إدارة MT5","nav-mt5","btn-sm"))+statusNotice()+
+ panel("تغذية الإشارات","NO SYNTHETIC SIGNALS",empty("المحرك غير متصل","لن نعرض إشارات مصطنعة أو قرارات مزعومة قبل ربط مصدر فعلي."));
 }
 function strategiesView(){
  const all=strategyList.filter(s=>(state.strategyGroup==="ALL"||s.group===state.strategyGroup)&&(!state.strategySearch||s.id.toLowerCase().includes(state.strategySearch.toLowerCase())||s.ar.includes(state.strategySearch)));
