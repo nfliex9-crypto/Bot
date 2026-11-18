@@ -17,7 +17,7 @@ module.exports=async(req,res)=>{
  if(!process.env.DATABASE_URL)return reply(res,503,{ok:false,error:"DATABASE_NOT_CONFIGURED"});
  const sql=neon(process.env.DATABASE_URL);
  try{
-  const [workers,cycles,candidates,papers,stats,publicResearch,marketImports,brokerBars]=await Promise.all([
+  const [workers,cycles,candidates,papers,stats,publicResearch,marketImports,brokerBars,brokerHypotheses]=await Promise.all([
    sql`SELECT status,last_heartbeat_at,last_success_at,last_cycle_id,last_error FROM sentinel_autonomy_worker_state WHERE worker_name='sentinel-autonomy' LIMIT 1`,
    sql`SELECT cycle_id,started_at,finished_at,status,account_id,totals,notes,markets_checked FROM sentinel_autonomy_cycles ORDER BY started_at DESC LIMIT 8`,
    sql`SELECT candidate_id,symbol,timeframe,family,status,reward_points,evaluated_cycles,metrics,last_evaluated_at FROM sentinel_autonomy_candidates ORDER BY last_evaluated_at DESC,reward_points DESC LIMIT 60`,
@@ -30,7 +30,11 @@ module.exports=async(req,res)=>{
        FROM sentinel_autonomy_import_attempts ORDER BY attempted_at DESC LIMIT 16`,
    sql`SELECT symbol,timeframe,COUNT(*)::int AS candle_count,
        COUNT(spread)::int AS candles_with_spread,MAX(bar_time) AS newest_closed_bar
-       FROM sentinel_brain_candles GROUP BY symbol,timeframe ORDER BY symbol,timeframe LIMIT 24`
+       FROM sentinel_brain_candles GROUP BY symbol,timeframe ORDER BY symbol,timeframe LIMIT 24`,
+   sql`SELECT symbol,timeframe,candle_count,missing_spread_ratio,
+       jsonb_array_length(analysis->'hypotheses')::int AS idea_count,
+       generated_at FROM sentinel_autonomy_broker_hypotheses
+       ORDER BY generated_at DESC LIMIT 12`
   ]);
   const w=workers[0]||null;
   const last=w?.last_heartbeat_at?new Date(w.last_heartbeat_at).getTime():0;
@@ -43,7 +47,7 @@ module.exports=async(req,res)=>{
    fresh:heartbeatFresh
   };
   return reply(res,200,{ok:true,mode:"AUTONOMOUS_RESEARCH_ONLY",worker,
-   cycles,stats,public_research:publicResearch,market_imports:marketImports,broker_candles:brokerBars,
+   cycles,stats,public_research:publicResearch,market_imports:marketImports,broker_candles:brokerBars,broker_hypotheses:brokerHypotheses,
    candidates:candidates.map(c=>({
     id:c.candidate_id,symbol:c.symbol,timeframe:c.timeframe,family:c.family,
     status:c.status,reward_points:c.reward_points,evaluated_cycles:c.evaluated_cycles,
