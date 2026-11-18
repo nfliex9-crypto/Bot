@@ -5,7 +5,7 @@
  * scores and paper-only rankings. No trading APIs, no synthetic candles,
  * no future-bar signals or use of backtest labels as forward evidence.
  */
-const VERSION="brain-research-v1";
+const VERSION="brain-research-v2";
 const STRATEGIES=[
  {id:"ema_pullback",label:"EMA pullback",family:"trend"},
  {id:"donchian_breakout",label:"Donchian breakout",family:"breakout"},
@@ -22,13 +22,15 @@ function timeMs(t){
 }
 function normalizeCandles(input){
  if(!Array.isArray(input))throw Error("CANDLES_MUST_BE_ARRAY");
- const byTime=new Map();let rejected=0,missingSpread=0;
+ const byTime=new Map();let rejected=0,missingSpread=0,nonMonotonic=0,previousTs=null;
  for(const bar of input){
   const ts=timeMs(bar.timestamp??bar.time),open=n(bar.open),high=n(bar.high),low=n(bar.low),close=n(bar.close);
   if(ts===null||open===null||high===null||low===null||close===null||
     low<=0||low>Math.min(open,close)||high<Math.max(open,close)||high<low){
     rejected++;continue;
   }
+  if(previousTs!==null&&ts<=previousTs)nonMonotonic++;
+  previousTs=ts;
   const spread=n(bar.spread);
   if(spread===null||spread<=0)missingSpread++;
   byTime.set(ts,{timestamp:ts,open,high,low,close,
@@ -36,7 +38,7 @@ function normalizeCandles(input){
    tickVolume:n(bar.tickVolume??bar.tick_volume)});
  }
  const bars=[...byTime.values()].sort((a,b)=>a.timestamp-b.timestamp);
- const gapCount=bars.length>2?bars.slice(1).filter((b,i)=>b.timestamp<=bars[i].timestamp).length:0;
+ const gapCount=nonMonotonic;
  return {bars,quality:{raw_rows:input.length,valid_rows:bars.length,rejected_rows:rejected,
   duplicate_rows:input.length-rejected-bars.length,missing_spread_rows:bars.filter(b=>b.spread===null).length,
   missing_spread_ratio:bars.length?bars.filter(b=>b.spread===null).length/bars.length:1,
@@ -111,6 +113,15 @@ function signal(strategy,bars,ind,i){
  }
  return 0;
 }
+function marketRegime(ind,i){
+ const x=ind[i];
+ if(!x||!Number.isFinite(x.atr)||x.atr<=0)return "unknown";
+ const strength=Math.abs(x.ema20-x.ema50)/x.atr;
+ if(x.tr/x.atr>1.7)return "volatile";
+ if(strength>.6)return "trending";
+ if(strength<.25)return "ranging";
+ return "transition";
+}
 function simulateFold(bars,ind,strategy,start,end,costMultiplier=1){
  const trades=[];let position=null;
  const count=Math.min(end,bars.length);
@@ -118,7 +129,7 @@ function simulateFold(bars,ind,strategy,start,end,costMultiplier=1){
  for(let i=Math.max(60,start);i<count;i++){
   const b=bars[i];
   if(position&&i>=position.entryIndex){
-   const {dir,entry,stop,target,initialRisk,entryIndex}=position;
+   const {dir,entry,stop,target,initialRisk,entryIndex,regime,entryTime}=position;
    // Gap through stop fills at the adverse open, never the optimistic stop price.
    const stopHit=dir>0?b.low<=stop:b.high>=stop;
    const targetHit=dir>0?b.high>=target:b.low<=target;
@@ -131,7 +142,7 @@ function simulateFold(bars,ind,strategy,start,end,costMultiplier=1){
     const cost=Math.max(rawSpread,b.close*.0001)*costMultiplier/2+b.close*.00002*costMultiplier;
     const exit=rawExit-dir*cost;
     const rr=(exit-entry)*dir/initialRisk;
-    if(Number.isFinite(rr))trades.push({time:b.timestamp,dir,rr,reason});
+    if(Number.isFinite(rr))trades.push({time:b.timestamp,entryTime,regime,dir,rr,reason});
     position=null;
    }
   }
@@ -143,7 +154,7 @@ function simulateFold(bars,ind,strategy,start,end,costMultiplier=1){
   const entryCost=Math.max(spread,next.open*.0001)*costMultiplier/2+next.open*.00002*costMultiplier;
   const entry=next.open+dir*entryCost;
   position={dir,entry,stop:entry-dir*risk,target:entry+dir*risk*2,
-   initialRisk:risk,entryIndex:i+1};
+   initialRisk:risk,entryIndex:i+1,entryTime:next.timestamp,regime:marketRegime(ind,i)};
  }
  return trades;
 }
@@ -162,7 +173,10 @@ function metrics(trades){
 }
 function research(candleInput,sourceQuality={}){
  const normalized=normalizeCandles(candleInput),bars=normalized.bars;
- const quality={...normalized.quality,source_coverage:String(sourceQuality.coverage||"unknown"),
+ const intervalMs={M5:300000,M15:900000,H1:3600000,H4:14400000,D1:86400000}[String(sourceQuality.timeframe||"").toUpperCase()]||null;
+ const gapEvents=intervalMs?bars.slice(1).filter((b,i)=>b.timestamp-bars[i].timestamp>intervalMs*2.5).length:null;
+ const quality={...normalized.quality,source_timeframe:String(sourceQuality.timeframe||"unknown"),
+  time_gap_events:gapEvents,source_coverage:String(sourceQuality.coverage||"unknown"),
   source_truncated:sourceQuality.truncated===true,
   source_stop_reason:sourceQuality.stopReason||null};
  if(bars.length<320)return {version:VERSION,quality,candles:bars.length,strategies:[],
@@ -183,6 +197,15 @@ function research(candleInput,sourceQuality={}){
   const all=starts.flatMap((from,k)=>simulateFold(bars,ind,id,from,ends[k]));
   const stressed=starts.flatMap((from,k)=>simulateFold(bars,ind,id,from,ends[k],2));
   const m=metrics(all),sm=metrics(stressed);
+  const regimes=Object.fromEntries(["trending","ranging","volatile","transition"].map(regime=>{
+   const observed=all.filter(t=>t.regime===regime);
+   const stressedRegime=stressed.filter(t=>t.regime===regime);
+   const om=metrics(observed),stressM=metrics(stressedRegime);
+   const status=observed.length<12?"LOW_SAMPLE":
+    om.expectancy_r<=0||stressM.expectancy_r<=0?"AVOID_PAPER":"RESEARCH_ONLY";
+   return [regime,{status,trades:om.trades,expectancy_r:om.expectancy_r,
+     double_cost_expectancy_r:stressM.expectancy_r,drawdown_r:om.drawdown_r}];
+  }));
   const minFold=Math.min(...folds.map(f=>f.trades)),positiveFolds=folds.filter(f=>f.expectancy_r>0).length;
   // Fixed strategy rules and non-overlapping, chronological OOS windows.
   // Genuine paper promotion needs further *forward* evidence on tagged executed trades.
@@ -195,7 +218,7 @@ function research(candleInput,sourceQuality={}){
   }else if((m.lower_confidence_expectancy_r??-1)>.03&&m.drawdown_r<=12){
     status="PAPER_CANDIDATE";reason="OOS positive with evidence, stress costs, fold stability";
   }
-  return {strategy_id:id,label,family,status,reason,folds,
+  return {strategy_id:id,label,family,status,reason,folds,regimes,
    oos:m,double_costs:sm,positive_folds:positiveFolds,
    relative_research_priority:0};
  });
@@ -215,4 +238,4 @@ function research(candleInput,sourceQuality={}){
   disclaimer:"OOS research evidence is not real forward performance. No automatic live/demo order sizing."};
 }
 module.exports={VERSION,STRATEGIES,normalizeCandles,normalizeClosedTrade,reviewRealTrades,
- indicators,signal,simulateFold,metrics,research};
+ indicators,signal,marketRegime,simulateFold,metrics,research};
