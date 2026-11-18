@@ -142,6 +142,34 @@ window.SentinelBrain=(()=>{
   }catch(e){view.error=e.message;if(!silent)toast(e.message,"error")}
   if(state.page==="ai")renderPage();
  }
+ // On-demand catch-up: refreshes broker history when the owner opens the Intelligence page.
+ // Not a background worker or a guarantee of uninterrupted Free-tier sessions.
+ let lastAutoAttempt=0;
+ async function maybeAutoSync(){
+  const a=account();
+  if(!a||!isOnline()||view.loading||state.page!=="ai")return;
+  const now=Date.now(),key="sentinel_brain_auto_v2_"+a.id+"_"+(view.symbol||"default")+"_"+view.timeframe;
+  let last=0;
+  try{last=Number(localStorage.getItem(key)||0)}catch(_){}
+  if(now-last<6*3600*1000||now-lastAutoAttempt<60000)return;
+  lastAutoAttempt=now;view.loading=true;view.error="";
+  try{
+   if(!view.symbol)await symbols(true);
+   view.stage="تحديث ذاكرة الصفقات";renderPage();
+   view.lastTrades=await call("syncTrades",{accountId:a.id});
+   if(view.symbol){
+    const prior=view.data?.imports?.find(x=>x.account_id===a.id&&x.symbol===view.symbol&&x.timeframe===view.timeframe);
+    if(!prior||now-new Date(prior.imported_at).getTime()>24*3600*1000){
+     view.stage="تحديث التاريخ الحقيقي";renderPage();
+     view.lastImport=await call("syncCandles",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe,hours:view.hours});
+    }
+    view.stage="تحديث ترتيب الاستراتيجيات";renderPage();
+    view.lastEvaluation=await call("evaluate",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe});
+   }
+   try{localStorage.setItem(key,String(Date.now()))}catch(_){}
+  }catch(e){view.error="Auto-sync: "+e.message}
+  finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+ }
  async function pipeline(){
   const a=account();
   if(!a||!isOnline()||view.loading||!view.symbol)return;
@@ -187,7 +215,7 @@ window.SentinelBrain=(()=>{
   }
   if(e.target.id==="brainHours")view.hours=Number(e.target.value);
  });
- async function init(){await refresh(true)}
- return {render,refresh,symbols,action,init};
+ async function init(){await refresh(true);await maybeAutoSync()}
+ return {render,refresh,symbols,action,init,maybeAutoSync};
 })();
 window.SentinelBrain.init();
