@@ -41,7 +41,8 @@ function selectableJobs(symbols){
 function normalizeBatch(payload,{timeframe,now=new Date()}={}){
  if(!Object.hasOwn(TF_MS,timeframe))throw Error("INVALID_BROKER_TIMEFRAME");
  const input=Array.isArray(payload?.candles)?payload.candles:[];
- const interval=TF_MS[timeframe],closed=[],openBarExcluded=0,futureRejected=0;
+ const interval=TF_MS[timeframe],closed=[];
+ let openBarExcluded=0,futureRejected=0;
  for(const x of input.slice(-10000)){
   const t=x?.timestamp;
   const parsed=typeof t==="number"&&Number.isFinite(t)?(t<1e11?t*1000:t):Date.parse(String(t||""));
