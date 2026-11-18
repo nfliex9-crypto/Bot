@@ -46,8 +46,9 @@ function tradeMemory(rows){
  const accepted=[];
  for(const row of rows){
   const profit=numeric(row.brokerProfit??row.broker_profit);
-  const closed=new Date(row.closeTime??row.close_time).getTime();
-  const opened=new Date(row.openTime??row.open_time).getTime();
+  const closedRaw=row.closeTime??row.close_time,openedRaw=row.openTime??row.open_time;
+  const closed=closedRaw==null?NaN:new Date(closedRaw).getTime();
+  const opened=openedRaw==null?NaN:new Date(openedRaw).getTime();
   const symbol=String(row.symbol||"").trim().toUpperCase();
   if(row.complete!==true||profit===null||!Number.isFinite(closed)||
     !/^[A-Z0-9._#-]{2,24}$/.test(symbol)){quality.skipped++;continue}
