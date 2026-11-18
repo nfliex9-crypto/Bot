@@ -159,7 +159,7 @@ window.SentinelBrain=(()=>{
    view.lastTrades=await call("syncTrades",{accountId:a.id});
    if(view.symbol){
     const prior=view.data?.imports?.find(x=>x.account_id===a.id&&x.symbol===view.symbol&&x.timeframe===view.timeframe);
-    if(!prior||now-new Date(prior.imported_at).getTime()>24*3600*1000){
+    if(!prior||!Number.isFinite(new Date(prior.imported_at).getTime())||now-new Date(prior.imported_at).getTime()>24*3600*1000){
      view.stage="تحديث التاريخ الحقيقي";renderPage();
      view.lastImport=await call("syncCandles",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe,hours:view.hours});
     }
