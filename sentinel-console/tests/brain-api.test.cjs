@@ -162,3 +162,12 @@ test("new actual DEMO open position can be attributed immutably without sending 
   assert.ok(insert.q.includes("ON CONFLICT(account_id,ticket) DO NOTHING"));
  }finally{global.fetch=previous}
 });
+
+test("evaluation SQL must isolate forward outcomes by symbol before learning",()=>{
+ const fs=require("node:fs"),path=require("node:path");
+ const source=fs.readFileSync(path.join(__dirname,"../api/brain.js"),"utf8");
+ assert.match(source,/FROM sentinel_brain_trades WHERE account_id=\$\{id\} AND symbol=\$\{symbol\} AND strategy_id IS NOT NULL/);
+ assert.match(source,/forward_by_account_symbol/);
+ assert.match(source,/history_may_be_truncated/);
+ assert.doesNotMatch(source,/placeOrder|order_send|place_order/);
+});
