@@ -11,6 +11,7 @@ const STORE="sentinel-console-v1";
 const nav=[
  ["overview","نظرة عامة","◈","OVERVIEW"],
  ["mt5","MT5 مجاني","⌁","FREE MT5"],
+ ["sentinel_trader","بوت Sentinel","◉","INDEPENDENT DEMO TRADER"],
  ["trades","الصفقات والمراكز","⇄","TRADES"],
  ["signals","الإشارات والقرارات","◉","SIGNALS"],
  ["strategies","مكتبة الاستراتيجيات","▦","STRATEGIES"],
@@ -253,12 +254,12 @@ function renderPage(){
  let h="";
  try{switch(state.page){
  case"overview":h=overview();break;case"mt5":h=mt5View();break;case"trades":h=tradesView();break;case"signals":h=signalsView();break;
- case"strategies":h=strategiesView();break;case"backtest":h=backtestView();break;case"ai":h=window.SentinelBrain?.render()||aiView();break;
+ case"strategies":h=strategiesView();break;case"backtest":h=backtestView();break;case"ai":h=window.SentinelBrain?.render()||aiView();break;case"sentinel_trader":h=window.SentinelTrader?.render()||heading("SENTINEL TRADER","بوت Sentinel المستقل","لم يتم تحميل الوحدة");break;
  case"risk":h=riskView();break;case"logs":h=logsView();break;case"settings":h=settingsView();break;
  default:h=overview();}}catch(e){h=heading("DISPLAY ERROR","تعذّر عرض الصفحة",esc(e.message));eventLog("render-error",e.message)}
  byId("page").innerHTML=h;
 }
-function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);if(page==="ai")void (async()=>{await window.SentinelBrain?.refresh(true);await window.SentinelBrain?.symbols(true);await window.SentinelBrain?.maybeAutoSync?.()})();state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
+function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);if(page==="sentinel_trader")void window.SentinelTrader?.refresh();if(page==="ai")void (async()=>{await window.SentinelBrain?.refresh(true);await window.SentinelBrain?.symbols(true);await window.SentinelBrain?.maybeAutoSync?.()})();state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
 function openConnect(){navigate("mt5");}
