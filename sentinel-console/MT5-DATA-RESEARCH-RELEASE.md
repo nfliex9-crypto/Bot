@@ -10,6 +10,7 @@
 - Only use fully **closed** candles (TickerAll documents timestamps in Unix *seconds*). Exclude in-progress and future-dated bars.
 - For slow XAUUSD and NAS100 requests use shorter historical windows; if the same job times out, use an even smaller retry window rather than hammering the full range. A shorter window may be insufficient for strategy promotion, but data remain genuine.
 - Historical price bars with **no observed broker spread** are kept as valid price research, but never treated as proven net-after-cost evidence.
+- **MT5 live quote observer:** when Demo is HOT, sample one genuine `GET /v1/accounts/:id/symbols/:symbol/quote` bid/ask pair per cycle across the broker's symbols. PostgreSQL calculates the exact decimal spread to avoid binary float rounding. Store in `sentinel_autonomy_spread_observations` with the actual observation time; show observed sample counts and a 90th-percentile spread only after at least 30 samples. These are not backfilled into old bars and are **never standalone order evidence**.
 - When enough complete broker OHLC is available without historical spread, generate separate **unverified-cost hypotheses** using an explicit stress assumption. These have **zero reward points and no execution permission**.
 - Only broker history with complete coverage and adequate observed spread may advance to the separately validated strategy candidate process. Even those are research candidates; live or demo order execution is not wired to this worker.
 - Separate public Binance BTCUSDT research and Crossref bibliography remain enabled and fully labeled. Their results never become broker-verified evidence.
@@ -48,6 +49,9 @@ FROM sentinel_autonomy_import_attempts ORDER BY attempted_at DESC;
 SELECT symbol,timeframe,candle_count,missing_spread_ratio,
        jsonb_array_length(analysis->'hypotheses') AS research_ideas
 FROM sentinel_autonomy_broker_hypotheses;
+
+SELECT symbol,COUNT(*)::int AS quote_samples,MAX(observed_at) AS latest
+FROM sentinel_autonomy_spread_observations GROUP BY symbol;
 
 SELECT started_at,status,totals,notes,markets_checked
 FROM sentinel_autonomy_cycles ORDER BY started_at DESC LIMIT 5;
