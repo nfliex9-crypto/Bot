@@ -98,7 +98,21 @@ window.SentinelBrain=(()=>{
   html+=panel("Strategy Selector","نتائج خارج العينة بعد التكاليف · أفضل المرشحين فقط للتجربة الورقية",
     strategyTable(latest),
     latest?'<span class="tag">'+esc(latest.symbol)+' · '+esc(latest.timeframe)+' · '+dateFmt(latest.date)+'</span>':'<span class="tag">AWAITING RESEARCH</span>');
-  if(latest)html+='<div class="info-block" style="margin-top:16px"><strong>حالات القرار</strong>PAPER_CANDIDATE: صالح للبحث الورقي فقط · PAUSE_RESEARCH: أداء خارج العينة ضعيف · INSUFFICIENT: صفقات غير كافية · DATA_INCOMPLETE: بيانات مصدر ناقصة. لا يوجد تنفيذ أو تغيير مخاطرة تلقائي.</div>';
+  if(latest)html+='<div class="info-block" style="margin-top:16px"><strong>حالات القرار</strong>PAPER_CANDIDATE: مرشح ورقي فقط · PAUSE_RESEARCH: مستبعد بحثياً · INSUFFICIENT: سجل صغير · DATA_INCOMPLETE: بيانات ناقصة. لا توجد صفقات آلية من هذا المختبر.</div>';
+  const forward=view.data?.forward_by_account?.[account()?.id];
+  const forwardRows=(forward?.strategy_results||[]).filter(x=>x.metrics.count>0);
+  html+=panel("Forward Learner","تعلّم من صفقات موسومة عند فتحها، قبل معرفة نتائجها",
+    forwardRows.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Strategy</th><th>حالة التعلّم</th><th>Forward Trades</th><th>Mean R</th><th>Research Weight</th></tr></thead><tbody>'+
+      forwardRows.map(f=>'<tr><td class="mono">'+esc(f.strategy_id)+'</td><td>'+badgeFor(f.status)+'</td>'+
+       '<td class="mono">'+num(f.metrics.count,0)+'</td><td class="mono">'+fx(f.metrics.mean_r)+'</td>'+
+       '<td class="mono">'+f.relative_research_multiplier+'×</td></tr>').join("")+'</tbody></table></div>':
+      empty("بانتظار صفقات موسومة مسبقاً","نحفظ كل صفقات MT5 لكن لا ننسب استراتيجية من الربح والخسارة. عند ربط محرك التنفيذ سيتم تسجيل هوية الاستراتيجية فور فتح الصفقة."));
+  if(latest?.paper_schedule?.allocations?.length){
+    html+=panel("Paper Research Allocation","توزيع أولوية التجارب، وليس أوامر تداول أو تغيير حجم مخاطرة",
+      '<div class="panel-pad">'+latest.paper_schedule.allocations.map(a=>
+        '<div class="key-value"><span>'+esc(a.strategy_id)+'</span><strong>'+Math.round(a.weight*100)+'% · '+esc(a.forward_status)+'</strong></div>'
+      ).join("")+'</div>');
+  }
   return html;
  }
  async function refresh(silent=false){
