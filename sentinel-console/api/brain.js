@@ -8,7 +8,8 @@ const crypto=require("node:crypto");
 const {neon}=require("@neondatabase/serverless");
 const brain=require("../brain/engine.js");
 const API="https://api.tickerall.com";
-const TF=new Set(["M5","M15","H1","H4"]);
+const TF=new Set(["M5","M15","H1","H4","D1"]);
+const MAX_HOURS={M5:720,M15:2200,H1:8760,H4:17520,D1:43800};
 const codeMessage=e=>String(e?.message||"ERROR").slice(0,90);
 function protect(req){
  if(process.env.SENTINEL_VERCEL_SSO!=="enabled")return false;
@@ -81,7 +82,7 @@ async function verifyDemo(token,id){
 }
 async function tradeSync(sql,id,token){
  await verifyDemo(token,id);
- const r=await provider("/v1/accounts/"+id+"/history?limit=1000&waitMs=0",token);
+ const r=await provider("/v1/accounts/"+id+"/history?limit=5000&waitMs=0",token);
  const raw=Array.isArray(r)?r:(r?.trades||[]);
  const rows=raw.map(brain.normalizeClosedTrade).filter(Boolean);
  if(rows.length){
@@ -119,8 +120,8 @@ async function candlesSync(sql,id,token,request){
  await verifyDemo(token,id);
  const symbol=symbolName(request.symbol),timeframe=String(request.timeframe||"M15").toUpperCase();
  if(!TF.has(timeframe))throw Error("INVALID_TIMEFRAME");
- const hours=Number(request.hours??480);
- if(!Number.isInteger(hours)||hours<24||hours>2200)throw Error("INVALID_HISTORY_WINDOW");
+ const hours=Number(request.hours??720);
+ if(!Number.isInteger(hours)||hours<24||hours>MAX_HOURS[timeframe])throw Error("INVALID_HISTORY_WINDOW");
  const query=new URLSearchParams({symbol,timeframe,hours:String(hours)});
  const output=await provider("/v1/accounts/"+id+"/candles?"+query.toString(),token);
  const raw=Array.isArray(output?.candles)?output.candles:[];
@@ -211,7 +212,7 @@ async function status(sql){
 }
 module.exports=async(req,res)=>{
  const action=String(req.query?.action||"");
- const routes={status:"GET",syncTrades:"POST",syncCandles:"POST",evaluate:"POST"};
+ const routes={status:"GET",symbols:"POST",syncTrades:"POST",syncCandles:"POST",evaluate:"POST"};
  if(!Object.hasOwn(routes,action))return reply(res,404,{ok:false,error:"UNKNOWN_ACTION"});
  if(req.method!==routes[action])return reply(res,405,{ok:false,error:"INVALID_METHOD"});
  if(!protect(req))return reply(res,403,{ok:false,error:"PROTECTED_DASHBOARD_REQUIRED"});
@@ -226,6 +227,10 @@ module.exports=async(req,res)=>{
    return reply(res,200,{ok:true,data:await evaluation(sql,id,req.body||{})});
   }
   const token=await access(sql);
+  if(action==="symbols"){
+   await verifyDemo(token,id);
+   const list=await provider("/v1/accounts/"+id+"/symbols",token);
+   return reply(res,200,{ok:true,data:{symbols:Array.isArray(list?.symbols)?list.symbols.slice(0,600):[]}});}
   if(action==="syncTrades")return reply(res,200,{ok:true,data:await tradeSync(sql,id,token)});
   if(action==="syncCandles")return reply(res,200,{ok:true,data:await candlesSync(sql,id,token,req.body||{})});
   return reply(res,404,{ok:false,error:"UNKNOWN_ACTION"});
