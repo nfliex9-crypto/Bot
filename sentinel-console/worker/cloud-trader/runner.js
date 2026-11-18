@@ -39,18 +39,20 @@ async function tokenFromExistingSettings(sql,env){
 }
 function strictPositions(raw){if(!Array.isArray(raw))throw Error("BROKER_POSITIONS_UNKNOWN");return raw}
 function strictOrders(raw){const xs=Array.isArray(raw)?raw:raw?.orders;if(!Array.isArray(xs))throw Error("BROKER_PENDING_ORDERS_UNKNOWN");return xs}
-async function reconcile(sql,api,accountId,positions){
- const pending=await sql`SELECT signal_hash,comment FROM sentinel_cloud_trader_intents
+async function reconcile(sql,api,accountId,positions,knownHistory=null){
+ const pending=await sql`SELECT signal_hash,comment,broker_ticket FROM sentinel_cloud_trader_intents
   WHERE account_id=${accountId} AND status IN ('SUBMITTING','UNKNOWN','ACK_PENDING_RECONCILIATION')
   ORDER BY created_at DESC LIMIT 50`;
  if(!pending.length)return {blocked:false,matched:0};
- let history=null;
- try{const h=await api.history(accountId);history=Array.isArray(h)?h:h?.trades}
+ let history=knownHistory;
+ if(history===null)try{const h=await api.history(accountId);history=Array.isArray(h)?h:h?.trades}
  catch(_){} // Still block; inability to fetch history is NOT evidence of non-execution.
  let matched=0;
  for(const p of pending){
   const row=[...positions,...(Array.isArray(history)?history:[])].find(x=>
-   x&&String(x.comment||"")===String(p.comment||"")&&String(x.ticket||"").length>0);
+   x&&String(x.ticket||"").length>0&&(
+      String(x.comment||"")===String(p.comment||"")||
+      (p.broker_ticket&&String(x.ticket)===String(p.broker_ticket))));
   if(row){await sql`UPDATE sentinel_cloud_trader_intents
      SET status='BROKER_POSITION_OR_HISTORY_CONFIRMED',broker_ticket=${String(row.ticket)},updated_at=NOW()
      WHERE signal_hash=${p.signal_hash} AND account_id=${accountId}`;matched++}
@@ -58,6 +60,30 @@ async function reconcile(sql,api,accountId,positions){
  // After a confirmed order, max-position guard is still necessary. No automatic re-entry
  // on the same signal due to UNIQUE(account_id,signal_hash) journal entry.
  return {blocked:pending.length>matched,matched};
+}
+async function syncClosedFills(sql,accountId,accountCurrency,history){
+ if(!Array.isArray(history)||!/^[A-Z]{3}$/.test(String(accountCurrency||"")))return 0;
+ const owned=await sql`SELECT signal_hash,broker_ticket,symbol,family FROM sentinel_cloud_trader_intents
+    WHERE account_id=${accountId} AND broker_ticket IS NOT NULL AND broker_ticket<>'' LIMIT 200`;
+ const byTicket=new Map(owned.map(x=>[String(x.broker_ticket),x]));
+ let recorded=0;
+ for(const row of history){
+  const mine=byTicket.get(String(row?.ticket||""));
+  if(!mine||row.complete!==true||row.partial===true||String(row.symbol)!==mine.symbol)continue;
+  const value=Number(row.profit),swap=Number(row.swap),commission=Number(row.commission);
+  const date=Date.parse(String(row.closeTime||""));
+  if([row.profit,row.swap,row.commission].some(x=>x===null||x===undefined)||
+     ![value,swap,commission].every(Number.isFinite)||!Number.isFinite(date))continue;
+  await sql`INSERT INTO sentinel_cloud_trader_fills
+    (account_id,signal_hash,broker_ticket,symbol,family,close_time,currency,profit,swap,commission,verified_at)
+    VALUES(${accountId},${mine.signal_hash},${String(row.ticket)},${mine.symbol},${mine.family},
+    ${new Date(date).toISOString()},${accountCurrency},${value},${swap},${commission},NOW())
+    ON CONFLICT(account_id,broker_ticket) DO UPDATE SET
+     profit=EXCLUDED.profit,swap=EXCLUDED.swap,commission=EXCLUDED.commission,
+     verified_at=NOW()`;
+  recorded++;
+ }
+ return recorded;
 }
 async function recordCycle(sql,record){
  await sql`INSERT INTO sentinel_cloud_trader_cycles
@@ -71,8 +97,9 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
  const report={cycle_id,account_id:null,account_last4:null,mode:"SHADOW_ONLY",status:"COLLECTING",reason:"",observations:[],orders_sent:0};
  const tables=await sql`SELECT to_regclass('public.sentinel_cloud_trader_cycles') AS cycles,
   to_regclass('public.sentinel_cloud_trader_intents') AS intents,
+  to_regclass('public.sentinel_cloud_trader_fills') AS fills,
   to_regclass('public.sentinel_cloud_trader_lease') AS lease`;
- if(!tables[0]?.cycles||!tables[0]?.intents||!tables[0]?.lease)return {...report,status:"MIGRATION_REQUIRED"};
+ if(!tables[0]?.cycles||!tables[0]?.intents||!tables[0]?.lease||!tables[0]?.fills)return {...report,status:"MIGRATION_REQUIRED"};
  const lease=await sql`INSERT INTO sentinel_cloud_trader_lease(worker_name,lease_owner,lease_until)
  VALUES(${SERVICE},${owner},NOW()+INTERVAL '5 minutes') ON CONFLICT(worker_name) DO UPDATE SET
  lease_owner=EXCLUDED.lease_owner,lease_until=EXCLUDED.lease_until
@@ -101,7 +128,13 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
   const equity=Number(account.account?.equity);
   if(!Number.isFinite(equity)||equity<=0){report.status="BLOCKED";report.reason="EQUITY_NOT_AVAILABLE";return report}
   const positions=strictPositions(account.positions),orders=strictOrders(await read.orders(a.id));
-  const unresolved=await reconcile(sql,read,a.id,positions);
+  let brokerHistory=null;
+  try{const h=await read.history(a.id);brokerHistory=Array.isArray(h)?h:h?.trades}catch(_){}
+  const unresolved=await reconcile(sql,read,a.id,positions,brokerHistory);
+  if(Array.isArray(brokerHistory)){
+   try{report.fills_verified=await syncClosedFills(sql,a.id,account.account.currency,brokerHistory)}
+   catch(e){report.fill_sync_error=clean(e.message)}
+  }
   if(unresolved.blocked){report.status="BLOCKED";report.reason="UNKNOWN_ORDER_REQUIRES_RECONCILIATION";return report}
   const utcDay=new Date(now).toISOString().slice(0,10);
   const baseline=await sql`INSERT INTO sentinel_cloud_trader_daily(account_id,utc_day,start_equity)
@@ -131,6 +164,12 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     const signal=c.decide(symbol,m15,h1,now);
     if(!signal){row.status="NO_VALID_CLOSED_BAR_SIGNAL";continue}
     row.signal_hash=c.keyFor(a.id,signal).slice(0,20);
+    // Actual Sentinel brain research registry is consulted, but an
+    // OHLC hypothesis or paper candidate is NEVER self-approved as alpha.
+    const candidates=await sql`SELECT candidate_id,status FROM sentinel_autonomy_candidates
+      WHERE account_id=${a.id} AND symbol=${symbol} AND timeframe='M15' AND family=${signal.family}
+      ORDER BY last_evaluated_at DESC LIMIT 3`;
+    row.brain_status=candidates.length?"RESEARCH_CANDIDATE_UNVERIFIED":"NO_VERIFIED_BRAIN_EVIDENCE";
     row.side=signal.side===1?"LONG":"SHORT";row.strategy=signal.family;
     if(positions.length||orders.length){row.status="ACCOUNT_HAS_EXISTING_POSITION_OR_ORDER";continue}
     const [quote,specResult]=await Promise.all([read.quote(a.id,symbol),read.spec(a.id,symbol)]);
@@ -185,4 +224,4 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
    WHERE worker_name=${SERVICE} AND lease_owner=${owner}`}catch(_){}
  }
 }
-module.exports={runCloudCycle,pickSymbols,strictPositions,strictOrders,reconcile};
+module.exports={runCloudCycle,pickSymbols,strictPositions,strictOrders,reconcile,syncClosedFills};

@@ -69,11 +69,13 @@ test("cloud runner remains unarmed under existing demo connection and records sh
  const encrypted=[iv.toString('base64'),null,Buffer.concat([d.update('connected_fake_token_12345','utf8'),d.final()]).toString('base64')];encrypted[1]=d.getAuthTag().toString('base64');
  const sql=async(strings,...vals)=>{
   const q=strings.join('?');
-  if(q.includes('to_regclass'))return [{cycles:'sentinel_cloud_trader_cycles',intents:'sentinel_cloud_trader_intents',lease:'sentinel_cloud_trader_lease'}];
+  if(q.includes('to_regclass'))return [{cycles:'sentinel_cloud_trader_cycles',intents:'sentinel_cloud_trader_intents',lease:'sentinel_cloud_trader_lease',fills:'sentinel_cloud_trader_fills'}];
   if(q.includes('INSERT INTO sentinel_cloud_trader_lease'))return [{lease_owner:'lease'}];
   if(q.includes('SELECT cipher_value'))return [{cipher_value:encrypted.join('.')}];
   if(q.includes('SELECT account_id FROM sentinel_autonomy_cycles'))return [{account_id:'acc_demo'}];
-  if(q.includes('SELECT signal_hash,comment FROM sentinel_cloud_trader_intents'))return [];
+  if(q.includes('SELECT signal_hash,comment,broker_ticket FROM sentinel_cloud_trader_intents'))return [];
+  if(q.includes('SELECT candidate_id,status FROM sentinel_autonomy_candidates'))return [];
+  if(q.includes('SELECT signal_hash,broker_ticket,symbol,family FROM sentinel_cloud_trader_intents'))return [];
   if(q.includes('INSERT INTO sentinel_cloud_trader_daily'))return [{start_equity:5000}];
   if(q.includes('INSERT INTO sentinel_cloud_trader_cycles')){seen.push({kind:'record',vals});return []}
   if(q.includes('UPDATE sentinel_cloud_trader_lease'))return [];
@@ -92,4 +94,47 @@ test("cloud runner remains unarmed under existing demo connection and records sh
 });
 test("symbol mapping prefers gold, BTC, NAS and EURUSD without requiring new provider",()=>{
  assert.deepEqual(pickSymbols({symbols:['BTCUSD','GOLD','EURUSD','USTECH100M','RANDOM','BTCUSDm']}),['GOLD','BTCUSD','USTECH100M','EURUSD']);
+});
+
+test("broker-verified completed history, not order ACK, is the only realized PnL source",async()=>{
+ const {syncClosedFills}=require("../worker/cloud-trader/runner.js");
+ const writes=[];
+ const sql=async(parts,...vals)=>{
+  const q=parts.join('?');
+  if(q.includes('SELECT signal_hash,broker_ticket,symbol,family FROM'))return [
+   {signal_hash:'a'.repeat(64),broker_ticket:'77701',symbol:'EURUSD',family:'trend_pullback'}
+  ];
+  if(q.includes('INSERT INTO sentinel_cloud_trader_fills')){writes.push(vals);return []}
+  throw Error('Unexpected SQL '+q);
+ };
+ const items=[
+  {ticket:'77701',symbol:'EURUSD',complete:true,profit:18,swap:-.5,commission:-1.25,closeTime:'2026-11-18T20:00:00Z'},
+  {ticket:'77702',symbol:'EURUSD',complete:true,profit:5000,swap:0,commission:0,closeTime:'2026-11-18T20:00:00Z'},
+  {ticket:'77701',symbol:'EURUSD',complete:false,profit:999,swap:0,commission:0,closeTime:'2026-11-18T20:00:00Z'},
+  {ticket:'77701',symbol:'EURUSD',complete:true,partial:true,profit:999,swap:0,commission:0,closeTime:'2026-11-18T20:00:00Z'}
+ ];
+ assert.equal(await syncClosedFills(sql,'acc_demo','EUR',items),1);
+ assert.equal(writes.length,1);
+ assert.equal(writes[0].includes(18),true);assert.equal(writes[0].includes(-1.25),true);
+ assert.equal(await syncClosedFills(sql,'acc_demo',null,items),0);
+});
+
+test("unresolved broker order blocks repeat submission even with DEMO authorizations",async()=>{
+ const {reconcile}=require("../worker/cloud-trader/runner.js");
+ const sql=async(parts,...vals)=>{
+  const q=parts.join('?');
+  if(q.includes('SELECT signal_hash,comment,broker_ticket FROM'))return [{signal_hash:'a'.repeat(64),comment:'STC-aaaaaaaaaaaaaaaa',broker_ticket:'77701'}];
+  throw Error('No matched broker position, so no update expected: '+q);
+ };
+ const api={history:async()=>({trades:[]})};
+ const result=await reconcile(sql,api,'acc_demo',[]);
+ assert.equal(result.blocked,true);assert.equal(result.matched,0);
+});
+
+test("dedicated cloud cycle service has bounded one-minute scheduling",()=>{
+ const {sleepDuration,INTERVAL_MS}=require("../worker/cloud-trader/service.js");
+ assert.equal(INTERVAL_MS,60000);
+ assert.equal(sleepDuration(30000),30000);
+ assert.equal(sleepDuration(120000),1000);
+ assert.equal(sleepDuration(-1),60000);
 });

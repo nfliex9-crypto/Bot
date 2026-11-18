@@ -1,7 +1,7 @@
 "use strict";
-/* SSO-protected, read-only status endpoint for the independent MT5 DEMO trader.
-   Trading stays in Windows MT5; there are no order, stop, size, or kill controls.
- */
+/* SSO-protected, read-only status endpoint for both the independent cloud
+   MT5 demo trader (existing TickerAll connection) and optional Windows agent.
+   There are no remote order, stop, size, or kill controls. */
 const {neon}=require("@neondatabase/serverless");
 function reply(res,status,body){
  res.setHeader("Cache-Control","private,no-store");
@@ -20,7 +20,8 @@ module.exports=async(req,res)=>{
  try{
   const sql=neon(process.env.DATABASE_URL);
   const existing=await sql`SELECT to_regclass('public.sentinel_independent_trader_status') AS native_table,
-    to_regclass('public.sentinel_cloud_trader_cycles') AS cloud_table`;
+    to_regclass('public.sentinel_cloud_trader_cycles') AS cloud_table,
+    to_regclass('public.sentinel_cloud_trader_fills') AS fills_table`;
   const nativeReady=Boolean(existing[0]?.native_table);
   const cloudReady=Boolean(existing[0]?.cloud_table);
   const [records,cloudRecords]=await Promise.all([
@@ -28,7 +29,7 @@ module.exports=async(req,res)=>{
       a.last_seen_at,a.connection_state,a.trade_mode,a.bot_state
       FROM sentinel_independent_trader_status s JOIN sentinel_mt5_agents a USING(agent_id)
       ORDER BY s.updated_at DESC LIMIT 10`:Promise.resolve([]),
-    cloudReady?sql`SELECT cycle_id,account_last4,mode,status,reason,observations,orders_sent,observed_at
+    cloudReady?sql`SELECT cycle_id,account_id,account_last4,mode,status,reason,observations,orders_sent,observed_at
       FROM sentinel_cloud_trader_cycles ORDER BY observed_at DESC LIMIT 1`:Promise.resolve([])
   ]);
   const now=Date.now();
@@ -45,12 +46,20 @@ module.exports=async(req,res)=>{
      note:"Device state only. Broker execution requires independent order/deal reconciliation."};
   });
   const last=cloudRecords[0]||null;
+  const settled=existing[0]?.fills_table&&last?.account_id?await sql`SELECT currency,
+    COUNT(*)::int AS completed,
+    COALESCE(SUM(profit+swap+commission),0) AS booked_net
+    FROM sentinel_cloud_trader_fills WHERE account_id=${last.account_id}
+    GROUP BY currency ORDER BY completed DESC LIMIT 1`:[];
+  const summary=settled[0]||null;
   const ts=last?new Date(last.observed_at).getTime():0;
   const cloud=last?{
     status:Number.isFinite(ts)&&now-ts>=0&&now-ts<35*60000?last.status:"STALE",
     detail:last.status,mode:last.mode,reason:last.reason,
     account_last4:last.account_last4,observed_at:last.observed_at,
-    orders_sent:last.orders_sent,
+    orders_sent:last.orders_sent,completed_broker_trades:summary?.completed||0,
+    broker_booked_net:summary?Number(summary.booked_net):null,
+    account_currency:summary?.currency||null,
     observations:Array.isArray(last.observations)?last.observations:[],
     broker_fill_proven:false
   }:{status:cloudReady?"NOT_STARTED":"NOT_INSTALLED",mode:"SHADOW_ONLY",

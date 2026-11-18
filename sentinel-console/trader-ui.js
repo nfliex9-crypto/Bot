@@ -5,13 +5,13 @@ window.SentinelTrader=(()=>{
  const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  function render(){
   const cloud=snapshot?.cloud||{status:"NOT_INSTALLED",mode:"SHADOW_ONLY",observations:[],orders_sent:0};
-  const rows=(cloud.observations||[]).map(s=>`<tr><td>${esc(s.symbol)}</td><td>${esc(s.status)}</td><td>${esc(s.strategy||"—")}</td><td>${esc(s.side||"—")}</td><td>${esc(s.risk_at_stop??"—")}</td><td>${esc(s.trades_submitted||0)}</td></tr>`).join("");
+  const rows=(cloud.observations||[]).map(s=>`<tr><td>${esc(s.symbol)}</td><td>${esc(s.status)}</td><td>${esc(s.strategy||"—")}</td><td>${esc(s.side||"—")}</td><td>${esc(s.risk_at_stop??"—")}</td><td>${esc(s.brain_status||"—")}</td><td>${esc(s.trades_submitted||0)}</td></tr>`).join("");
   const cloudPanel=`<section class="trader-panel"><div class="trader-eyebrow">SENTINEL / TICKERALL / CLOUD DEMO</div>
     <h2>بوت Sentinel السحابي المستقل</h2>
     <p>يرتبط بحساب MT5 الموجود في موقعنا. وضع البحث لا يفتح أي صفقة، ولا يحتاج Windows.</p>
     <div class="trader-alert">${esc(cloud.status)} • ${esc(cloud.reason||"لم يبدأ الفحص السحابي بعد")}</div>
-    <div class="trader-metadata">الوضع: ${esc(cloud.mode)} | حساب Demo •••• ${esc(cloud.account_last4||"—")} | أوامر مرسلة: ${esc(cloud.orders_sent||0)} | آخر فحص: ${esc(cloud.observed_at||"—")}</div>
-    <table class="trader-table"><thead><tr><th>السوق</th><th>القرار</th><th>الاستراتيجية</th><th>الاتجاه</th><th>المخاطرة المقدّرة</th><th>الأوامر</th></tr></thead><tbody>${rows||'<tr><td colspan="6">لا يوجد تحليل سحابي مكتمل حالياً</td></tr>'}</tbody></table>
+    <div class="trader-metadata">الوضع: ${esc(cloud.mode)} | حساب Demo •••• ${esc(cloud.account_last4||"—")} | أوامر مرسلة: ${esc(cloud.orders_sent||0)} | الصفقات المغلقة المؤكدة: ${esc(cloud.completed_broker_trades||0)} | صافي الوسيط: ${esc(cloud.broker_booked_net??"—")} ${esc(cloud.account_currency||"")} | آخر فحص: ${esc(cloud.observed_at||"—")}</div>
+    <table class="trader-table"><thead><tr><th>السوق</th><th>القرار</th><th>الاستراتيجية</th><th>الاتجاه</th><th>المخاطرة المقدّرة</th><th>تقييم العقل</th><th>الأوامر</th></tr></thead><tbody>${rows||'<tr><td colspan="7">لا يوجد تحليل سحابي مكتمل حالياً</td></tr>'}</tbody></table>
     <p class="trader-muted">هذه بيانات مراقبة وليست تأكيداً لصفقات مكتملة. الموقع لا يوفر أمر تداول عن بُعد.</p>
    </section>`;
   const top=`<section class="trader-panel"><div class="trader-eyebrow">SENTINEL / INDEPENDENT TRADER</div>

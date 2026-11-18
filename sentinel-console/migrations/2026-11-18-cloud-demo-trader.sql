@@ -40,3 +40,21 @@ CREATE TABLE IF NOT EXISTS sentinel_cloud_trader_cycles (
   orders_sent integer NOT NULL DEFAULT 0 CHECK(orders_sent>=0),
   observed_at timestamptz NOT NULL DEFAULT NOW()
 );
+
+-- True completed broker round-trips only. Separate from orders, shadow signals
+-- and speculative research. Commission may arrive after the initial close.
+CREATE TABLE IF NOT EXISTS sentinel_cloud_trader_fills (
+  account_id text NOT NULL,
+  signal_hash text NOT NULL,
+  broker_ticket text NOT NULL,
+  symbol text NOT NULL,
+  family text NOT NULL,
+  close_time timestamptz NOT NULL,
+  currency text NOT NULL,
+  profit numeric NOT NULL,
+  swap numeric NOT NULL,
+  commission numeric NOT NULL,
+  verified_at timestamptz NOT NULL DEFAULT NOW(),
+  PRIMARY KEY(account_id,broker_ticket),
+  FOREIGN KEY (account_id,signal_hash) REFERENCES sentinel_cloud_trader_intents(account_id,signal_hash)
+);
