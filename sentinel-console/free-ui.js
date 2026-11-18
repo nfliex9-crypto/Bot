@@ -16,7 +16,11 @@ window.FreeMT5UI=(()=>{
   BROKER_ACCOUNT_NOT_HOT:"جلسة الوسيط غير نشطة. أعد ربط حساب الديمو.",
   BROKER_SESSION_COLD:"انتهت الجلسة المجانية. أعد الاتصال.",
   INVALID_BROKER_CREDENTIAL_FIELDS:"يرجى التأكد من رقم الحساب وكلمة المرور واسم السيرفر.",
-  PROVIDER_ERROR:"تعذّر إكمال العملية لدى TickerAll. تحقق من حسابك وأعد المحاولة."
+  PROVIDER_ERROR:"تعذّر إكمال العملية لدى TickerAll. تحقق من حسابك وأعد المحاولة.",
+  PENDING_BROKER_SNAPSHOT:"جاري قراءة بيانات الحساب من TickerAll.",
+  BROKER_SNAPSHOT_OFFLINE:"الجلسة نشطة لكن الوسيط لم يرجع بيانات الحساب بعد؛ سنحاول مجدداً.",
+  BROKER_SNAPSHOT_UNVERIFIED:"بيانات الحساب غير مؤكدة؛ لم نتحقق من أنه حساب Demo.",
+  BROKER_SNAPSHOT_FAILED:"تعذرت قراءة تفاصيل الحساب. حاول تحديث الحالة."
  };
  const friendly=x=>errText[x]||String(x||"تعذّر تنفيذ العملية");
  async function api(action,body){
@@ -32,8 +36,8 @@ window.FreeMT5UI=(()=>{
   if(!res.ok||!result?.ok)throw Error(friendly(result?.error||"PROVIDER_ERROR"));
   return result;
  }
- const primary=()=>stateMT.accounts.find(a=>a.isDemo&&a.hot)||stateMT.accounts.find(a=>a.isDemo)||null;
- const verified=()=>{const a=primary();const d=a?stateMT.details[a.id]:null;return Boolean(a?.hot&&d?.online&&d?.isDemo)};
+ const primary=()=>stateMT.accounts.find(a=>a.isDemo&&a.verified)||stateMT.accounts.find(a=>a.isDemo&&a.hot)||stateMT.accounts.find(a=>a.isDemo)||null;
+ const verified=()=>{const a=primary();const d=a?stateMT.details[a.id]:null;return Boolean(a?.verified&&a?.hot&&d?.online&&d?.isDemo)};
  function summary(){
   const a=primary(),d=a?stateMT.details[a.id]:null;
   return {
@@ -54,12 +58,12 @@ window.FreeMT5UI=(()=>{
     stateMT.configured=r.configured===true;
     stateMT.error="";
     stateMT.lastSync=new Date().toISOString();
-    const a=primary();
-    if(a?.hot){
-      try{
-        const detail=await api("inspect",{accountId:a.id});
-        stateMT.details[a.id]=detail.account;
-      }catch(_){delete stateMT.details[a.id]}
+    // Same-request provider verification: no hidden POST failure.
+    stateMT.details={};
+    for(const account of stateMT.accounts){
+      if(account.verified&&account.snapshot?.online&&account.snapshot?.isDemo){
+        stateMT.details[account.id]=account.snapshot;
+      }
     }
     if(!silent)toast("تم تحديث حالة الحساب","success");
   }catch(e){stateMT.error=e.message;if(!silent)toast(e.message,"error");}
