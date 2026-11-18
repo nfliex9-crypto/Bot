@@ -11,6 +11,8 @@
   },
   "scripts": {
     "autonomy:once": "node worker/cron.js",
-    "autonomy:loop": "node worker/runner.js"
+    "autonomy:loop": "node worker/runner.js",
+    "cloud:once": "node worker/cloud-trader/cron.js",
+    "cloud:loop": "node worker/cloud-trader/service.js"
   }
 }

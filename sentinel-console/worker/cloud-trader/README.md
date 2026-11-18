@@ -19,3 +19,9 @@ TickerAll currently does not supply exchange-grade order book for this integrati
 
 ## Tests
 `node --test sentinel-console/tests/cloud-trader.test.cjs`
+
+## Faster broker-connected monitoring (optional)
+Requires only existing TickerAll account connection, database, and stored encryption key; no separate MT5 Windows terminal or new API account. Run `npm run cloud:loop` to poll roughly every 60 seconds as a private worker (not automatically deployed). `npm run cloud:once` performs a one-time shadow evaluation. Existing 15-minute research worker also invokes cloud monitoring. Neon lease serializes competing cycles. Broker hot state can still expire, so 24/7 availability is NOT proven and no paid always-hot setting was changed.
+
+## Closed broker deals and research provenance
+`sentinel_cloud_trader_fills` stores only complete matching broker-history closed trades, by previously recorded Sentinel order ticket, in deposit currency with broker commission and swap. Order acknowledgment is NOT realized P&L. `sentinel_autonomy_candidates` supplies research context, but OHLC paper hypotheses remain UNVERIFIED and NEVER auto-approve an execution strategy. Demo trial order gates remain OFF unless explicitly configured in a private worker after separate review.

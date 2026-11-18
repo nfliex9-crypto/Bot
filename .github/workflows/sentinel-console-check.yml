@@ -60,6 +60,8 @@ jobs:
           node --check sentinel-console/worker/cloud-trader/provider.js
           node --check sentinel-console/worker/cloud-trader/runner.js
           node --test sentinel-console/tests/cloud-trader.test.cjs
+          node --check sentinel-console/worker/cloud-trader/service.js
+          node --check sentinel-console/worker/cloud-trader/cron.js
           node --check sentinel-console/trader-ui.js
           node --check sentinel-bridge/api/mt5.js
       - name: Unit test Windows agent core under mocked MT5
