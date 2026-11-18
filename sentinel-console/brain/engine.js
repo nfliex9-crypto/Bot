@@ -30,9 +30,9 @@ function normalizeCandles(input){
     rejected++;continue;
   }
   const spread=n(bar.spread);
-  if(spread===null||spread<0)missingSpread++;
+  if(spread===null||spread<=0)missingSpread++;
   byTime.set(ts,{timestamp:ts,open,high,low,close,
-   spread:spread!==null&&spread>=0?spread:null,
+   spread:spread!==null&&spread>0?spread:null,
    tickVolume:n(bar.tickVolume??bar.tick_volume)});
  }
  const bars=[...byTime.values()].sort((a,b)=>a.timestamp-b.timestamp);
