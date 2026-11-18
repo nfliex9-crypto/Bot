@@ -81,3 +81,12 @@ test("research UI distinguishes incomplete source data from verified performance
  assert.match(ui,/source_coverage/);
  assert.match(ui,/time_gap_events/);
 });
+
+test("quant evidence export is flat Perspective-compatible data and never a trading action",()=>{
+ const ui=file("brain-ui.js");
+ assert.match(ui,/const exportRows=/);
+ assert.match(ui,/dataset_sha256:/);
+ assert.match(ui,/adjusted_lower_bound_r:/);
+ assert.match(ui,/fileDownload\(filename,JSON\.stringify\(exportRows,null,2\)/);
+ assert.match(ui,/execution_enabled:false/);
+});
