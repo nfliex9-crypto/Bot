@@ -7,6 +7,7 @@
 const crypto=require("node:crypto");
 const {neon}=require("@neondatabase/serverless");
 const brain=require("../brain/engine.js");
+const selector=require("../brain/selector.js");
 const API="https://api.tickerall.com";
 const TF=new Set(["M5","M15","H1","H4","D1"]);
 const MAX_HOURS={M5:720,M15:2200,H1:8760,H4:17520,D1:43800};
@@ -107,6 +108,15 @@ async function tradeSync(sql,id,token){
      volume=EXCLUDED.volume,swap=EXCLUDED.swap,commission=EXCLUDED.commission,
      imported_at=NOW()`;
  }
+ // Attribute only tickets recorded while positions were still open, before close.
+ // No retroactive strategy labels based on whether a trade won.
+ await sql`UPDATE sentinel_brain_trades AS t SET
+   strategy_id=x.strategy_id,risk_amount=x.risk_amount,tagged_at=x.recorded_at,
+   attribution='open_position_ledger'
+   FROM sentinel_brain_order_tags AS x
+   WHERE t.account_id=${id} AND x.account_id=t.account_id AND x.ticket=t.ticket
+     AND x.symbol=t.symbol AND x.recorded_at<t.close_time
+     AND t.complete=true AND t.strategy_id IS NULL`;
  const stored=await sql`SELECT ticket,close_time,broker_profit,complete,strategy_id
    FROM sentinel_brain_trades WHERE account_id=${id}
    ORDER BY close_time ASC LIMIT 5000`;
