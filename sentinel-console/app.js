@@ -146,18 +146,18 @@ function overview(){
  html+=statusNotice();
  if(!mt.configured)html+='<div class="connect-hero"><div class="hero-kicker"><span class="live-spark"></span> CONNECTION READY</div><h2>جاهز لربط أول حساب تداول</h2><p>ربط سحابي مجاني لحساب MT5 Demo، بدون Windows أو MetaApi.</p><div class="connect-actions">'+button("ربط حساب MT5","nav-mt5","btn-primary")+'</div></div>';
  html+='<div class="grid kpi-grid">'+
-  kpi("الرصيد",ok?money(mt.balance,mt.currency||"USD"):"—","BROKER BALANCE","#46e3bb")+
-  kpi("Equity",ok?money(mt.equity,mt.currency||"USD"):"—","VERIFIED EQUITY","#799dff")+
-  kpi("مراكز مفتوحة",ok?num(mt.positions.length,0):"—","MT5 POSITIONS","#ab8cff")+
+  kpi("الرصيد",ok&&mt.financialsReady&&mt.balance!=null?money(mt.balance,mt.currency||"USD"):"—","BROKER BALANCE","#46e3bb")+
+  kpi("Equity",ok&&mt.financialsReady&&mt.equity!=null?money(mt.equity,mt.currency||"USD"):"—","VERIFIED EQUITY","#799dff")+
+  kpi("مراكز مفتوحة",ok&&mt.financialsReady?num(mt.positions.length,0):"—","MT5 POSITIONS","#ab8cff")+
   kpi("حالة الاتصال",ok?"CONNECTED":mt.configured?"PENDING":"OFFLINE","CLOUD BRIDGE",ok?"#46e3bb":"#ffca80")+'</div>';
  const positions=ok?mt.positions:[];
  const positionTable=positions.length?'<div class="table-wrap"><table class="table"><thead><tr><th>الرمز</th><th>الاتجاه</th><th>الحجم</th><th>P&L</th></tr></thead><tbody>'+
   positions.map(p=>'<tr><td class="mono">'+esc(p.symbol)+'</td><td>'+esc(p.side)+'</td><td class="mono">'+num(p.volume,3)+'</td><td class="mono">'+(p.profit==null?"—":money(p.profit,mt.currency||"USD"))+'</td></tr>').join("")+'</tbody></table></div>':
-  empty("لا توجد مراكز موثقة","ستظهر المراكز الفعلية بعد ربط MT5 Demo.");
+  empty(mt.financialsReady?"لا توجد مراكز مفتوحة":"بيانات المراكز قيد التحديث","المراكز الفعلية تظهر فور وصول بيانات الوسيط.");
  html+='<div class="content-grid">'+panel("مراكز MT5","BROKER POSITIONS / READ ONLY",positionTable,button("فتح MT5","nav-mt5","btn-sm btn-quiet"))+
  panel("حالة النظام","LIVE INFRASTRUCTURE",'<div class="panel-pad">'+[
   ["TickerAll API",mt.configured?"CONFIGURED":"NOT CONNECTED"],
-  ["MT5 Demo",ok?"VERIFIED":"NOT VERIFIED"],
+  ["MT5 Demo",ok?"ONLINE":"NOT CONNECTED"],
   ["Trading engine","NOT DEPLOYED"],
   ["Auto execution","DISABLED"],
   ["Account type","DEMO ONLY"]
