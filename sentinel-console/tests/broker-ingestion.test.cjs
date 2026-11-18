@@ -32,6 +32,22 @@ test("one job per cycle: never retry the same timed-out symbol before untried ma
  })));
  assert.equal(ingest.selectJob(symbols,fullyAttempted,now),null);
 });
+test("heavy gold and NAS100 histories use smaller windows, timeouts back off to a compact retry",()=>{
+ const jobs=ingest.selectableJobs(["XAUUSD","USTECH100M","EURUSD"]);
+ const gold=jobs.find(x=>x.symbol==="XAUUSD"&&x.timeframe==="M15");
+ const nas=jobs.find(x=>x.symbol==="USTECH100M"&&x.timeframe==="H1");
+ const fx=jobs.find(x=>x.symbol==="EURUSD"&&x.timeframe==="M15");
+ assert.equal(gold.hours,336);
+ assert.equal(nas.hours,720);
+ assert.equal(fx.hours,1440);
+ const prior=[
+  {symbol:"XAUUSD",timeframe:"M15",status:"ERROR",attempted_at:"2026-11-18T11:00:00Z"},
+  {symbol:"XAUUSD",timeframe:"H1",status:"STORED_RESEARCH_BLOCKED",attempted_at:"2026-11-18T11:30:00Z"}
+ ];
+ const retry=ingest.selectJob(["XAUUSD"],prior,new Date("2026-11-18T11:45:00Z"));
+ assert.equal(retry.timeframe,"M15");
+ assert.equal(retry.hours,168);
+});
 test("provider Unix seconds become closed UTC bars, and open candle is excluded",()=>{
  const now=new Date("2026-11-18T12:07:00Z");
  const result=ingest.normalizeBatch({coverage:"complete",truncated:false,candles:sample(now)},
