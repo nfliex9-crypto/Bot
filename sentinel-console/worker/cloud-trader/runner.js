@@ -156,7 +156,7 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
    const row={symbol,status:"NO_SIGNAL_OR_UNAVAILABLE",trades_submitted:0};
    report.observations.push(row);
    try{
-    const [rawM,rawH]=await Promise.all([read.candles(a.id,symbol,"M15",120),read.candles(a.id,symbol,"H1",240)]);
+    const [rawM,rawH]=await Promise.all([read.candles(a.id,symbol,"M15",40),read.candles(a.id,symbol,"H1",100)]);
     if(rawM?.truncated===true||rawH?.truncated===true||rawM?.coverage!=="complete"||rawH?.coverage!=="complete"){
      row.status="HISTORY_NOT_COMPLETE";continue
     }
@@ -214,6 +214,18 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     // One logical trial order at most per cycle.
     break;
    }catch(e){row.status="DATA_OR_PREFLIGHT_ERROR";row.error_code=clean(e.message)}
+  }
+  // A successful account login does not mean market-data requests succeeded.
+  // Surface a degraded condition when all eligible broker candle requests fail.
+  if(report.observations.length>0&&report.observations.every(x=>x.status==="DATA_OR_PREFLIGHT_ERROR")){
+    report.status="MARKET_DATA_UNAVAILABLE";
+    report.reason="ALL_BROKER_CANDLE_REQUESTS_FAILED";
+    return report;
+  }
+  if(report.observations.length>0&&report.observations.every(x=>["DATA_OR_PREFLIGHT_ERROR","HISTORY_NOT_COMPLETE"].includes(x.status))){
+    report.status="MARKET_HISTORY_INCOMPLETE";
+    report.reason="CLOSED_BAR_HISTORY_NOT_READY";
+    return report;
   }
   report.status="COMPLETED";report.reason=enabled?"INDEPENDENT_MT5_DEMO_TRIAL":"BROKER_SHADOW_RESEARCH_ONLY";
   return report;
