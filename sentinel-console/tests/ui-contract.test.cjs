@@ -45,3 +45,12 @@ test("MT5 demo ONLINE is independent of broker equity, no redundant verification
  assert.match(backend,/base\.online=/);
  assert.match(backend,/base\.verificationError=/);
 });
+
+test("broker ONLINE can precede balance snapshot without generating fake zero",()=>{
+ const ui=file("free-ui.js");
+ const overview=file("app.js");
+ assert.match(ui,/financialsReady/);
+ assert.match(overview,/mt\.financialsReady&&mt\.balance!=null/);
+ assert.match(overview,/mt\.financialsReady&&mt\.equity!=null/);
+ assert.doesNotMatch(ui,/section\("Verified",3/);
+});
