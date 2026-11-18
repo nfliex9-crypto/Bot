@@ -111,7 +111,7 @@ test("intelligence code makes no requests to order execution routes",()=>{
 
 test("regime-aware research records trade market context without trading",()=>{
  const r=brain.research(fixture(1200),{coverage:"complete",truncated:false,timeframe:"M15"});
- assert.equal(r.version,"brain-research-v2");
+ assert.equal(r.version,"brain-research-v3");
  assert.equal(r.quality.source_timeframe,"M15");
  assert.equal(r.quality.time_gap_events,0);
  for(const strat of r.strategies){
