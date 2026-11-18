@@ -1,0 +1,169 @@
+/* Sentinel Brain v1 — broker-grounded research dashboard. No order execution. */
+"use strict";
+window.SentinelBrain=(()=>{
+ let view={data:null,symbols:[],symbol:"",timeframe:"M15",hours:720,loading:false,stage:"",error:"",
+  lastImport:null,lastTrades:null,lastEvaluation:null};
+ const msg={
+  DEMO_ACCOUNT_REQUIRED:"الربط لا يخص حساب MT5 Demo مؤكد.",
+  BROKER_SESSION_COLD:"جلسة MT5 بردت؛ افتح MT5 وأعد تنشيطها قبل الاستيراد.",
+  TICKERALL_NOT_CONNECTED:"اربط مفتاح TickerAll في صفحة MT5.",
+  IMPORT_HISTORY_FIRST:"استورد شموع تاريخية كافية قبل تشغيل التحليل.",
+  TICKERALL_UNREACHABLE:"تعذّر الاتصال بمصدر TickerAll.",
+  INVALID_SYMBOL:"الرمز غير موجود ضمن الرموز المسموحة.",
+  INVALID_HISTORY_WINDOW:"هذه الفترة الزمنية غير متاحة للفاصل المحدد.",
+  INVALID_TIMEFRAME:"فاصل زمني غير مدعوم.",
+  TICKERALL_RATE_LIMIT:"تم الوصول إلى حد الطلبات. جرّب بعد قليل.",
+  RESEARCH_WORKER_UNAVAILABLE:"تعذّر إكمال الفحص البحثي. راجع سجل الوظائف."
+ };
+ const errorText=x=>msg[x]||String(x||"Error");
+ const account=()=>window.FreeMT5UI?.summary()?.account||null;
+ const isOnline=()=>Boolean(window.FreeMT5UI?.summary()?.verified);
+ const curr=()=>window.FreeMT5UI?.summary()?.currency||"";
+ const currentAccountMemory=()=>view.data?.accounts?.find(a=>a.account_id===account()?.id)||null;
+ const activeRuns=()=>view.data?.runs?.filter(r=>r.account_id===account()?.id)||[];
+ const maxWindow={M5:720,M15:2200,H1:8760,H4:17520,D1:43800};
+ async function call(action,body){
+  const r=await fetch("/api/brain?action="+encodeURIComponent(action),{
+   method:body===undefined?"GET":"POST",credentials:"same-origin",
+   headers:{"Content-Type":"application/json"},
+   body:body===undefined?undefined:JSON.stringify(body),cache:"no-store",redirect:"error"
+  });
+  let j;
+  try{j=await r.json()}catch(_){throw Error("تعذرت قراءة استجابة السيرفر")}
+  if(!r.ok||!j?.ok)throw Error(errorText(j?.error));
+  return j.data;
+ }
+ const fx=x=>Number.isFinite(Number(x))?Number(x).toFixed(3):"—";
+ const badgeFor=status=>{
+  if(status==="PAPER_CANDIDATE")return '<span class="tag mint">PAPER CANDIDATE</span>';
+  if(["PAUSE_RESEARCH","DATA_INCOMPLETE","COST_DATA_WEAK"].includes(status))return '<span class="tag red">'+esc(status)+'</span>';
+  return '<span class="tag amber">'+esc(status)+'</span>';
+ };
+ const percentCount=(n,d)=>d>0?((n/d)*100).toFixed(1)+"%":"—";
+ function strategyTable(run){
+  if(!run?.strategies?.length)return empty("لا يوجد اختبار تاريخي مؤكد","استورد شموع السوق الحقيقية ثم نفّذ تحليل الاستراتيجيات.");
+  return '<div class="table-wrap"><table class="table"><thead><tr><th>Strategy</th><th>القرار</th><th>OOS Trades</th><th>Expectancy (R)</th><th>Costs x2 (R)</th></tr></thead><tbody>'+
+   run.strategies.map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td>'+badgeFor(s.status)+'</td><td class="mono">'+num(s.trades,0)+'</td>'+
+    '<td class="mono '+(s.expectancy_r>0?"pos":"neg")+'">'+fx(s.expectancy_r)+'</td>'+
+    '<td class="mono '+(s.stress_expectancy_r>0?"pos":"neg")+'">'+fx(s.stress_expectancy_r)+'</td></tr>').join("")+
+   '</tbody></table></div>';
+ }
+ function render(){
+  const mt=window.FreeMT5UI?.summary()||{},mem=currentAccountMemory(),latest=activeRuns()[0],running=view.loading;
+  const realTradeCount=mem?.completed_trades||0;
+  const pnl=mem?.recorded_broker_profit;
+  const total=(view.data?.candles||0);
+  let html=heading("SENTINEL / INTELLIGENCE","العقل المتعلّم","تغذية من صفقات MT5 والشموع التاريخية. فحص خارج العيّنة وترتيب بحثي للاستراتيجيات.",
+    button("↻ تحديث","brain-refresh","btn-sm",running)+button("فتح MT5","nav-mt5","btn-sm",running));
+  html+='<div class="notice info"><strong>RESEARCH MODE · NO ORDERS</strong><span class="notice-small">النتائج تُستخدم لاستبعاد الاستراتيجيات الضعيفة من التجارب وترشيح الأفضل للتداول الورقي، بدون مضاعفة اللوت أو تفعيل تداول تلقائي.</span></div>';
+  if(!account())html+='<div class="notice"><strong>لا يوجد حساب Demo مرتبط</strong><span class="notice-small">اربط حساب MT5 عبر TickerAll قبل الاستيراد.</span>'+button("ربط MT5","nav-mt5","btn-sm btn-primary")+'</div>';
+  else if(!isOnline())html+='<div class="notice"><strong>اتصال MT5 غير نشط</strong><span class="notice-small">فعّل جلسة TickerAll قبل تحميل سجل الصفقات والشموع.</span></div>';
+  if(view.error)html+='<div class="notice"><strong>فحص البيانات</strong><span class="notice-small">'+esc(view.error)+'</span></div>';
+  html+='<div class="grid kpi-grid">'+
+    kpi("صفقات تاريخية",num(realTradeCount,0),"COMPLETE BROKER TRADES","#4ce3bd")+
+    kpi("منسوبة لاستراتيجية",num(mem?.attributed_trades||0,0),"VERIFIED STRATEGY TAGS","#799dff")+
+    kpi("شموع محفوظة",num(total,0),"PERSISTENT HISTORICAL BARS","#ad8cff")+
+    kpi("نتائج البحث",num(activeRuns().length,0),"VISIBLE RECENT RUNS","#ffca80")+'</div>';
+  const provenance=mem&&pnl!==null?'<span class="mono">'+num(pnl,2)+(curr()?" "+esc(curr()):"")+'</span>':'—';
+  html+='<div class="content-grid">'+panel("Trade Memory","صفقات مكتملة من TickerAll، بدون نسخ مكررة",'<div class="panel-pad">'+[
+    ["Closed trades",num(realTradeCount,0)],
+    ["Broker-reported profit",provenance],
+    ["Recorded win rate",percentCount(mem?.wins||0,realTradeCount)],
+    ["Unknown strategy attribution",num(realTradeCount-(mem?.attributed_trades||0),0)],
+    ["Trading execution","DISABLED"]
+  ].map(x=>'<div class="key-value"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join("")+
+   '<div class="info-block" style="margin-top:15px"><strong>Cost & attribution</strong>تاريخ TickerAll قد لا يحتوي عمولة الوسيط الفعلية أو الاستراتيجية التي أنشأت الصفقة. لا نستخدم هذه الصفقات لتفضيل استراتيجية محددة بدون وسم موثوق قبل التنفيذ.</div></div>')+
+  panel("Historical Lab","أربع استراتيجيات فعلية بقواعد محددة، على شموع MT5",'<div class="panel-pad">'+
+    '<div class="field"><label>رمز الوسيط</label><select class="input select" id="brainSymbol">'+
+    (view.symbols.length?view.symbols.map(s=>'<option value="'+esc(s)+'" '+(view.symbol===s?"selected":"")+'>'+esc(s)+'</option>').join(""):
+      '<option value="">اضغط تحديث الرموز</option>')+'</select></div>'+
+    '<div class="form-grid" style="margin-top:13px"><div class="field"><label>Timeframe</label><select id="brainTimeframe" class="input select">'+
+    ["M5","M15","H1","H4","D1"].map(tf=>'<option '+(view.timeframe===tf?"selected":"")+'>'+tf+'</option>').join("")+'</select></div>'+
+    '<div class="field"><label>التاريخ المطلوب</label><select id="brainHours" class="input select">'+
+    [168,720,2200,8760,17520,43800].filter(h=>h<=maxWindow[view.timeframe]).map(h=>
+      '<option value="'+h+'" '+(view.hours===h?"selected":"")+'>'+({168:"7 أيام",720:"30 يوماً",2200:"~3 أشهر",8760:"سنة",17520:"سنتان",43800:"5 سنوات"}[h])+'</option>').join("")+
+    '</select></div></div>'+
+    '<div class="info-block" style="margin-top:14px"><strong>Out-of-sample</strong>اختبار 3 فترات زمنية متتابعة، دخول الشمعة التالية، Stop/Target، تكلفة مضاعفة، ورفض البيانات الناقصة. ما في ربح مضمون.</div>'+
+    '<div class="action-strip" style="margin-top:16px">'+
+      '<span class="small subtle">'+(running?"جاري: "+esc(view.stage):"جاهز للتحليل")+'</span>'+
+      button(running?"جاري فحص البيانات...":"▶ تحديث البيانات وتدريب الاستراتيجيات","brain-pipeline","btn-primary btn-sm",running||!isOnline()||!view.symbol)+
+      '</div>'+
+    '<div class="action-strip" style="margin-top:10px">'+
+      button("↻ الرموز","brain-symbols","btn-sm",running||!isOnline())+
+      button("سجل الصفقات فقط","brain-trades","btn-sm",running||!isOnline())+
+      button("إعادة تقييم الموجود","brain-evaluate","btn-sm",running||!view.symbol)+
+    '</div></div>')+'</div>';
+  const importRow=view.data?.imports?.find(x=>x.account_id===account()?.id&&x.symbol===view.symbol&&x.timeframe===view.timeframe);
+  if(importRow)html+='<div class="notice '+(importRow.truncated?"":"success")+'"><strong>تغطية بيانات الشموع: '+esc(importRow.coverage)+'</strong><span class="notice-small">'+num(importRow.provider_count,0)+' شمعة · '+esc(importRow.timeframe)+' · '+(importRow.truncated?"تاريخ غير مكتمل — لا ترقية":"تم فحص سجل المصدر")+'</span></div>';
+  html+=panel("Strategy Selector","نتائج خارج العينة بعد التكاليف · أفضل المرشحين فقط للتجربة الورقية",
+    strategyTable(latest),
+    latest?'<span class="tag">'+esc(latest.symbol)+' · '+esc(latest.timeframe)+' · '+dateFmt(latest.date)+'</span>':'<span class="tag">AWAITING RESEARCH</span>');
+  if(latest)html+='<div class="info-block" style="margin-top:16px"><strong>حالات القرار</strong>PAPER_CANDIDATE: صالح للبحث الورقي فقط · PAUSE_RESEARCH: أداء خارج العينة ضعيف · INSUFFICIENT: صفقات غير كافية · DATA_INCOMPLETE: بيانات مصدر ناقصة. لا يوجد تنفيذ أو تغيير مخاطرة تلقائي.</div>';
+  return html;
+ }
+ async function refresh(silent=false){
+  try{view.data=await call("status");view.error="";if(!silent)toast("تم تحديث ذاكرة التداول","success")}
+  catch(e){view.error=e.message;if(!silent)toast(e.message,"error")}
+  if(state.page==="ai")renderPage();
+ }
+ async function symbols(silent=false){
+  const a=account();
+  if(!a)return;
+  try{
+   const r=await call("symbols",{accountId:a.id});
+   view.symbols=(r.symbols||[]).filter(x=>typeof x==="string"&&/^[A-Za-z0-9._#-]{2,24}$/.test(x));
+   const priorities=["XAUUSD","GOLD","BTCUSD","EURUSD","NAS100"];
+   if(!view.symbols.includes(view.symbol))view.symbol=priorities.find(x=>view.symbols.includes(x))||view.symbols[0]||"";
+   if(!silent)toast(view.symbols.length+" رموز من الوسيط","success");
+  }catch(e){view.error=e.message;if(!silent)toast(e.message,"error")}
+  if(state.page==="ai")renderPage();
+ }
+ async function pipeline(){
+  const a=account();
+  if(!a||!isOnline()||view.loading||!view.symbol)return;
+  view.loading=true;view.error="";
+  try{
+   view.stage="الصفقات المكتملة";renderPage();
+   view.lastTrades=await call("syncTrades",{accountId:a.id});
+   view.stage="الشموع التاريخية";renderPage();
+   view.lastImport=await call("syncCandles",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe,hours:view.hours});
+   view.stage="تحليل الاستراتيجيات";renderPage();
+   view.lastEvaluation=await call("evaluate",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe});
+   toast("اكتمل التحليل الحقيقي — بدون أوامر تداول","success");
+  }catch(e){view.error=e.message;toast(e.message,"error")}
+  finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+ }
+ async function action(cmd){
+  if(cmd==="brain-refresh"){await refresh();return}
+  if(cmd==="brain-symbols"){await symbols();return}
+  if(cmd==="brain-pipeline"){await pipeline();return}
+  if(cmd==="brain-trades"){
+   const a=account();if(!a||view.loading)return;
+   view.loading=true;view.stage="جلب سجل الصفقات";renderPage();
+   try{view.lastTrades=await call("syncTrades",{accountId:a.id});toast("تمت مزامنة سجل MT5","success")}
+   catch(e){view.error=e.message;toast(e.message,"error")}
+   finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+   return;
+  }
+  if(cmd==="brain-evaluate"){
+   const a=account();if(!a||!view.symbol||view.loading)return;
+   view.loading=true;view.stage="تحليل بيانات سابقة";renderPage();
+   try{view.lastEvaluation=await call("evaluate",{accountId:a.id,symbol:view.symbol,timeframe:view.timeframe});toast("تم إعادة التقييم","success")}
+   catch(e){view.error=e.message;toast(e.message,"error")}
+   finally{view.loading=false;view.stage="";await refresh(true);renderPage()}
+  }
+ }
+ document.addEventListener("change",e=>{
+  if(e.target.id==="brainSymbol")view.symbol=e.target.value;
+  if(e.target.id==="brainTimeframe"){
+   view.timeframe=e.target.value;
+   if(view.hours>maxWindow[view.timeframe])view.hours=maxWindow[view.timeframe];
+   if(![168,720,2200,8760,17520,43800].filter(h=>h<=maxWindow[view.timeframe]).includes(view.hours))
+    view.hours=720;renderPage();
+  }
+  if(e.target.id==="brainHours")view.hours=Number(e.target.value);
+ });
+ async function init(){await refresh(true)}
+ return {render,refresh,symbols,action,init};
+})();
+window.SentinelBrain.init();
