@@ -71,7 +71,7 @@ function assessForward(trades,{costStressR=.15,symbol=null}={}){
   const close=validDate(row.closeTime),tagged=validDate(row.taggedAt);
   const opened=row.openTime?validDate(row.openTime):null;
   if(close===null||tagged===null||tagged>=close||(opened!==null&&tagged<opened)){
-   quality.invalid_time++;continue;
+   quality.invalid_tags++;quality.invalid_time++;continue;
   }
   if(row.ticket!==undefined&&row.ticket!==null){
    const identity=String(row.ticket)+"|"+String(close);
