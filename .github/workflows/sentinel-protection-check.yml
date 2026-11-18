@@ -1,0 +1,24 @@
+name: Sentinel Protected Console Check
+on:
+  workflow_dispatch:
+  push:
+    branches: [sentinel-console-isolated-v1]
+    paths: [.github/workflows/sentinel-protection-check.yml]
+permissions:
+  contents: read
+jobs:
+  production-privacy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure production UI requires Vercel login
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(curl --max-time 20 -sS -o /tmp/sentinel-response.html -D /tmp/sentinel-headers.txt -w '%{http_code}' https://sentinel-mt5-console.vercel.app/)
+          echo "Unauthenticated production response code: $status"
+          grep -iE '^(location:|x-vercel-|www-authenticate:)' /tmp/sentinel-headers.txt | cut -c1-170 || true
+          if [ "$status" = "200" ]; then
+            echo "::error::Production console is PUBLIC. Do not remove API login protection."
+            exit 1
+          fi
+          case "$status" in 301|302|303|307|308|401|403) ;; *) echo "::error::Unexpected protection response $status"; exit 1;; esac
