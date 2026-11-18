@@ -3,6 +3,9 @@
   "functions": {
     "api/gateway.js": {
       "maxDuration": 15
+    },
+    "api/free-mt5.js": {
+      "maxDuration": 30
     }
   },
   "headers": [
