@@ -182,3 +182,37 @@ test("inspection exposes only verified demo balance",async()=>{
   assert.equal(r.body.account.positions.length,1);
  }finally{global.fetch=old}
 });
+
+test("broker login timeout produces a precise, password-free diagnostic after 25s budget",async()=>{
+ const old=global.fetch;
+ global.fetch=async (url,init)=>{
+  assert.ok(String(url).endsWith("/v1/sessions"));
+  assert.ok(init.signal instanceof AbortSignal);
+  return Promise.reject(Object.assign(new Error("abort"),{name:"TimeoutError"}));
+ };
+ try{
+  const r=await call("POST","connect",{account:"12345678",password:"example-demo-password",server:"MetaQuotes-Demo"});
+  assert.equal(r.statusCode,422);
+  assert.equal(r.body.error,"TICKERALL_SESSION_TIMEOUT");
+  assert.doesNotMatch(JSON.stringify(r.body),/example-demo-password/);
+ }finally{global.fetch=old}
+});
+test("provider broker-offline is different from an unreachable TickerAll API",async()=>{
+ const old=global.fetch;
+ global.fetch=async()=>new Response(JSON.stringify({error:"BROKER_UNREACHABLE",message:"handshake failed"}),
+   {status:503,headers:{"content-type":"application/json"}});
+ try{
+  const r=await call("POST","connect",{account:"12345678",password:"demo-password",server:"MetaQuotes-Demo"});
+  assert.equal(r.statusCode,422);
+  assert.equal(r.body.error,"BROKER_UNREACHABLE");
+ }finally{global.fetch=old}
+});
+test("unexpected network failures are distinguishable from broker rejection",async()=>{
+ const old=global.fetch;
+ global.fetch=async()=>Promise.reject(Object.assign(new Error("socket closed"),{name:"TypeError"}));
+ try{
+  const r=await call("POST","connect",{account:"12345678",password:"demo-password",server:"MetaQuotes-Demo"});
+  assert.equal(r.statusCode,422);
+  assert.equal(r.body.error,"TICKERALL_NETWORK_FAILURE");
+ }finally{global.fetch=old}
+});
