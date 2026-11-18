@@ -188,19 +188,29 @@ async function evaluation(sql,id,req){
 }
 async function status(sql){
  const [trades,bars,runs,imports]=await Promise.all([
-  sql`SELECT COUNT(*)::int AS all_count,
+  sql`SELECT account_id,COUNT(*)::int AS all_count,
     COUNT(*) FILTER(WHERE complete)::int AS completed,
-    COUNT(*) FILTER(WHERE complete AND strategy_id IS NOT NULL)::int AS attributed
-    FROM sentinel_brain_trades`,
+    COUNT(*) FILTER(WHERE complete AND strategy_id IS NOT NULL)::int AS attributed,
+    COUNT(*) FILTER(WHERE complete AND broker_profit>0)::int AS wins,
+    SUM(broker_profit) FILTER(WHERE complete)::float AS recorded_profit,
+    MAX(close_time) FILTER(WHERE complete) AS last_closed_trade
+    FROM sentinel_brain_trades GROUP BY account_id ORDER BY MAX(close_time) DESC LIMIT 15`,
   sql`SELECT COUNT(*)::int AS count FROM sentinel_brain_candles`,
   sql`SELECT id,account_id,symbol,timeframe,candles_used,coverage,analysis,created_at
     FROM sentinel_brain_runs ORDER BY created_at DESC LIMIT 6`,
   sql`SELECT account_id,symbol,timeframe,requested_hours,provider_count,coverage,truncated,
     imported_at FROM sentinel_brain_imports ORDER BY imported_at DESC LIMIT 15`
  ]);
- return {version:brain.VERSION,real_trades:Number(trades[0]?.all_count||0),
-  completed_trades:Number(trades[0]?.completed||0),
-  attributed_trades:Number(trades[0]?.attributed||0),
+ const accountRows=trades.map(x=>({account_id:x.account_id,
+    real_trades:Number(x.all_count||0),completed_trades:Number(x.completed||0),
+    attributed_trades:Number(x.attributed||0),wins:Number(x.wins||0),
+    recorded_broker_profit:x.recorded_profit===null?null:Number(x.recorded_profit),
+    last_closed_trade:x.last_closed_trade,fees_verified:false}));
+ return {version:brain.VERSION,
+  real_trades:accountRows.reduce((n,a)=>n+a.real_trades,0),
+  completed_trades:accountRows.reduce((n,a)=>n+a.completed_trades,0),
+  attributed_trades:accountRows.reduce((n,a)=>n+a.attributed_trades,0),
+  accounts:accountRows,
   candles:Number(bars[0]?.count||0),
   runs:runs.map(x=>({id:x.id,symbol:x.symbol,timeframe:x.timeframe,
    candles:x.candles_used,date:x.created_at,portfolio:x.analysis?.portfolio,
