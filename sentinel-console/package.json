@@ -8,5 +8,9 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2"
+  },
+  "scripts": {
+    "autonomy:once": "node worker/cron.js",
+    "autonomy:loop": "node worker/runner.js"
   }
 }
