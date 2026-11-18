@@ -154,7 +154,7 @@ module.exports=async(req,res)=>{
     const accounts=await Promise.all(demos.map(async (a)=>{
       const base=minimalAccount(a);
       base.verified=false;
-      base.online=Boolean(a.hot===true&&String(a.status||"").toUpperCase()==="CONNECTED");
+      base.online=Boolean(a.hot===true&&["CONNECTED","ONLINE"].includes(String(a.status||"").toUpperCase()));
       // Provider's own Demo + CONNECTED fields confirm broker connectivity.
       // Separate the financial snapshot: it can lag behind the live connection.
       base.verificationError=base.online?"PENDING_BROKER_SNAPSHOT":"BROKER_SESSION_COLD";
