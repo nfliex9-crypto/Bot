@@ -117,11 +117,13 @@ test("real-account responses are blocked fail closed",async()=>{
 });
 test("inspection exposes only verified demo balance",async()=>{
  const old=global.fetch;
- global.fetch=async()=>new Response(JSON.stringify({
-  id:"acc_abcDE12345",broker:"mt5",isDemo:true,status:"online",
-  account:{accountType:"demo",balance:5000,equity:5011,currency:"USD"},
-  positions:[{ticket:10,symbol:"XAUUSD",side:"BUY",volume:.01,profit:11}]
- }),{status:200});
+ global.fetch=async(url)=>new Response(JSON.stringify(
+  String(url).endsWith("/v1/accounts")
+  ? [{id:"acc_abcDE12345",broker:"mt5",isDemo:true,status:"CONNECTED",hot:true}]
+  : {id:"acc_abcDE12345",broker:"mt5",isDemo:true,status:"online",
+     account:{accountType:"demo",balance:5000,equity:5011,currency:"USD"},
+     positions:[{ticket:10,symbol:"XAUUSD",side:"BUY",volume:.01,profit:11}]}
+ ),{status:200});
  try{
   const r=await call("POST","inspect",{accountId:"acc_abcDE12345"});
   assert.equal(r.statusCode,200);
