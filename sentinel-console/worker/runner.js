@@ -176,17 +176,18 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
       notes.broker_imports="UP_TO_DATE";
       results.push({status:"HISTORY_REFRESH_NOT_DUE"});
     }
-    try{
-      // A single genuine quote per cycle; stamped when received, never backfilled.
-      const eligible=symbols.filter(x=>/^[A-Za-z0-9._-]{2,24}$/.test(x));
-      if(eligible.length){
-        const pos=Math.floor(now.getTime()/900000)%eligible.length;
-        const symbol=eligible[pos];
+    // Capture independent *current* bid/ask observations from each eligible
+    // symbol in parallel; do not backfill these into historic candle spreads.
+    const eligible=symbols.filter(x=>/^[A-Za-z0-9._-]{2,24}$/.test(x)).slice(0,4);
+    const observations=await Promise.all(eligible.map(async symbol=>{
+      try{
         const quote=await fetcher(API+"/v1/accounts/"+demo.id+"/symbols/"+
           encodeURIComponent(symbol)+"/quote",{Authorization:"Bearer "+token});
-        notes.quote=await recordQuote(sql,{accountId:demo.id,symbol,raw:quote,now:new Date()});
-      }
-    }catch(e){notes.quote={status:"UNAVAILABLE",reason:clean(e.message)}}
+        return await recordQuote(sql,{accountId:demo.id,symbol,raw:quote,now:new Date()});
+      }catch(e){return {symbol,status:"UNAVAILABLE",reason:clean(e.message)}}
+    }));
+    notes.quotes=observations;
+    notes.quote=observations.find(x=>x.status==="OBSERVED")||observations[0]||null;
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
    const cached=await sql`SELECT account_id,symbol,timeframe,MAX(bar_time) AS last_bar
