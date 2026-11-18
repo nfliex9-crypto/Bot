@@ -218,24 +218,23 @@ window.SentinelBrain=(()=>{
   if(cmd==="brain-export"){
    const current=activeRuns()[0];
    if(!current){toast("لا يوجد تحليل حقيقي لتصديره","error");return}
-   const exportPayload={
-    format:"sentinel-perspective-compatible-evidence-v1",
-    exported_at:new Date().toISOString(),
-    source:"Sentinel broker-verified research",
-    symbol:current.symbol,timeframe:current.timeframe,
-    dataset:current.dataset||null,quality:current.quality||null,
-    research_mode:"READ_ONLY_NO_EXECUTION",
-    strategies:(current.strategies||[]).map(x=>({
-     strategy_id:x.id,status:x.status,oos_trades:x.trades,
-     expectancy_r:x.expectancy_r,double_cost_expectancy_r:x.stress_expectancy_r,
-     independent_days:x.integrity?.sample_days??null,
-     adjusted_lower_bound_r:x.integrity?.lower_bound_r??null,
-     adjusted_confidence:x.integrity?.effective_confidence??null,
-     decision:x.status==="PAPER_CANDIDATE"?"RESEARCH_ONLY":"NO_PROMOTION"
-    }))
-   };
+   // A flat array of typed records can be loaded into Perspective directly.
+   const exportRows=(current.strategies||[]).map(x=>({
+    strategy_id:x.id,status:x.status,symbol:current.symbol,
+    timeframe:current.timeframe,source:"TickerAll MT5 Demo",
+    dataset_sha256:current.dataset?.id||null,
+    coverage:current.quality?.source_coverage||null,
+    oos_trades:Number(x.trades)||0,
+    expectancy_r:Number.isFinite(x.expectancy_r)?x.expectancy_r:null,
+    double_cost_expectancy_r:Number.isFinite(x.stress_expectancy_r)?x.stress_expectancy_r:null,
+    independent_days:x.integrity?.sample_days??null,
+    adjusted_lower_bound_r:x.integrity?.lower_bound_r??null,
+    adjusted_confidence:x.integrity?.effective_confidence??null,
+    execution_enabled:false,
+    decision:x.status==="PAPER_CANDIDATE"?"PAPER_RESEARCH_ONLY":"NO_PROMOTION"
+   }));
    const filename="sentinel-quant-evidence-"+String(current.symbol||"market").replace(/[^A-Za-z0-9._-]/g,"_")+"-"+String(current.timeframe||"TF")+".json";
-   fileDownload(filename,JSON.stringify(exportPayload,null,2),"application/json");
+   fileDownload(filename,JSON.stringify(exportRows,null,2),"application/json");
    toast("تم تصدير بيانات البحث للتحليل والمقارنة","success");
    return;
   }
