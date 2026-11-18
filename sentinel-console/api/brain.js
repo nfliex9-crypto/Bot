@@ -286,7 +286,7 @@ async function status(sql){
    paper_schedule:x.analysis?.paper_schedule,forward_quality:x.analysis?.forward_quality,
    strategies:x.analysis?.strategies?.map(s=>({
     id:s.strategy_id,status:s.status,trades:s.oos.trades,expectancy_r:s.oos.expectancy_r,
-    stress_expectancy_r:s.double_costs.expectancy_r,reason:s.reason
+    stress_expectancy_r:s.double_costs.expectancy_r,regimes:s.regimes||{},reason:s.reason
    }))||[]})),
   imports:imports,execution_enabled:false,worker_running:false};
 }
