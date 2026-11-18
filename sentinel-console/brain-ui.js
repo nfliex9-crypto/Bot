@@ -3,7 +3,7 @@
 window.SentinelBrain=(()=>{
  let view={data:null,symbols:[],symbol:"",timeframe:"M15",hours:720,loading:false,stage:"",error:"",
   lastImport:null,lastTrades:null,lastEvaluation:null};
- let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],public_research:[],error:null};
+ let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],public_research:[],market_imports:[],broker_candles:[],error:null};
  const msg={
   DEMO_ACCOUNT_REQUIRED:"الربط لا يخص حساب MT5 Demo مؤكد.",
   BROKER_SESSION_COLD:"جلسة MT5 بردت؛ افتح MT5 وأعد تنشيطها قبل الاستيراد.",
@@ -77,6 +77,32 @@ window.SentinelBrain=(()=>{
     (!fresh?'<div class="notice" style="margin-top:12px"><strong>Worker غير مؤكد</strong><span class="notice-small">لا يوجد Heartbeat حديث؛ تشغيل 24/7 لم يُتحقق منه بعد.</span></div>':'')+
     (autonomy.error?'<div class="small subtle">'+esc(autonomy.error)+'</div>':'')+
     '<div class="action-strip" style="margin-top:14px">'+button("تحديث العقل","brain-autonomy","btn-sm")+'</div></div>');
+  if(autonomy.broker_candles?.length||autonomy.market_imports?.length){
+   const imports=autonomy.market_imports||[];
+   const quality=autonomy.broker_candles||[];
+   html+=panel("MT5 Broker Data Quality","شموع محفوظة فعلياً من الوسيط · التكاليف والتغطية مؤكدة فقط عند توفرها",
+    '<div class="panel-pad">'+
+     '<div class="grid kpi-grid">'+
+      kpi("شموع MT5",num(quality.reduce((n,q)=>n+Number(q.candle_count||0),0),0),
+       "REAL BROKER OHLC","#4ce3bd")+
+      kpi("أسواق مستوردة",num(quality.length,0),"SYMBOL / TIMEFRAME","#799dff")+
+      kpi("شموع مع سبريد",num(quality.reduce((n,q)=>n+Number(q.candles_with_spread||0),0),0),
+       "OBSERVED SPREAD ONLY","#ab8cff")+
+      kpi("المحاولات",num(imports.length,0),"IMPORT ATTEMPT RECORDS","#ffca80")+
+     '</div></div>'+
+     '<div class="table-wrap"><table class="table"><thead><tr><th>Symbol</th><th>Frame</th><th>Stored</th><th>Observed spread</th><th>Last attempt</th><th>Status</th></tr></thead><tbody>'+
+      quality.map(q=>{
+       const imp=imports.find(x=>x.symbol===q.symbol&&x.timeframe===q.timeframe);
+       const pct=Number(q.candle_count)>0?Math.round(Number(q.candles_with_spread||0)/Number(q.candle_count)*100):0;
+       return '<tr><td class="mono">'+esc(q.symbol)+'</td><td class="mono">'+esc(q.timeframe)+
+        '</td><td class="mono">'+num(q.candle_count,0)+'</td><td class="mono">'+pct+
+        '%</td><td>'+ (imp?.attempted_at?dateFmt(imp.attempted_at):"—")+
+        '</td><td>'+esc(imp?.status||"PREVIOUS IMPORT")+'</td></tr>';
+      }).join("")+
+      '</tbody></table></div>'+
+     '<div class="panel-pad"><p class="small subtle">وجود شموع بدون سبريد تاريخي لا يعني اكتمال الاختبار بعد التكاليف. الاستراتيجيات تبقى للبحث ولا تتحول تلقائياً إلى صفقات.</p>'+
+     (imports.filter(x=>x.status==="ERROR").length?'<div class="notice">بعض طلبات الوسيط تأخرت أو فشلت. العامل يبدّل الأسواق ويحاول لاحقاً بدون تعطيل الاستيراد الآخر.</div>':"")+'</div>');
+  }
   if(autonomy.candidates?.length){
    html+=panel("Strategy Evolution / Leaderboard","مكافآت التجارب لا تزيد حجم المخاطرة",
     '<div class="table-wrap"><table class="table"><thead><tr><th>Family</th><th>Symbol</th><th>TF</th><th>Decision</th><th>Reward</th><th>Heldout R</th></tr></thead><tbody>'+
