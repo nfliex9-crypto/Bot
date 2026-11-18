@@ -47,8 +47,8 @@ function normalizeBatch(payload,{timeframe,now=new Date()}={}){
   const t=x?.timestamp;
   const parsed=typeof t==="number"&&Number.isFinite(t)?(t<1e11?t*1000:t):Date.parse(String(t||""));
   if(!Number.isSafeInteger(parsed)){futureRejected++;continue}
-  if(parsed+interval>now.getTime()){openBarExcluded++;continue}
   if(parsed>now.getTime()||parsed<Date.UTC(1990,0,1)){futureRejected++;continue}
+  if(parsed+interval>now.getTime()){openBarExcluded++;continue}
   closed.push(x);
  }
  const n=normalizeCandles(closed);
