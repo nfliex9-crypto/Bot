@@ -212,7 +212,7 @@ async function status(sql){
   attributed_trades:accountRows.reduce((n,a)=>n+a.attributed_trades,0),
   accounts:accountRows,
   candles:Number(bars[0]?.count||0),
-  runs:runs.map(x=>({id:x.id,symbol:x.symbol,timeframe:x.timeframe,
+  runs:runs.map(x=>({id:x.id,account_id:x.account_id,symbol:x.symbol,timeframe:x.timeframe,
    candles:x.candles_used,date:x.created_at,portfolio:x.analysis?.portfolio,
    strategies:x.analysis?.strategies?.map(s=>({
     id:s.strategy_id,status:s.status,trades:s.oos.trades,expectancy_r:s.oos.expectancy_r,
