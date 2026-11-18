@@ -3,7 +3,7 @@
 window.SentinelBrain=(()=>{
  let view={data:null,symbols:[],symbol:"",timeframe:"M15",hours:720,loading:false,stage:"",error:"",
   lastImport:null,lastTrades:null,lastEvaluation:null};
- let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],error:null};
+ let autonomy={worker:null,candidates:[],cycles:[],papers:[],stats:[],public_research:[],error:null};
  const msg={
   DEMO_ACCOUNT_REQUIRED:"الربط لا يخص حساب MT5 Demo مؤكد.",
   BROKER_SESSION_COLD:"جلسة MT5 بردت؛ افتح MT5 وأعد تنشيطها قبل الاستيراد.",
@@ -81,6 +81,13 @@ window.SentinelBrain=(()=>{
    html+=panel("Strategy Evolution / Leaderboard","مكافآت التجارب لا تزيد حجم المخاطرة",
     '<div class="table-wrap"><table class="table"><thead><tr><th>Family</th><th>Symbol</th><th>TF</th><th>Decision</th><th>Reward</th><th>Heldout R</th></tr></thead><tbody>'+
     autonomy.candidates.slice(0,20).map(c=>'<tr><td class="mono">'+esc(c.family)+'</td><td>'+esc(c.symbol)+'</td><td>'+esc(c.timeframe)+'</td><td>'+badgeFor(c.status)+'</td><td class="mono">'+num(c.reward_points,0)+'</td><td class="mono">'+fx(c.holdout?.expectancy_r)+'</td></tr>').join("")+'</tbody></table></div>');
+  }
+  if(autonomy.public_research?.length){
+   html+=panel("Public Market Lab · BTCUSDT","شموع إنترنت حقيقية، بس مو سعر تنفيذ MT5 أو دليل ربحية",
+    '<div class="panel-pad">'+autonomy.public_research.slice(0,3).map(p=>
+     '<div class="key-value"><span>'+esc(p.provider)+" · "+esc(p.symbol)+
+       ' · '+num(p.candle_count,0)+' شمعة</span><strong>HYPOTHESIS ONLY</strong></div>'
+    ).join("")+'<p class="small subtle">سبريد التداول غير متاح بالمصدر العام، لذلك لا نكافئ ولا نفعّل الاستراتيجيات استناداً له.</p></div>');
   }
   if(autonomy.papers?.length){
    html+=panel("Research Radar · Crossref","مراجع علمية منشورة: بيانات ببليوغرافية فقط، وليست توصيات دخول",
