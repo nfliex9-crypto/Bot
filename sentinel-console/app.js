@@ -15,7 +15,7 @@ const nav=[
  ["signals","الإشارات والقرارات","◉","SIGNALS"],
  ["strategies","مكتبة الاستراتيجيات","▦","STRATEGIES"],
  ["backtest","مختبر الاختبارات","▤","BACKTEST LAB"],
- ["ai","الذكاء والتدريب","✧","AI LAB"],
+ ["ai","العقل المتعلّم","✧","ADAPTIVE INTELLIGENCE"],
  ["risk","المخاطرة والإعدادات","⬡","RISK & CONFIG"],
  ["logs","مركز الأحداث","≡","EVENT CENTER"],
  ["settings","الربط والنظام","⚙","SYSTEM"]
@@ -253,12 +253,12 @@ function renderPage(){
  let h="";
  try{switch(state.page){
  case"overview":h=overview();break;case"mt5":h=mt5View();break;case"trades":h=tradesView();break;case"signals":h=signalsView();break;
- case"strategies":h=strategiesView();break;case"backtest":h=backtestView();break;case"ai":h=aiView();break;
+ case"strategies":h=strategiesView();break;case"backtest":h=backtestView();break;case"ai":h=window.SentinelBrain?.render()||aiView();break;
  case"risk":h=riskView();break;case"logs":h=logsView();break;case"settings":h=settingsView();break;
  default:h=overview();}}catch(e){h=heading("DISPLAY ERROR","تعذّر عرض الصفحة",esc(e.message));eventLog("render-error",e.message)}
  byId("page").innerHTML=h;
 }
-function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
+function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);if(page==="ai"){window.SentinelBrain?.refresh(true);window.SentinelBrain?.symbols(true)}state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
 function openConnect(){navigate("mt5");}
@@ -332,6 +332,7 @@ function localBacktest(bars,balance,spreadPct){
  return {trades,wins,winRate:trades?wins/trades:0,pnl:cash-balance,maxDD,curve,bars:bars.length,openAtEnd:!!position};
 }
 async function act(action){
+ if(action.startsWith("brain-")){await window.SentinelBrain?.action(action);return}
  if(action.startsWith("free-")){await window.FreeMT5UI?.action(action);return}
  if(action.startsWith("nav-")){navigate(action.slice(4));return}
  if(action==="refresh"){await window.FreeMT5UI?.sync();return}
