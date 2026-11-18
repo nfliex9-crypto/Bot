@@ -5,6 +5,7 @@ const core=require("../brain/engine.js");
 const {fingerprint}=require("../brain/provenance.js");
 const factory=require("../brain/strategy-factory.js");
 const {researchRadar}=require("../brain/research-radar.js");
+const {refreshPublic}=require("../brain/public-feed.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -17,7 +18,7 @@ function decrypt(cipher,key){
 }
 async function fetchJSON(url,headers={}){
  const u=new URL(url);
- if(u.protocol!=="https:"||!((u.hostname==="api.tickerall.com"&&/^\/v1\/accounts(?:\/[A-Za-z0-9_-]{3,128}(?:\/(?:symbols|candles|history))?)?$/.test(u.pathname))||(u.hostname==="api.crossref.org"&&u.pathname==="/works")))throw Error("SOURCE_NOT_ALLOWLISTED");
+ if(u.protocol!=="https:"||!((u.hostname==="api.tickerall.com"&&/^\/v1\/accounts(?:\/[A-Za-z0-9_-]{3,128}(?:\/(?:symbols|candles|history))?)?$/.test(u.pathname))||(u.hostname==="api.crossref.org"&&u.pathname==="/works")||(u.hostname==="data-api.binance.vision"&&u.pathname==="/api/v3/klines"&&u.searchParams.get("symbol")==="BTCUSDT"&&u.searchParams.get("interval")==="1h"&&u.searchParams.get("limit")==="1000"&&[...u.searchParams.keys()].length===3)))throw Error("SOURCE_NOT_ALLOWLISTED");
  const response=await fetch(u,{headers:{Accept:"application/json",...headers},redirect:"error",cache:"no-store",signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error((u.hostname==="api.tickerall.com"?"BROKER_HTTP_":"RESEARCH_HTTP_")+response.status);
  return response.json();
@@ -139,6 +140,8 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
   notes.weekend=[0,6].includes(now.getUTCDay());
   notes.demo_session_online=Boolean(demo);
   try{notes.literature=await harvest(sql,now,fetcher)}catch(e){notes.literature_error=clean(e.message)}
+  try{notes.public_market=await refreshPublic(sql,{fetcher,now})}
+  catch(e){notes.public_market={status:"UNAVAILABLE",reason:clean(e.message)}}
   if(!demo&&!results.length)status="WAITING_FOR_REAL_DATA";
   else if(results.some(r=>r.status==="ERROR"))status="PARTIAL";
  }catch(e){status="ERROR";notes.error=clean(e.message)}
