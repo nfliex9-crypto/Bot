@@ -32,6 +32,16 @@ function pickSymbols(raw){
  }
  return found.slice(0,4);
 }
+// Prefer an existing linked Fusion MT5 Demo for shadow-only comparison after
+// the owner securely links it in TickerAll. Never silently switch execution
+// to a different account; demo orders still require an explicit exact ID.
+function shadowPreferredDemo(roster,incumbent,env={}){
+ if(env.SENTINEL_CLOUD_MODE==="demo_execution"||env.SENTINEL_CLOUD_ACCOUNT_ID)return incumbent;
+ const accounts=Array.isArray(roster)?roster:(Array.isArray(roster?.accounts)?roster.accounts:[]);
+ const matches=accounts.filter(a=>a?.broker==="mt5"&&a.isDemo===true&&a.hot===true&&
+   a.readOnly!==true&&/fusion/i.test(String(a.server||"")+" "+String(a.name||"")));
+ return matches.length===1?matches[0].id:incumbent;
+}
 async function tokenFromExistingSettings(sql,env){
  const keys=await sql`SELECT cipher_value FROM sentinel_mt5_cloud_config WHERE config_key='tickerall_api_token' LIMIT 1`;
  if(keys.length!==1)throw Error("EXISTING_TICKERALL_KEY_NOT_PRESENT");
@@ -114,7 +124,8 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
   const recent=await sql`SELECT account_id FROM sentinel_autonomy_cycles WHERE account_id IS NOT NULL
     ORDER BY started_at DESC LIMIT 1`;
   const explicit=env.SENTINEL_CLOUD_ACCOUNT_ID||"";
-  const chosen=c.selectAccount(roster,explicit,recent[0]?.account_id||"");
+  const preferred=shadowPreferredDemo(roster,recent[0]?.account_id||"",env);
+  const chosen=c.selectAccount(roster,explicit,preferred);
   if(!chosen.account){report.status="BLOCKED";report.reason=chosen.status;return report}
   const a=chosen.account;
   report.account_id=a.id;report.account_last4=String(a.accountNumber||"").slice(-4);
@@ -236,4 +247,4 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
    WHERE worker_name=${SERVICE} AND lease_owner=${owner}`}catch(_){}
  }
 }
-module.exports={runCloudCycle,pickSymbols,strictPositions,strictOrders,reconcile,syncClosedFills};
+module.exports={runCloudCycle,pickSymbols,shadowPreferredDemo,strictPositions,strictOrders,reconcile,syncClosedFills};
