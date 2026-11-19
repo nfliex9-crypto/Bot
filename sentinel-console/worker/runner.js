@@ -131,6 +131,28 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
   const fusion=eligible.filter(a=>/fusion/i.test(String(a.server||"")+" "+String(a.name||"")));
   const demo=fusion.length===1?fusion[0]:eligible[0];
   accountId=demo?.id||null;let symbols=[];
+  // Forward feedback comes exclusively from broker-confirmed closed Sentinel
+  // demo trades. This evidence is descriptive; no auto strategy promotion,
+  // increased risk, or fresh order is allowed from a small sample.
+  if(demo)try{
+    const feedback=await sql`SELECT symbol,family,currency,COUNT(*)::int AS closed,
+       COUNT(*) FILTER (WHERE profit+swap+commission>0)::int AS winners,
+       SUM(profit+swap+commission) AS booked_net,
+       MAX(close_time) AS last_close
+       FROM sentinel_cloud_trader_fills WHERE account_id=${demo.id}
+       GROUP BY symbol,family,currency ORDER BY MAX(close_time) DESC LIMIT 12`;
+    const totals=feedback.reduce((n,r)=>n+Number(r.closed||0),0);
+    notes.forward_broker_feedback={
+      status:totals>0?"OBSERVED_UNVERIFIED_EDGE":"AWAITING_BROKER_FILLS",
+      source:"BROKER_VERIFIED_CLOSED_DEMO_ONLY",
+      closed:totals,confidence:"INSUFFICIENT_FOR_PROMOTION",
+      minimum_closed_for_review:30,auto_promotion:false,
+      strategies:feedback.map(r=>({symbol:r.symbol,family:r.family,
+        currency:r.currency,closed:Number(r.closed)||0,
+        winners:Number(r.winners)||0,
+        booked_net:Number(r.booked_net)||0,last_close:r.last_close}))
+    };
+  }catch(e){notes.forward_feedback_error=clean(e.message)}
   notes.selected_demo_last4=demo?String(demo.accountNumber||'').slice(-4):null;
   notes.broker_selection=fusion.length===1?'FUSION_DEMO':'DEFAULT_ELIGIBLE_DEMO';
   if(demo)try{
