@@ -199,3 +199,9 @@ body{background:#080d16}
  .lc-light,.lc-loading-shape,.lc-root{animation:none!important}
  .lc-market,.lc-button{transition:none!important}
 }
+
+.lc-forward-evidence{margin:0 22px 15px;padding:14px 16px;border:1px solid #35516a;border-radius:12px;background:#101e2e}
+.lc-forward-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;color:#b3c7dc;font-size:11px}
+.lc-forward-row strong{font:700 19px 'IBM Plex Mono';color:#d7f6eb}
+.lc-forward-evidence p{font-size:10px;color:#839bae;line-height:1.8;margin-top:7px}
+@media(max-width:650px){.lc-forward-evidence{margin:0 13px 12px}}
