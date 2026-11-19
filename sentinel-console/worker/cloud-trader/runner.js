@@ -174,6 +174,18 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
   }
   const riskPct=databaseApproved?Number(permission.risk_pct):.25;
   const write=enabled?providerFactory(token,{fetcher,allowWrites:true}):null;
+  if(enabled){
+    // Cap the controlled unverified trial at four new signal entries per UTC
+    // day, independently of its 1% daily equity-loss guard.
+    const daily=await sql`SELECT COUNT(*)::int AS entries
+      FROM sentinel_cloud_trader_intents
+      WHERE account_id=${a.id} AND created_at>=DATE_TRUNC('day',NOW())
+      AND status<>'NOT_SENT'`;
+    if(!daily.length||!Number.isSafeInteger(Number(daily[0].entries))||
+       Number(daily[0].entries)>=4){
+      report.status="BLOCKED";report.reason="DAILY_DEMO_ENTRY_CAP";return report;
+    }
+  }
   // Sample only closed broker bars. Never substitute stored partial research bars
   // for an unavailable broker feed when deciding a live DEMO entry.
   for(const symbol of symbols){
