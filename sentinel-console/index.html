@@ -4,28 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#090e18">
+  <meta name="theme-color" content="#0a111b">
   <meta name="description" content="Sentinel MT5 Control — isolated trading research and operations console.">
-  <title>Sentinel | MT5 Control Center</title>
+  <title>Sentinel | Live Trading Command Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/trader.css">
   <link rel="stylesheet" href="/styles-v2.css?v=mt5-reconnect-20261118-5">
+  <link rel="stylesheet" href="/styles-v3.css?v=sentinel-live-v3-20261119">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <div id="app">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><div class="brand-mark"><svg viewBox="0 0 40 40" fill="none"><path d="M20 3 36 12v16L20 37 4 28V12L20 3Z" stroke="currentColor" stroke-width="1.6"/><path d="M10 23h7l3-9 4 13 3-7h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="brand-name">SENTINEL<span class="brand-dot">.</span></div><div class="brand-sub">MT5 / CONTROL SYSTEM</div></div></div>
-      <div class="workspace-badge"><span class="tiny-pulse"></span><span>مركز القيادة</span><span class="workspace-version">V1.0</span></div>
+      <div class="workspace-badge"><span class="tiny-pulse"></span><span>مركز القيادة</span><span class="workspace-version">V3.0</span></div>
       <div class="nav-label">WORKSPACE / النظام</div><nav class="nav" id="nav"></nav>
       <div class="sidebar-bottom"><div class="connector-mini" id="connectorMini"><span class="socket"></span><div><strong>MT5 Gateway</strong><small>غير متصل</small></div><span class="mini-chevron">↗</span></div><div class="sidebar-caption">ISOLATED CONSOLE • NO LIVE ORDERS BY DEFAULT</div></div>
     </aside>
     <div class="main-shell">
       <header class="topbar">
-        <div class="topbar-title"><button class="mobile-menu icon-button" id="mobileMenu" aria-label="القائمة">☰</button><div class="breadcrumbs"><span>WORKSPACE</span><span class="slash">/</span><strong id="breadcrumb">نظرة عامة</strong></div></div>
+        <div class="topbar-title"><button class="mobile-menu icon-button" id="mobileMenu" aria-label="القائمة">☰</button><div class="breadcrumbs"><span>WORKSPACE</span><span class="slash">/</span><strong id="breadcrumb">مركز القيادة المباشر</strong></div></div>
         <div class="topbar-actions"><span class="mode-indicator" id="modeBadge"><span class="mode-dot"></span> CONNECTING</span><span class="utc-clock" id="clock">--:--:-- UTC</span><button class="icon-button" id="refreshBtn" aria-label="تحديث" title="تحديث">↻</button><button class="top-connect" id="connectBtn"><span class="connect-button-dot"></span> ربط MT5</button><div class="avatar">S</div></div>
       </header>
       <div class="scroll-area"><main class="page" id="page"><div class="loading-screen"><div class="loader-ring"></div><p>Preparing Sentinel Console...</p></div></main></div>
@@ -37,5 +38,6 @@
   <script src="/free-ui.js?v=mt5-reconnect-20261118-5" defer></script>
   <script src="/brain-ui.js?v=autonomy-mt5-20261118-2" defer></script>
   <script src="/trader-ui.js" defer></script>
+  <script src="/live-ui.js?v=sentinel-live-v3-20261119" defer></script>
 </body>
 </html>
