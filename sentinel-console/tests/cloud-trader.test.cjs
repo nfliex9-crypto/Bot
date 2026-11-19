@@ -138,3 +138,19 @@ test("dedicated cloud cycle service has bounded one-minute scheduling",()=>{
  assert.equal(sleepDuration(120000),1000);
  assert.equal(sleepDuration(-1),60000);
 });
+
+test("Fusion MT5 demo is preferred only in shadow mode; never silently switched for execution",()=>{
+ const {shadowPreferredDemo}=require("../worker/cloud-trader/runner.js");
+ const demo={broker:"mt5",isDemo:true,hot:true,readOnly:false};
+ const accounts=[
+  {...demo,id:"old",server:"OtherBroker-Demo"},
+  {...demo,id:"fusion",server:"FusionMarkets-Demo"},
+  {...demo,id:"fusion-live",server:"FusionMarkets-Live",isDemo:false}
+ ];
+ assert.equal(shadowPreferredDemo(accounts,"old",{}),"fusion");
+ assert.equal(shadowPreferredDemo(accounts,"old",{SENTINEL_CLOUD_MODE:"demo_execution"}),"old");
+ assert.equal(shadowPreferredDemo(accounts,"old",{SENTINEL_CLOUD_ACCOUNT_ID:"old"}),"old");
+ assert.equal(shadowPreferredDemo([...accounts,{...demo,id:"fusion2",server:"FusionMarkets-OtherDemo"}],"old",{}),"old");
+ assert.equal(shadowPreferredDemo([{...demo,id:"fusion",server:"FusionMarkets-Demo",hot:false}],"old",{}),"old");
+ assert.equal(shadowPreferredDemo([{...demo,id:"fusion",server:"FusionMarkets-Demo",readOnly:true}],"old",{}),"old");
+});
