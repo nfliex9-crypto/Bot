@@ -67,7 +67,8 @@ module.exports=async function liveHandler(req,res){
           WHERE f.account_id=${accountId}
           ORDER BY f.close_time DESC LIMIT 30`,
       sql`SELECT symbol,observed_at,bid,ask,spread FROM sentinel_autonomy_spread_observations
-          WHERE account_id=${accountId} ORDER BY observed_at DESC LIMIT 240`,
+          WHERE account_id=${accountId} AND observed_at>NOW()-INTERVAL '12 hours'
+          ORDER BY observed_at DESC LIMIT 520`,
       sql`SELECT
            (SELECT COUNT(*)::int FROM sentinel_cloud_trader_intents WHERE account_id=${accountId}) AS order_intents,
            (SELECT COUNT(*)::int FROM sentinel_cloud_trader_fills WHERE account_id=${accountId}) AS closed_fills,
@@ -110,7 +111,7 @@ module.exports=async function liveHandler(req,res){
     const observations=(Array.isArray(last.observations)?last.observations:[])
       .map(sanitizedObservation).filter(Boolean);
     const markets=observations.map(s=>{
-      const samples=(series.get(s.symbol)||[]).slice(-45),quote=samples[samples.length-1]||null;
+      const samples=(series.get(s.symbol)||[]).slice(-130),quote=samples[samples.length-1]||null;
       const isFresh=quote&&ageSeconds(quote.at,now)<=600;
       return {...s,quote:isFresh?quote:null,quote_at:quote?.at||null,
         quote_age_seconds:quote?ageSeconds(quote.at,now):null,
