@@ -110,6 +110,12 @@ window.SentinelLive=(()=>{
       '<span class="lc-quality-icon">!</span><div><strong>'+(quality?"جودة التكاليف التاريخية غير مكتملة":"نتائج البحث قيد المراجعة")+'</strong>'+
       '<p>'+ (quality?"آخر بيانات البحث تفتقد سبريد تاريخياً موثقاً؛ الفرضيات ليست استراتيجيات معتمدة.":
         "لا يجوز اعتبار الفرضيات البحثية أرباحاً أو صفقات تنفيذية.")+'</p></div></div>'+
+      '<div class="lc-forward-evidence"><span class="lc-kicker">VERIFIED BROKER FEEDBACK</span>'+
+      '<div class="lc-forward-row"><span>صفقات مغلقة رآها العقل</span><strong>'+
+      num(brain.forward_feedback?.closed||0,0)+'</strong></div>'+
+      '<p>'+(brain.forward_feedback?.closed?
+        'هذه نتائج Demo فعلية، لكن العينة لا تكفي لترقية استراتيجية تلقائياً.':
+        'بانتظار ربط دورة البحث الجديدة بسجل التنفيذ المؤكد.')+'</p></div>'+
       '<div class="lc-brain-footer"><span>المصدر <b>'+esc(brain.broker_selection||"غير محدد")+'</b></span>'+
       '<span>آخر دورة <b>'+esc(localTime(brain.updated_at))+'</b></span></div>'+
       '</section>';
