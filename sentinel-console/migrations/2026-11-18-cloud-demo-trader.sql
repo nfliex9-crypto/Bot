@@ -58,3 +58,16 @@ CREATE TABLE IF NOT EXISTS sentinel_cloud_trader_fills (
   PRIMARY KEY(account_id,broker_ticket),
   FOREIGN KEY (account_id,signal_hash) REFERENCES sentinel_cloud_trader_intents(account_id,signal_hash)
 );
+
+-- Separately authorized, time-bounded, exact-account Fusion DEMO trial.
+-- Server and masked account must match the connected broker roster.
+CREATE TABLE IF NOT EXISTS sentinel_cloud_trader_authorizations (
+  account_id text PRIMARY KEY,
+  expected_last4 text NOT NULL CHECK(expected_last4 ~ '^[0-9]{4}$'),
+  expected_server text NOT NULL,
+  enabled boolean NOT NULL DEFAULT false,
+  expires_at timestamptz NOT NULL,
+  risk_pct numeric NOT NULL DEFAULT .25 CHECK(risk_pct>0 AND risk_pct<=.25),
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW()
+);
