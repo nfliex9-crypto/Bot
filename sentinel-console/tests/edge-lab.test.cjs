@@ -26,6 +26,16 @@ test("hard fail without genuine bid ask source instead of assuming zero friction
  assert.equal(lab.evaluate(bars(80),{spreads:Array.from({length:12},()=>({spread:.05}))}).status,"INSUFFICIENT_BARS");
  assert.equal(lab.costPriceFromQuotes(Array.from({length:4},()=>({spread:.05}))),null);
 });
+test("cached features reproduce direct causal indicators at any closed bar",()=>{
+ const data=lab.normalize(bars(220)),cache=lab.precompute(data);
+ for(const i of [100,130,175,219]){
+  assert.ok(Math.abs(cache.atr[i]-lab.atrAt(data,i))<1e-10);
+  assert.ok(Math.abs(cache.e20[i]-lab.emaAt(data,i,20))<1e-10);
+  assert.ok(Math.abs(cache.e50[i]-lab.emaAt(data,i,50))<1e-10);
+  assert.deepEqual(lab.signalAt(data,i,"sweep_reclaim",cache),lab.signalAt(data,i,"sweep_reclaim"));
+  assert.deepEqual(lab.signalAt(data,i,"compression_breakout",cache),lab.signalAt(data,i,"compression_breakout"));
+ }
+});
 test("bar parsing rejects nonmonotonic, corrupt OHLC and timestamps",()=>{
  const data=bars(6);
  assert.throws(()=>lab.normalize([...data,data[0]]),/INVALID_BROKER_BAR/);
