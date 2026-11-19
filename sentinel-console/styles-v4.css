@@ -231,3 +231,19 @@ body{background:#070d15}
 .sc-decision-strip span{display:block;font-size:9px;color:#8ea7b9}
 .sc-decision-strip strong{display:block;margin-top:6px;font-size:10px;color:#d5e9f1;font-weight:700;overflow-wrap:anywhere}
 @media(max-width:720px){.sc-decision-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.sc-decision-strip>div{border-bottom:1px solid #273d4c}}
+
+/* Research-only independent Edge Lab: never a broker trade or a profit forecast. */
+.sc-edge-info{font-size:10px;line-height:1.9;color:#b8a8a0;background:#2c2928;border-top:1px solid #4c4039;border-bottom:1px solid #4c4039;padding:13px 17px}
+.sc-edge-rows{padding:4px 17px 14px}
+.sc-edge-market{border-bottom:1px solid #293f4b;padding:12px 0}
+.sc-edge-market:last-child{border-bottom:0}
+.sc-edge-market-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.sc-edge-market-title strong{font:700 12px 'IBM Plex Mono',monospace;color:#e0f2f7}
+.sc-edge-market-title span{font-size:9px;color:#89a0b2}
+.sc-edge-family{padding:9px 0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sc-edge-family>div:first-child{display:flex;flex-direction:column;gap:4px}
+.sc-edge-family b{font:650 10px 'IBM Plex Mono',monospace;color:#d6eee8}
+.sc-edge-family span{font-size:9px;color:#b5b6ac}
+.sc-edge-figures{display:flex;align-items:flex-end;flex-direction:column;gap:3px}
+.sc-edge-figures strong{font:700 12px 'IBM Plex Mono',monospace;color:#dee9ee}
+.sc-edge-figures small{font:9px 'IBM Plex Mono',monospace;color:#92a6b6}
