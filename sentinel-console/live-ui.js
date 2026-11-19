@@ -174,7 +174,7 @@ window.SentinelLive=(()=>{
       '<section class="lc-panel lc-sources"><span class="lc-kicker">SYSTEM TRANSPARENCY</span>'+
       '<h2>حقيقة البيانات</h2><div class="lc-source-row"><span>مصدر التنفيذ</span><strong>TickerAll / MT5</strong></div>'+
       '<div class="lc-source-row"><span>قاعدة السجلات</span><strong>Neon</strong></div>'+
-      '<div class="lc-source-row"><span>آخر دورة تداول</span><strong>'+esc(localTime(d.generated_at))+'</strong></div>'+
+      '<div class="lc-source-row"><span>آخر دورة تداول</span><strong>'+esc(localTime(d.trader_at))+'</strong></div>'+
       '<div class="lc-source-row"><span>آخر تحديث للعقل</span><strong>'+esc(localTime(brain.updated_at))+'</strong></div>'+
       '<p>معدل تحديث الشاشة لا يعني وصول سعر جديد كل 20 ثانية. لا نعرض رأس مال أو P&L عائماً بدون توثيق.</p>'+
       '</section></div></div>'+
@@ -184,6 +184,7 @@ window.SentinelLive=(()=>{
   function rerender(){
     if(document.querySelector('.nav-item.active[data-nav="live"]')){
       const el=document.getElementById("page");if(el)el.innerHTML=render();
+      if(typeof window.renderHeader==="function")window.renderHeader();
     }
   }
   async function refresh(){
