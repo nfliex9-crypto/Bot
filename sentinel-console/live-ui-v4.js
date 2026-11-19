@@ -206,6 +206,27 @@ window.SentinelLive=(()=>{
       "<div class='sc-research-title'>آخر دورات البحث <span>"+safe(date(brain.updated_at))+"</span></div>"+
       "<div class='sc-research-list'>"+(research||"<div class='sc-empty-inline'>لا يوجد سجل بحث بعد</div>")+"</div></section>";
   }
+  function edgePanel(d){
+    const runs=Array.isArray(d.edge_lab)?d.edge_lab:[];
+    const rows=runs.map(run=>{
+      const families=(run.families||[]).map(f=>
+        "<div class='sc-edge-family'><div><b>"+safe(f.family)+"</b>"+
+        "<span>"+safe(f.status==="SHADOW_REVIEW_ELIGIBLE"?"مرشح لمراجعة ظلّية فقط":"غير مثبت")+
+        "</span></div><div class='sc-edge-figures'><small>VALID "+n(f.validation_n,0)+"</small>"+
+        "<strong dir='ltr'>"+n(f.validation_expectancy_r,3)+" R</strong>"+
+        "<small>2× spread "+n(f.stressed_expectancy_r,3)+" R</small></div></div>").join("");
+      return "<div class='sc-edge-market'><div class='sc-edge-market-title'><strong>"+safe(run.symbol)+"</strong>"+
+        "<span>"+safe(date(run.at))+" · "+n(run.bar_count,0)+" M15 bars</span></div>"+
+        (families||"<div class='sc-empty-inline'>لا يوجد تقييم لهذه البيانات</div>")+"</div>";
+    }).join("");
+    return "<section class='sc-panel sc-edge-panel'><div class='sc-section-header'><div>"+
+      "<div class='sc-overline'>EDGE LAB / SHADOW RESEARCH ONLY</div><h2>مختبر استراتيجيات جديد</h2>"+
+      "<p>تجربة فشل الاختراق واندفاع ما بعد الانضغاط — بدون إرسال أوامر</p></div>"+
+      "<span class='sc-chip sc-chip-muted'><i></i>غير معتمد</span></div>"+
+      "<div class='sc-edge-info'>الاختبارات زمنية (Train / Validation / Holdout)، ونتائج Holdout للعرض فقط. التكاليف تقديرية من عينات السبريد الحديثة؛ ليست سبريد تاريخياً ولا إثباتاً لربحية.</div>"+
+      "<div class='sc-edge-rows'>"+(rows||"<div class='sc-empty-inline'>بانتظار تشغيل أول دورة بحث مستقلة</div>")+
+      "</div></section>";
+  }
   function cycles(d){
     const rows=(d.scan_history||[]).slice().reverse();
     const bars=rows.map(x=>{
@@ -254,7 +275,7 @@ window.SentinelLive=(()=>{
       metric("استراتيجيات معتمدة",n(b.candidates,0),"لا نخلط الفرضيات بالاعتماد","")+"</div>"+
       markets(d)+"<div class='sc-content-grid'><div class='sc-main-column'>"+
       ledger(d)+cycles(d)+"</div><div class='sc-side-column'>"+
-      brainPanel(d)+feed(d)+"</div></div>"+
+      brainPanel(d)+edgePanel(d)+feed(d)+"</div></div>"+
       "<div class='sc-provenance'><span>SENTINEL / DATA INTEGRITY</span>"+
       "<p>الأسعار لقطات دورية من TickerAll / MT5، وليست بث Tick لحظياً. نتائج الصفقات من سجل الوسيط المطابق في Neon. لا تُعرض أرباح غير محققة أو رصيد غير موثّق. لا توجد أوامر تداول من المتصفح.</p>"+
       "<span>آخر تحديث للبيانات: "+safe(date(d.generated_at))+" بتوقيت بلجيكا</span></div></div>";
