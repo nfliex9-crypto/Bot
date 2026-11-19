@@ -9,7 +9,8 @@ const dateFmt=v=>v?new Date(v).toLocaleString("en-GB",{timeZone:"UTC",month:"sho
 const idName=s=>String(s||"").replace(/_/g," ").toUpperCase();
 const STORE="sentinel-console-v1";
 const nav=[
- ["overview","نظرة عامة","◈","OVERVIEW"],
+ ["live","مركز القيادة المباشر","◉","LIVE COMMAND CENTER"],
+ ["overview","ملخص الحساب","◈","ACCOUNT OVERVIEW"],
  ["mt5","MT5 مجاني","⌁","FREE MT5"],
  ["sentinel_trader","بوت Sentinel","◉","INDEPENDENT DEMO TRADER"],
  ["trades","الصفقات والمراكز","⇄","TRADES"],
@@ -39,7 +40,7 @@ const strategyList=[
 const getSave=()=>{try{return JSON.parse(localStorage.getItem(STORE)||"{}")}catch(_){return {}}};
 const saved=getSave();
 const state={
- page:"overview",preview:false,connected:false,key:"",
+ page:"live",preview:false,connected:false,key:"",
  remote:{},errors:{},strategyDraft:saved.strategyDraft||Object.fromEntries(strategyList.map(s=>[s.id,{enabled:s.id!=="ORDER_FLOW",score:s.score}])),
  riskDraft:saved.riskDraft||{risk:.5,maxDaily:3,maxPortfolio:2,minConfidence:65,tradeLimit:3},
  search:"",strategySearch:"",strategyGroup:"ALL",tradeFilter:"ALL",symbolFilter:"ALL",
@@ -106,11 +107,21 @@ function renderNav(){byId("nav").innerHTML=nav.map(n=>'<button class="nav-item '
 function renderHeader(){
  const n=nav.find(n=>n[0]===state.page);byId("breadcrumb").textContent=n?.[1]||"";
  const mt=window.FreeMT5UI?.summary()||{},ok=Boolean(mt.verified);
- byId("modeBadge").className="mode-indicator"+(ok?" connected":"");
- byId("modeBadge").innerHTML='<span class="mode-dot"></span>'+(ok?"MT5 DEMO / VERIFIED":mt.configured?"MT5 / NOT VERIFIED":"SETUP REQUIRED");
- byId("connectorMini").innerHTML='<span class="socket '+(ok?"live":"")+'"></span><div><strong>MT5 / Demo</strong><small>'+(ok?"Broker connected":"ربط الحساب")+'</small></div><span class="mini-chevron">↗</span>';
- byId("footStatus").textContent=ok?"BROKER DEMO / VERIFIED":"SENTINEL / NO VERIFIED ACCOUNT";
- byId("footTimestamp").textContent=mt.lastSync?"Last check "+dateFmt(mt.lastSync)+" UTC":"Awaiting provider connection";
+ const source=window.SentinelLive?.getSnapshot(),cloud=source?.health,
+   cloudFresh=cloud?.trader==="FRESH",hasCloud=Boolean(source?.account?.last4);
+ byId("modeBadge").className="mode-indicator"+((cloudFresh||ok)?" connected":"");
+ byId("modeBadge").innerHTML='<span class="mode-dot"></span>'+
+   (hasCloud?(cloudFresh?"FUSION MT5 DEMO / "+esc(source.account.last4):
+     "MT5 DEMO / DATA STALE"):ok?"MT5 DEMO / VERIFIED":mt.configured?"MT5 / NOT VERIFIED":"CONNECTING");
+ byId("connectorMini").innerHTML='<span class="socket '+((cloudFresh||ok)?"live":"")+
+   '"></span><div><strong>MT5 / Demo</strong><small>'+
+   (hasCloud?("Fusion •••• "+esc(source.account.last4)):ok?"Broker connected":"ربط الحساب")+
+   '</small></div><span class="mini-chevron">↗</span>';
+ byId("footStatus").textContent=hasCloud?("FUSION DEMO / "+(cloudFresh?"RECENT DATA":"STALE DATA")):
+   ok?"BROKER DEMO / VERIFIED":"SENTINEL / WAITING FOR SOURCE";
+ byId("footTimestamp").textContent=source?.trader_at?
+   "Last cloud scan "+dateFmt(source.trader_at)+" UTC":
+   mt.lastSync?"Last check "+dateFmt(mt.lastSync)+" UTC":"Awaiting provider connection";
 }
 function render(){renderNav();renderHeader();renderPage()}
 function heading(k,title,description,actions=""){return '<div class="page-heading"><div><div class="eyebrow">'+k+'</div><h1>'+title+'</h1><p>'+description+'</p></div><div class="head-buttons">'+actions+'</div></div>'}
@@ -159,8 +170,8 @@ function overview(){
  panel("حالة النظام","LIVE INFRASTRUCTURE",'<div class="panel-pad">'+[
   ["TickerAll API",mt.configured?"CONFIGURED":"NOT CONNECTED"],
   ["MT5 Demo",ok?"ONLINE":"NOT CONNECTED"],
-  ["Trading engine","NOT DEPLOYED"],
-  ["Auto execution","DISABLED"],
+  ["Trading engine",window.SentinelLive?.getSnapshot()?.health?.trade_status||"UNVERIFIED"],
+  ["Auto execution",window.SentinelLive?.getSnapshot()?.authorization?.enabled===true?"DEMO TRIAL":"NOT ARMED"],
   ["Account type","DEMO ONLY"]
  ].map(x=>'<div class="key-value"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join("")+'</div>')+'</div>';
  html+=panel("منحنى رأس المال","بانتظار سجل حقيقي للقيم الزمنية",empty("لا يوجد سجل Equity تاريخي بعد","ما منعرض رسوم أو أرقام صناعية."));
@@ -240,8 +251,8 @@ function settingsView(){
   ["Dashboard access","VERCEL SSO"],
   ["TickerAll API",c.configured?"READY":"NOT CONNECTED"],
   ["MT5 Demo",c.verified?"VERIFIED":"NOT VERIFIED"],
-  ["Strategy worker","NOT RUNNING"],
-  ["Auto execution","DISABLED"]
+  ["Strategy worker",window.SentinelLive?.getSnapshot()?.health?.research_status||"UNVERIFIED"],
+  ["Auto execution",window.SentinelLive?.getSnapshot()?.authorization?.enabled===true?"DEMO TRIAL":"NOT ARMED"]
  ].map(x=>'<div class="key-value"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join("")+'</div>')+
  panel("الأدوات","LOCAL RESEARCH ONLY",'<div class="panel-pad">'+
  '<p class="subtle">إعدادات الاستراتيجيات والمخاطر ما زالت مسودات محلية، بدون تأثير على محرك التداول.</p>'+
@@ -253,13 +264,14 @@ function mt5View(){return window.FreeMT5UI?.render()||heading("FREE MT5","الر
 function renderPage(){
  let h="";
  try{switch(state.page){
+ case"live":h=window.SentinelLive?.render()||heading("LIVE COMMAND","مركز القيادة المباشر","جارٍ تحميل بيانات Neon");break;
  case"overview":h=overview();break;case"mt5":h=mt5View();break;case"trades":h=tradesView();break;case"signals":h=signalsView();break;
  case"strategies":h=strategiesView();break;case"backtest":h=backtestView();break;case"ai":h=window.SentinelBrain?.render()||aiView();break;case"sentinel_trader":h=window.SentinelTrader?.render()||heading("SENTINEL TRADER","بوت Sentinel المستقل","لم يتم تحميل الوحدة");break;
  case"risk":h=riskView();break;case"logs":h=logsView();break;case"settings":h=settingsView();break;
  default:h=overview();}}catch(e){h=heading("DISPLAY ERROR","تعذّر عرض الصفحة",esc(e.message));eventLog("render-error",e.message)}
  byId("page").innerHTML=h;
 }
-function navigate(page){state.page=page;if(page==="mt5")window.FreeMT5UI?.sync(true);if(page==="sentinel_trader")void window.SentinelTrader?.refresh();if(page==="ai")void (async()=>{await window.SentinelBrain?.refresh(true);await window.SentinelBrain?.symbols(true);await window.SentinelBrain?.maybeAutoSync?.()})();state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
+function navigate(page){state.page=page;if(page==="live")void window.SentinelLive?.refresh();if(page==="mt5")window.FreeMT5UI?.sync(true);if(page==="sentinel_trader")void window.SentinelTrader?.refresh();if(page==="ai")void (async()=>{await window.SentinelBrain?.refresh(true);await window.SentinelBrain?.symbols(true);await window.SentinelBrain?.maybeAutoSync?.()})();state.search="";byId("sidebar").classList.remove("open");render();document.querySelector(".scroll-area").scrollTop=0}
 function showModal(title,content,footer="",wide=false){byId("modalRoot").innerHTML='<div class="modal-overlay" data-close-modal><div class="modal '+(wide?"wide":"")+'" role="dialog" aria-modal="true"><div class="modal-head"><strong>'+title+'</strong><button class="modal-x" data-action="close-modal" aria-label="إغلاق">×</button></div><div class="modal-content">'+content+'</div>'+(footer?'<div class="modal-footer">'+footer+'</div>':"")+'</div></div>'}
 function closeModal(){byId("modalRoot").innerHTML=""}
 function openConnect(){navigate("mt5");}
@@ -386,7 +398,7 @@ document.addEventListener("input",e=>{
  if(t.id==="tradeSearch"){state.search=t.value;let pos=t.selectionStart;renderPage();let input=byId("tradeSearch");input.focus();input.setSelectionRange(pos,pos)}
  if(t.id==="strategySearch"){state.strategySearch=t.value;let pos=t.selectionStart;renderPage();let input=byId("strategySearch");input.focus();input.setSelectionRange(pos,pos)}
 });
-byId("refreshBtn").onclick=()=>window.FreeMT5UI?.sync();
+byId("refreshBtn").onclick=()=>state.page==="live"?window.SentinelLive?.refresh():window.FreeMT5UI?.sync();
 byId("connectBtn").onclick=()=>navigate("mt5");
 byId("connectorMini").onclick=()=>navigate("mt5");
 byId("mobileMenu").onclick=()=>byId("sidebar").classList.toggle("open");
