@@ -25,6 +25,10 @@ export default {
     return Response.json({ok:true,service:"sentinel-research",status:result.status,
        totals:result.totals||{},orders_executed:0});
   }
+  // Safe non-secret release canary: confirm that the scheduled function has
+  // loaded the intended contract-aware cloud trader module.
+  console.info(JSON.stringify({event:"sentinel_cloud_module_canary_v12",
+    contract_probe_loaded:runCloudCycle.toString().includes("row.contract_status")}));
   let cloud;
   try{cloud=await runCloudCycle(sql)}
   catch(e){cloud={status:"ERROR",reason:String(e?.message||"CLOUD_CYCLE_ERROR").slice(0,80),orders_sent:0}}
