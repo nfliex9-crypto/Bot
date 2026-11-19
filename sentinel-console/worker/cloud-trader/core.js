@@ -50,12 +50,16 @@ function floorVolume(raw,spec,maxLots=.5){
  const ceiling=Math.min(maxLots,max,raw);const count=Math.floor((ceiling-min)/step+1e-9);
  return Number((min+count*step).toFixed(8));
 }
-function preflight({signal,quote,spec,equity,riskPct=.25,maxSpreadBps=25,maxLots=.5,now=Date.now()}){
+function preflight({signal,quote,spec,equity,accountCurrency=null,riskPct=.25,maxSpreadBps=25,maxLots=.5,now=Date.now()}){
  if(!signal||!FAMILIES.has(signal.family)||![-1,1].includes(signal.side)||!Number.isSafeInteger(signal.bar_time)||now-signal.bar_time-900000<0||now-signal.bar_time-900000>900000)return {ok:false,reason:"SIGNAL_NOT_FRESH_OR_ALLOWED"};
  const bid=finite(quote?.bid),ask=finite(quote?.ask),point=finite(spec?.point),tickSize=finite(spec?.tickSize),value=finite(spec?.tickValueAccount),digits=spec?.digits;
  if(bid===null||ask===null||bid<=0||ask<=bid)return {ok:false,reason:"QUOTE_UNAVAILABLE"};
  if(!Number.isInteger(digits)||digits<0||digits>10||point===null||point<=0||tickSize===null||tickSize<=0||value===null||value<=0||spec?.specSource!=="broker"||!['wire','override'].includes(spec.tickValueCurrency?.source)||spec.tickValueCurrency?.code===undefined)return {ok:false,reason:"NATIVE_ACCOUNT_TICK_VALUE_UNVERIFIED"};
  if(finite(equity)===null||equity<=0||riskPct<=0||riskPct>.5)return {ok:false,reason:"EQUITY_OR_RISK_UNAVAILABLE"};
+ if(accountCurrency!==null){
+  const verified=verifyContract(spec,accountCurrency);
+  if(!verified.ok)return verified;
+ }
  const spread=(ask-bid)/((ask+bid)/2)*10000;if(spread>maxSpreadBps)return {ok:false,reason:"SPREAD_TOO_WIDE"};
  if(!Number.isFinite(signal.reference_close)||signal.reference_close<=0||
     Math.abs((ask+bid)/2-signal.reference_close)>3*signal.atr+(ask-bid))
@@ -70,7 +74,31 @@ function preflight({signal,quote,spec,equity,riskPct=.25,maxSpreadBps=25,maxLots
  if(!(volume>0)||volume*perLot>equity*riskPct/100*1.000001)return {ok:false,reason:"RISK_BELOW_MIN_VOLUME"};
  return {ok:true,request:{type:"market",symbol:signal.symbol,side:signal.side===1?"BUY":"SELL",volume,stopLoss:sl,takeProfit:tp},risk:volume*perLot,spread_bps:spread};
 }
+function authorizedFusionDemo(row,account,now=Date.now()){
+ const expiry=Date.parse(String(row?.expires_at||""));
+ const risk=Number(row?.risk_pct);
+ return Boolean(row?.enabled===true&&row.account_id===account?.id&&
+  /^[0-9]{4}$/.test(String(row.expected_last4||""))&&
+  String(account.accountNumber||"").endsWith(String(row.expected_last4))&&
+  /fusion/i.test(String(account.server||""))&&
+  String(row.expected_server||"").toLowerCase()===String(account.server||"").toLowerCase()&&
+  account.broker==="mt5"&&account.isDemo===true&&account.hot===true&&
+  account.readOnly!==true&&Number.isFinite(expiry)&&expiry>now&&
+  Number.isFinite(risk)&&risk>0&&risk<=0.25);
+}
+function verifyContract(spec,accountCurrency){
+ const val=finite(spec?.tickValueAccount),size=finite(spec?.tickSize);
+ const min=finite(spec?.volumeMin),step=finite(spec?.volumeStep),max=finite(spec?.volumeMax);
+ if(spec?.specSource!=="broker"||size===null||size<=0||
+    val===null||val<=0||min===null||min<=0||step===null||step<=0||
+    max===null||max<min)return {ok:false,reason:"BROKER_CONTRACT_VALUE_UNKNOWN"};
+ if(!/^[A-Z]{3}$/.test(String(accountCurrency||""))||
+    !["wire","override"].includes(spec?.tickValueCurrency?.source)||
+    spec?.tickValueCurrency?.code!==accountCurrency)
+    return {ok:false,reason:"ACCOUNT_CURRENCY_TICK_VALUE_UNVERIFIED"};
+ return {ok:true,reason:"BROKER_CONTRACT_VERIFIED"};
+}
 function demoExecutionAllowed(env,account){
  return env.SENTINEL_CLOUD_MODE==="demo_execution"&&env.SENTINEL_CLOUD_ENABLE_DEMO==="YES_I_AUTHORIZE_SENTINEL_DEMO_ONLY"&&env.SENTINEL_CLOUD_UNVERIFIED_TRIAL==="YES_EXPLICIT_DEMO_TRIAL"&&typeof env.SENTINEL_CLOUD_ACCOUNT_ID==="string"&&env.SENTINEL_CLOUD_ACCOUNT_ID===account?.id&&account.isDemo===true&&account.hot===true&&account.broker==="mt5";
 }
-module.exports={parseCandles,ema,atr,decide,keyFor,selectAccount,floorVolume,preflight,demoExecutionAllowed};
+module.exports={parseCandles,ema,atr,decide,keyFor,selectAccount,floorVolume,preflight,demoExecutionAllowed,authorizedFusionDemo,verifyContract};
