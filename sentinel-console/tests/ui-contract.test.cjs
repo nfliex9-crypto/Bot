@@ -14,7 +14,7 @@ test("production HTML uses the new MT5 onboarding and responsive theme",()=>{
 });
 test("no broken login-to-unconfigured-bot flow triggers on load",()=>{
  const js=file("app.js"),mt=file("free-ui.js");
- assert.match(js,/page:"overview",preview:false/);
+ assert.match(js,/page:"live",preview:false/);
  assert.doesNotMatch(js,/if\(state\.key\)\{connect\(\)\}/);
  assert.match(js,/window\.FreeMT5UI\?\.sync/);
  assert.match(mt,/window\.FreeMT5UI\.init\(\)/);
