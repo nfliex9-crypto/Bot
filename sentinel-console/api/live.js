@@ -149,6 +149,7 @@ module.exports=async function liveHandler(req,res){
           broker_ticket_recorded:i.broker_ticket_recorded}))},
       brain:{status:research?.status||"UNKNOWN",updated_at:research?.finished_at||null,
         broker_selection:research?.notes?.broker_selection||null,
+        forward_feedback:research?.notes?.forward_broker_feedback||null,
         candidates:counts[0].candidates,
         analyses:counts[0].verified_brain_runs,
         cycles_24h:counts[0].research_cycles_24h,
