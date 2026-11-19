@@ -155,6 +155,19 @@ module.exports=async function liveHandler(req,res){
           created_at:i.created_at,updated_at:i.updated_at,
           broker_ticket_recorded:i.broker_ticket_recorded}))},
       brain:{status:research?.status||"UNKNOWN",updated_at:research?.finished_at||null,
+        forward_broker_feedback:research?.notes?.forward_broker_feedback?{
+          source:"BROKER_VERIFIED_CLOSED_DEMO_ONLY",
+          closed:Number(research.notes.forward_broker_feedback.closed)||0,
+          minimum_closed_for_review:Number(research.notes.forward_broker_feedback.minimum_closed_for_review)||30,
+          auto_promotion:false,
+          confidence:"INSUFFICIENT_FOR_PROMOTION",
+          strategies:(Array.isArray(research.notes.forward_broker_feedback.strategies)?
+            research.notes.forward_broker_feedback.strategies:[]).slice(0,8).map(x=>({
+              symbol:String(x.symbol||"").slice(0,24),family:String(x.family||"").slice(0,70),
+              closed:Number(x.closed)||0,winners:Number(x.winners)||0,
+              booked_net:numeric(x.booked_net),currency:String(x.currency||"").slice(0,3)
+            }))
+        }:null,
         broker_selection:research?.notes?.broker_selection||null,
         forward_feedback:research?.notes?.forward_broker_feedback||null,
         candidates:counts[0].candidates,
