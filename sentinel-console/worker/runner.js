@@ -230,10 +230,7 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
       results.push(attempt);
       try{await recordAttempt(sql,demo.id,symbol,tf,attempt)}
       catch(e){notes.attempt_record_error=clean(e.message)}
-      if(tf==="M15"&&attempt.status!=="ERROR"){
-        try{notes.edge_lab=await runEdgeLab(sql,{account:demo.id,symbol,now})}
-        catch(e){notes.edge_lab_error=clean(e.message)}
-      }
+
     }else{
       notes.broker_imports="UP_TO_DATE";
       results.push({status:"HISTORY_REFRESH_NOT_DUE"});
@@ -250,6 +247,13 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
     }));
     notes.quotes=observations;
     notes.quote=observations.find(x=>x.status==="OBSERVED")||observations[0]||null;
+    // The broker-import queue can be idle while cached M15 is researchable.
+    // Rotate one market per 15-minute research slot, with no broker writes.
+    const laboratorySymbol=eligible[Math.floor(now.getUTCMinutes()/15)%Math.max(1,eligible.length)];
+    if(laboratorySymbol)try{
+      notes.edge_lab=await runEdgeLab(sql,{account:demo.id,symbol:laboratorySymbol,now});
+    }catch(e){notes.edge_lab_error=clean(e.message)}
+
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
    const cached=await sql`SELECT account_id,symbol,timeframe,MAX(bar_time) AS last_bar
