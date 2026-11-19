@@ -155,11 +155,24 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
   if(!(start>0)||equity<start*.99){report.status="BLOCKED";report.reason="DAILY_LOSS_LIMIT";return report}
   const catalog=await read.symbols(a.id),symbols=pickSymbols(catalog);
   if(!symbols.length){report.status="BLOCKED";report.reason="BROKER_SYMBOLS_NOT_FOUND";return report}
-  // Triple gate: connection verified DEMO, exact linked account selected, and
-  // explicit two-stage local trial authorization. This is not an approved alpha.
-  const enabled=c.demoExecutionAllowed(env,a);
+  // Broker account identity and the database's time-limited DEMO-only
+  // authorization must BOTH match. This is an unverified trial, not alpha.
+  // The legacy private-worker environment flags remain supported and gated.
+  const approvals=await sql`SELECT account_id,expected_last4,expected_server,enabled,expires_at,risk_pct
+     FROM sentinel_cloud_trader_authorizations WHERE account_id=${a.id} LIMIT 1`;
+  const permission=approvals[0]||null;
+  const databaseApproved=c.authorizedFusionDemo(permission,a,now);
+  const armedEnv=databaseApproved?{...env,
+    SENTINEL_CLOUD_MODE:"demo_execution",
+    SENTINEL_CLOUD_ENABLE_DEMO:"YES_I_AUTHORIZE_SENTINEL_DEMO_ONLY",
+    SENTINEL_CLOUD_UNVERIFIED_TRIAL:"YES_EXPLICIT_DEMO_TRIAL",
+    SENTINEL_CLOUD_ACCOUNT_ID:a.id}:env;
+  const enabled=c.demoExecutionAllowed(armedEnv,a);
   report.mode=enabled?"UNVERIFIED_DEMO_TRIAL":"SHADOW_ONLY";
-  if(enabled&&(!explicit||String(explicit)!==String(a.id))){report.status="BLOCKED";report.reason="ACCOUNT_ID_NOT_EXPLICITLY_SELECTED";return report}
+  if(enabled&&!(databaseApproved||explicit===a.id)){
+    report.status="BLOCKED";report.reason="ACCOUNT_ID_NOT_EXPLICITLY_SELECTED";return report
+  }
+  const riskPct=databaseApproved?Number(permission.risk_pct):.25;
   const write=enabled?providerFactory(token,{fetcher,allowWrites:true}):null;
   // Sample only closed broker bars. Never substitute stored partial research bars
   // for an unavailable broker feed when deciding a live DEMO entry.
@@ -172,6 +185,16 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
      row.status="HISTORY_NOT_COMPLETE";continue
     }
     const m15=c.parseCandles(rawM.candles,"M15",now),h1=c.parseCandles(rawH.candles,"H1",now);
+    // Every cycle inspects live quote + authoritative contract specifications
+    // even without a signal; this exposes broker readiness before the first order.
+    let quote=null,specResult=null;
+    try{
+      [quote,specResult]=await Promise.all([read.quote(a.id,symbol),read.spec(a.id,symbol)]);
+      const contract=c.verifyContract(specResult?.spec,account.account?.currency);
+      row.contract_status=contract.reason;
+      const bid=Number(quote?.bid),ask=Number(quote?.ask);
+      row.quote_ready=Number.isFinite(bid)&&Number.isFinite(ask)&&bid>0&&ask>bid;
+    }catch(e){row.contract_status="BROKER_CONTRACT_READ_FAILED";row.contract_error=clean(e.message)}
     const signal=c.decide(symbol,m15,h1,now);
     if(!signal){row.status="NO_VALID_CLOSED_BAR_SIGNAL";continue}
     row.signal_hash=c.keyFor(a.id,signal).slice(0,20);
@@ -183,8 +206,9 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     row.brain_status=candidates.length?"RESEARCH_CANDIDATE_UNVERIFIED":"NO_VERIFIED_BRAIN_EVIDENCE";
     row.side=signal.side===1?"LONG":"SHORT";row.strategy=signal.family;
     if(positions.length||orders.length){row.status="ACCOUNT_HAS_EXISTING_POSITION_OR_ORDER";continue}
-    const [quote,specResult]=await Promise.all([read.quote(a.id,symbol),read.spec(a.id,symbol)]);
-    const ready=c.preflight({signal,quote,spec:specResult.spec,equity,now});
+    if(!quote||!specResult?.spec){row.status="BROKER_CONTRACT_UNAVAILABLE";continue}
+    const ready=c.preflight({signal,quote,spec:specResult.spec,equity,
+      accountCurrency:account.account?.currency,riskPct,now});
     if(!ready.ok){row.status=ready.reason;continue}
     row.risk_at_stop=Number(ready.risk.toFixed(2));
     if(!enabled){row.status="SHADOW_SIGNAL_RESEARCH_NOT_APPROVED";continue}
