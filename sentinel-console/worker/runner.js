@@ -123,10 +123,16 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
   }catch(e){notes.broker_error=clean(e.message)}
   else notes.broker_error="TICKERALL_KEY_UNCONFIGURED";
   const accounts=Array.isArray(roster)?roster:(roster?.accounts||[]);
-  const demo=accounts.find(a=>a.broker==="mt5"&&a.isDemo===true&&a.hot===true
+  const eligible=accounts.filter(a=>a.broker==="mt5"&&a.isDemo===true&&a.hot===true
    &&["CONNECTED","ONLINE"].includes(String(a.status).toUpperCase())
    &&/^[A-Za-z0-9_-]{3,128}$/.test(String(a.id)));
+  // Prefer the single existing Fusion Demo for both research and cloud shadow.
+  // A different/demo-live connection can never acquire an execution permission.
+  const fusion=eligible.filter(a=>/fusion/i.test(String(a.server||"")+" "+String(a.name||"")));
+  const demo=fusion.length===1?fusion[0]:eligible[0];
   accountId=demo?.id||null;let symbols=[];
+  notes.selected_demo_last4=demo?String(demo.accountNumber||'').slice(-4):null;
+  notes.broker_selection=fusion.length===1?'FUSION_DEMO':'DEFAULT_ELIGIBLE_DEMO';
   if(demo)try{
    symbols=selectMarkets(await fetcher(API+"/v1/accounts/"+demo.id+"/symbols",{Authorization:"Bearer "+token}),now);
   }catch(e){notes.symbol_error=clean(e.message)}
