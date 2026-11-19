@@ -58,6 +58,8 @@ test("V4 terminal renders only broker-grounded metrics, trade P&L and quote hist
  assert.match(html,/بانتظار إشارة/);
  assert.match(html,/FORWARD \/ BROKER-VERIFIED DEMO/);
  assert.match(html,/1 \/ 30/);
+ assert.match(html,/<progress class='sc-feedback-track'/);
+ assert.doesNotMatch(html,/style='/);
  assert.match(html,/لا يوجد اعتماد تلقائي/);
  assert.match(html,/BROKER_DATA_QUALITY_GATE|نقص تكاليف تاريخية|البحث التاريخي محجوب/);
  assert.match(html,/&lt;img src=x onerror=alert\(1\)&gt;/);
