@@ -169,6 +169,20 @@ window.SentinelLive=(()=>{
   function brainPanel(d){
     const brain=d.brain||{},last=brain.last_market||{},missing=Number(last.missing_spread_ratio);
     const gated=last.reason==="BROKER_DATA_QUALITY_GATE"||missing===1;
+    const feedback=brain.forward_broker_feedback||null;
+    const closed=Math.max(0,Number(feedback?.closed)||0);
+    const minimum=Math.max(1,Number(feedback?.minimum_closed_for_review)||30);
+    const evidencePct=Math.min(100,closed/minimum*100);
+    const feedbackDetails=(feedback?.strategies||[]).slice(0,3).map(x=>
+      "<div class='sc-feedback-strategy'><span>"+safe(x.symbol)+" · "+safe(x.family)+
+      "</span><strong class='"+(Number(x.booked_net)<0?"sc-negative":"sc-positive")+"' dir='ltr'>"+
+      money(x.booked_net,x.currency)+"</strong></div>").join("");
+    const feedbackPanel="<div class='sc-feedback'><div class='sc-feedback-heading'><span>FORWARD / BROKER-VERIFIED DEMO</span>"+
+      "<strong>"+closed+" / "+minimum+"</strong></div>"+
+      "<div class='sc-feedback-track' role='progressbar' aria-label='عدد صفقات الديمو المغلقة اللازمة لبدء مراجعة الأدلة' aria-valuemin='0' aria-valuemax='"+minimum+
+      "' aria-valuenow='"+Math.min(closed,minimum)+"'><i style='width:"+evidencePct.toFixed(2)+"%'></i></div>"+
+      "<p>صفقات Demo مغلقة وموثّقة. "+minimum+" حد أدنى لمراجعة العينة فقط، وليس دليلاً على الربحية. لا يوجد اعتماد تلقائي.</p>"+
+      feedbackDetails+"</div>";
     const research=(d.research_history||[]).slice(0,5).map(x=>
       "<div class='sc-research-row'><span class='sc-research-dot'></span><div><b>"+
       safe(x.symbol||"بحث")+"</b><small>"+safe(label(x.reason||x.status))+"</small></div>"+
@@ -184,6 +198,7 @@ window.SentinelLive=(()=>{
       "<div><strong>"+(gated?"البحث التاريخي محجوب بجودة البيانات":"جودة الأبحاث قيد التحقق")+"</strong>"+
       "<p>"+(gated?"سبريد الأسعار الحي متاح، لكن الشموع التاريخية ما زالت تفتقد تكاليف تنفيذ موثّقة. الفرضيات ليست استراتيجيات معتمدة.":
       "لا تُعتمد أي استراتيجية تلقائياً بدون اختبار مستقل وتكاليف تنفيذ موثّقة.")+"</p></div></div>"+
+      feedbackPanel+
       "<div class='sc-research-title'>آخر دورات البحث <span>"+safe(date(brain.updated_at))+"</span></div>"+
       "<div class='sc-research-list'>"+(research||"<div class='sc-empty-inline'>لا يوجد سجل بحث بعد</div>")+"</div></section>";
   }
