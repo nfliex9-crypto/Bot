@@ -220,3 +220,11 @@ body{background:#070d15}
 .sc-feedback-strategy{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #34534e;padding-top:9px;margin-top:9px;font-size:9px}
 .sc-feedback-strategy span{color:#bfdcd7}
 .sc-feedback-strategy strong{font:650 10px 'IBM Plex Mono',monospace}
+
+/* Latest actual broker scan decision for the selected market. */
+.sc-decision-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #2b4051;background:#0d1c29}
+.sc-decision-strip>div{padding:12px 14px;border-left:1px solid #273d4c;min-width:0}
+.sc-decision-strip>div:last-child{border-left:0}
+.sc-decision-strip span{display:block;font-size:9px;color:#8ea7b9}
+.sc-decision-strip strong{display:block;margin-top:6px;font-size:10px;color:#d5e9f1;font-weight:700;overflow-wrap:anywhere}
+@media(max-width:720px){.sc-decision-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.sc-decision-strip>div{border-bottom:1px solid #273d4c}}
