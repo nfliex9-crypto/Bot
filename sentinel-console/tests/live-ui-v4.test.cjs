@@ -16,7 +16,10 @@ const sample={
  trades:{intents:1,closed:1,net_by_currency:[{currency:"EUR",net:-43.66}],
   recent:[{symbol:"BTCUSD",family:"trend_pullback",side:"SHORT",net:-43.66,currency:"EUR",closed_at:at(-90000)}],
   orders:[{symbol:"BTCUSD",family:"trend_pullback",side:"SHORT",status:"BROKER_POSITION_OR_HISTORY_CONFIRMED",updated_at:at(-90000)}]},
- brain:{cycles_24h:20,trade_cycles_24h:70,candidates:0,updated_at:at(-120000),last_market:{symbol:"BTCUSD",hypotheses:22,missing_spread_ratio:1,reason:"BROKER_DATA_QUALITY_GATE"}},
+ brain:{cycles_24h:20,trade_cycles_24h:70,candidates:0,updated_at:at(-120000),
+  forward_broker_feedback:{closed:1,minimum_closed_for_review:30,auto_promotion:false,
+    strategies:[{symbol:"BTCUSD",family:"trend_pullback",closed:1,booked_net:-43.66,currency:"EUR"}]},
+  last_market:{symbol:"BTCUSD",hypotheses:22,missing_spread_ratio:1,reason:"BROKER_DATA_QUALITY_GATE"}},
  markets:[
   {symbol:"XAUUSD",contract_status:"BROKER_CONTRACT_VERIFIED",quote_ready:true,quote_age_seconds:60,
    quote:{bid:4000,ask:4000.2,mid:4000.1},spread_bps:.5,
@@ -51,6 +54,9 @@ test("V4 terminal renders only broker-grounded metrics, trade P&L and quote hist
  assert.match(html,/43\.66/);
  assert.match(html,/BTCUSD/);
  assert.match(html,/sc-chart-canvas/);
+ assert.match(html,/FORWARD \/ BROKER-VERIFIED DEMO/);
+ assert.match(html,/1 \/ 30/);
+ assert.match(html,/لا يوجد اعتماد تلقائي/);
  assert.match(html,/BROKER_DATA_QUALITY_GATE|نقص تكاليف تاريخية|البحث التاريخي محجوب/);
  assert.match(html,/&lt;img src=x onerror=alert\(1\)&gt;/);
  assert.doesNotMatch(html,/<img src=x onerror=alert\(1\)>/);
@@ -76,6 +82,7 @@ test("V4 API stays read-only and exposes real bounded scan/research histories",(
  assert.match(api,/req\.method!=="GET"/);
  assert.match(api,/scan_history:scanHistory\.map/);
  assert.match(api,/research_history:researchHistory\.map/);
+ assert.match(api,/forward_broker_feedback:research\?\.notes/);
  assert.match(api,/sentinel_autonomy_spread_observations/);
  assert.match(html,/live-ui-v4\.js/);
  assert.match(html,/styles-v4\.css/);
