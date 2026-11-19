@@ -77,6 +77,7 @@ test("cloud runner remains unarmed under existing demo connection and records sh
   if(q.includes('SELECT signal_hash,comment,broker_ticket FROM sentinel_cloud_trader_intents'))return [];
   if(q.includes('SELECT candidate_id,status FROM sentinel_autonomy_candidates'))return [];
   if(q.includes('SELECT signal_hash,broker_ticket,symbol,family FROM sentinel_cloud_trader_intents'))return [];
+  if(q.includes('INSERT INTO sentinel_autonomy_spread_observations'))return [];
   if(q.includes('INSERT INTO sentinel_cloud_trader_daily'))return [{start_equity:5000}];
   if(q.includes('INSERT INTO sentinel_cloud_trader_cycles')){seen.push({kind:'record',vals});return []}
   if(q.includes('UPDATE sentinel_cloud_trader_lease'))return [];
