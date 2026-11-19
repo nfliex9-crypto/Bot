@@ -211,11 +211,16 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
       if(row.quote_ready){
         const spread=ask-bid;
         row.spread_bps=Number((spread/((bid+ask)/2)*10000).toFixed(4));
-        await sql`INSERT INTO sentinel_autonomy_spread_observations
-           (account_id,symbol,observed_at,bid,ask,spread,source)
-           VALUES(${a.id},${symbol},${new Date(now).toISOString()},
-             ${bid},${ask},${spread},'TICKERALL_FUSION_MT5_QUOTE')
-           ON CONFLICT(account_id,symbol,observed_at) DO NOTHING`;
+        // Compute the exact decimal difference in SQL: JS float subtraction
+        // can violate the existing spread=ask-bid numeric check constraint.
+        // Telemetry failure must not corrupt independent broker safety checks.
+        try{
+          await sql`INSERT INTO sentinel_autonomy_spread_observations
+             (account_id,symbol,observed_at,bid,ask,spread,source)
+             VALUES(${a.id},${symbol},${new Date(now).toISOString()},
+               ${bid},${ask},(${ask}::numeric-${bid}::numeric),'TICKERALL_FUSION_MT5_QUOTE')
+             ON CONFLICT(account_id,symbol,observed_at) DO NOTHING`;
+        }catch(e){row.spread_record_error=clean(e.message)}
       }
     }catch(e){row.contract_status="BROKER_CONTRACT_READ_FAILED";row.contract_error=clean(e.message)}
     const signal=c.decide(symbol,m15,h1,now);
