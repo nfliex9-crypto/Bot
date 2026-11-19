@@ -139,7 +139,11 @@ window.SentinelLive=(()=>{
       "<div class='sc-quote-strip'><div><small>BID</small><strong dir='ltr'>"+(valid?n(q.bid,m?.symbol==="EURUSD"?5:2):"—")+
       "</strong></div><div><small>ASK</small><strong dir='ltr'>"+(valid?n(q.ask,m?.symbol==="EURUSD"?5:2):"—")+
       "</strong></div><div><small>SPREAD</small><strong dir='ltr'>"+(valid?n(m.spread_bps,3)+" bps":"—")+
-      "</strong></div><div><small>آخر عينة</small><strong>"+safe(age(m?.quote_age_seconds))+"</strong></div></div></article>"+
+      "</strong></div><div><small>آخر عينة</small><strong>"+safe(age(m?.quote_age_seconds))+"</strong></div></div>"+
+      "<div class='sc-decision-strip'><div><span>آخر قرار للمحرك</span><strong>"+safe(label(m?.status))+"</strong></div>"+
+      "<div><span>الاستراتيجية</span><strong dir='ltr'>"+safe(m?.strategy||"—")+"</strong></div>"+
+      "<div><span>تقييم العقل</span><strong>"+safe(m?.brain_status?label(m.brain_status):"لا يوجد تقييم جديد")+"</strong></div>"+
+      "<div><span>أوامر هذه الدورة</span><strong>"+n(m?.trades_submitted,0)+"</strong></div></div></article>"+
       "<aside class='sc-panel sc-watchlist'><div class='sc-watch-header'><div class='sc-overline'>MARKET WATCH</div><h2>الأسواق</h2>"+
       "<p>اختار السوق لتشوف عيناته الفعلية</p></div><div class='sc-watch-rows'>"+
       (d.markets||[]).map(watch).join("")+"</div>"+
