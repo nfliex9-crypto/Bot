@@ -208,3 +208,15 @@ body{background:#070d15}
 @media(max-width:720px){#app{display:block}.sidebar{right:-275px;width:265px;position:fixed;top:0;height:100dvh;z-index:50}.sidebar.open{right:0}.main-shell{height:100dvh}.page{padding:15px 12px 38px}.sc-hero{border-radius:16px}.sc-hero-top{padding:18px 16px 0}.sc-build{font-size:8px;max-width:110px;text-align:left}.sc-hero-body{display:block;padding:22px 16px 18px}.sc-hero-copy h1{font-size:29px}.sc-hero-copy p{font-size:11px}.sc-account{width:auto;margin-top:21px}.sc-hero-bottom{padding:13px 16px;align-items:flex-start}.sc-cadence{font-size:9px}.sc-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.sc-metric{min-height:105px}.sc-metric strong{font-size:23px}.sc-market-workspace{gap:11px}.sc-watch-rows{grid-template-columns:1fr 1fr}.sc-watch-row{padding:10px 7px;gap:6px}.sc-watch-icon{height:28px;width:28px;flex-basis:28px;font-size:10px}.sc-watch-values b{font-size:10px}.sc-watch-values small{font-size:9px}.sc-watch-identity strong{font-size:10px}.sc-watch-identity small{font-size:8px}.sc-watch-led{display:none}.sc-section-header{padding:16px 14px 12px}.sc-price-line{padding:0 14px}.sc-big-price{font-size:30px}.sc-price-meaning{width:100%;margin:0}.sc-chart-controls{padding:12px 14px 0}.sc-chart-canvas,.sc-chart-empty{height:230px}.sc-quote-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.sc-quote-strip>div{padding:12px 14px;border-bottom:1px solid #293e50}.sc-brain-stats{padding:12px}.sc-brain-stats>div{padding:10px 7px}.sc-brain-stats strong{font-size:18px}.sc-brain-stats span{font-size:8px}.sc-provenance{padding:18px 4px}}
 @media(max-width:390px){.sc-watch-rows{grid-template-columns:1fr}.sc-hero-copy h1{font-size:26px}.sc-metrics{grid-template-columns:1fr 1fr}.sc-hero-bottom{display:block}.sc-refresh{margin-top:10px}}
 @media(prefers-reduced-motion:reduce){.sc-root,.sc-spinner,.sc-pulse{animation:none!important}.sc-refresh,.sc-cycle-bar,.sc-watch-row{transition:none!important}}
+
+/* Broker-verified closed-demo feedback: a sample counter, never a profitability badge. */
+.sc-feedback{margin:0 17px 17px;padding:13px 14px;background:#102b2a;border:1px solid #315e54;border-radius:11px}
+.sc-feedback-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sc-feedback-heading span{font:650 9px 'IBM Plex Mono',monospace;letter-spacing:.6px;color:#a5dccb;direction:ltr}
+.sc-feedback-heading strong{font:700 13px 'IBM Plex Mono',monospace;color:#d4f8e9;direction:ltr}
+.sc-feedback-track{height:5px;background:#2c4846;border-radius:999px;overflow:hidden;margin:11px 0 9px;direction:ltr}
+.sc-feedback-track i{display:block;height:100%;background:#7aeac3;border-radius:999px}
+.sc-feedback p{font-size:9px;color:#9eb8b7;line-height:1.9}
+.sc-feedback-strategy{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #34534e;padding-top:9px;margin-top:9px;font-size:9px}
+.sc-feedback-strategy span{color:#bfdcd7}
+.sc-feedback-strategy strong{font:650 10px 'IBM Plex Mono',monospace}
