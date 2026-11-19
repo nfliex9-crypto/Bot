@@ -12,6 +12,9 @@
     },
     "api/autonomy.js": {
       "maxDuration": 15
+    },
+    "api/live.js": {
+      "maxDuration": 30
     }
   },
   "headers": [
