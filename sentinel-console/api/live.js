@@ -54,7 +54,7 @@ module.exports=async function liveHandler(req,res){
       mode:"READ_ONLY",account:null,health:{trader:"NOT_STARTED",brain:research?.status||"NOT_STARTED"},
       trades:{intents:0,closed:0,net:null,currency:null,recent:[]},markets:[],events:[]});
     const accountId=String(last.account_id||"");
-    const [intents,fills,quotes,counts,auth]=await Promise.all([
+    const [intents,fills,quotes,counts,auth,totalsByCurrency]=await Promise.all([
       sql`SELECT signal_hash,symbol,family,side,status,created_at,updated_at,
           CASE WHEN broker_ticket IS NULL THEN false ELSE true END AS broker_ticket_recorded
           FROM sentinel_cloud_trader_intents WHERE account_id=${accountId}
@@ -77,13 +77,16 @@ module.exports=async function liveHandler(req,res){
              AND account_id=${accountId}) AS trade_cycles_24h,
            (SELECT COUNT(*)::int FROM sentinel_brain_runs WHERE account_id=${accountId}) AS verified_brain_runs`,
       sql`SELECT enabled,expires_at,risk_pct FROM sentinel_cloud_trader_authorizations
-          WHERE account_id=${accountId} LIMIT 1`
+          WHERE account_id=${accountId} LIMIT 1`,
+      sql`SELECT currency,COUNT(*)::int AS trades,
+          SUM(profit+swap+commission) AS net
+          FROM sentinel_cloud_trader_fills WHERE account_id=${accountId}
+          GROUP BY currency ORDER BY currency`
     ]);
-    const sumByCurrency=new Map();
+    const sumByCurrency=new Map(totalsByCurrency.map(x=>[x.currency,numeric(x.net)]));
     const cleanFills=fills.map(f=>{
       const profit=numeric(f.profit),swap=numeric(f.swap),commission=numeric(f.commission);
       const net=[profit,swap,commission].every(v=>v!==null)?profit+swap+commission:null;
-      if(net!==null)sumByCurrency.set(f.currency,(sumByCurrency.get(f.currency)||0)+net);
       return {symbol:String(f.symbol||"").slice(0,24),family:String(f.family||"").slice(0,70),
         side:String(f.side||"UNKNOWN").slice(0,8),
         closed_at:f.close_time,currency:f.currency,net,
@@ -130,6 +133,7 @@ module.exports=async function liveHandler(req,res){
     events.sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
     const result={ok:true,mode:"READ_ONLY_LIVE_SNAPSHOTS",
       generated_at:new Date(now).toISOString(),
+      trader_at:last.observed_at,
       cadence_seconds:{trader:300,brain:900,ui:20},
       account:{last4:String(last.account_last4||"").slice(-4),type:"MT5 DEMO",
         provider:"TickerAll",broker:"Fusion Markets"},
