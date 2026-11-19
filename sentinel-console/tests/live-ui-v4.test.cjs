@@ -21,7 +21,7 @@ const sample={
     strategies:[{symbol:"BTCUSD",family:"trend_pullback",closed:1,booked_net:-43.66,currency:"EUR"}]},
   last_market:{symbol:"BTCUSD",hypotheses:22,missing_spread_ratio:1,reason:"BROKER_DATA_QUALITY_GATE"}},
  markets:[
-  {symbol:"XAUUSD",contract_status:"BROKER_CONTRACT_VERIFIED",quote_ready:true,quote_age_seconds:60,
+  {symbol:"XAUUSD",status:"NO_VALID_CLOSED_BAR_SIGNAL",contract_status:"BROKER_CONTRACT_VERIFIED",quote_ready:true,quote_age_seconds:60,
    quote:{bid:4000,ask:4000.2,mid:4000.1},spread_bps:.5,
    history:[{at:at(-3600000),mid:3998},{at:at(-1800000),mid:3999},{at:at(-60000),mid:4000.1}]},
   {symbol:"BTCUSD",contract_status:"BROKER_CONTRACT_VERIFIED",quote_ready:true,quote_age_seconds:60,
@@ -54,6 +54,8 @@ test("V4 terminal renders only broker-grounded metrics, trade P&L and quote hist
  assert.match(html,/43\.66/);
  assert.match(html,/BTCUSD/);
  assert.match(html,/sc-chart-canvas/);
+ assert.match(html,/sc-decision-strip/);
+ assert.match(html,/بانتظار إشارة/);
  assert.match(html,/FORWARD \/ BROKER-VERIFIED DEMO/);
  assert.match(html,/1 \/ 30/);
  assert.match(html,/لا يوجد اعتماد تلقائي/);
