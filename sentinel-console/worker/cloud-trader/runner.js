@@ -194,6 +194,17 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
       row.contract_status=contract.reason;
       const bid=Number(quote?.bid),ask=Number(quote?.ask);
       row.quote_ready=Number.isFinite(bid)&&Number.isFinite(ask)&&bid>0&&ask>bid;
+      // Store actual current bid/ask snapshots; never backfill fabricated
+      // spreads onto older bid-only candle history.
+      if(row.quote_ready){
+        const spread=ask-bid;
+        row.spread_bps=Number((spread/((bid+ask)/2)*10000).toFixed(4));
+        await sql`INSERT INTO sentinel_autonomy_spread_observations
+           (account_id,symbol,observed_at,bid,ask,spread,source)
+           VALUES(${a.id},${symbol},${new Date(now).toISOString()},
+             ${bid},${ask},${spread},'TICKERALL_FUSION_MT5_QUOTE')
+           ON CONFLICT(account_id,symbol,observed_at) DO NOTHING`;
+      }
     }catch(e){row.contract_status="BROKER_CONTRACT_READ_FAILED";row.contract_error=clean(e.message)}
     const signal=c.decide(symbol,m15,h1,now);
     if(!signal){row.status="NO_VALID_CLOSED_BAR_SIGNAL";continue}
