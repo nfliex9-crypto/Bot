@@ -2,7 +2,7 @@ name: Sentinel Console Build Checks
 
 on:
   push:
-    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118, sentinel-independent-trader-v1, sentinel-ui-v4-live]
+    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118, sentinel-independent-trader-v1, sentinel-ui-v4-live, sentinel-edge-lab-v1]
   workflow_dispatch:
 
 jobs:
@@ -65,6 +65,8 @@ jobs:
           node --check sentinel-console/trader-ui.js
           node --check sentinel-console/api/live.js
           node --check sentinel-console/live-ui-v4.js
+          node --check sentinel-console/brain/edge-lab.js
+          node --test sentinel-console/tests/edge-lab.test.cjs
           node --test sentinel-console/tests/live-ui-v4.test.cjs
           node --check sentinel-bridge/api/mt5.js
       - name: Unit test Windows agent core under mocked MT5
