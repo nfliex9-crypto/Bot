@@ -73,6 +73,7 @@ test("cloud runner remains unarmed under existing demo connection and records sh
   if(q.includes('INSERT INTO sentinel_cloud_trader_lease'))return [{lease_owner:'lease'}];
   if(q.includes('SELECT cipher_value'))return [{cipher_value:encrypted.join('.')}];
   if(q.includes('SELECT account_id FROM sentinel_autonomy_cycles'))return [{account_id:'acc_demo'}];
+  if(q.includes('FROM sentinel_cloud_trader_authorizations'))return [];
   if(q.includes('SELECT signal_hash,comment,broker_ticket FROM sentinel_cloud_trader_intents'))return [];
   if(q.includes('SELECT candidate_id,status FROM sentinel_autonomy_candidates'))return [];
   if(q.includes('SELECT signal_hash,broker_ticket,symbol,family FROM sentinel_cloud_trader_intents'))return [];
@@ -153,4 +154,29 @@ test("Fusion MT5 demo is preferred only in shadow mode; never silently switched 
  assert.equal(shadowPreferredDemo([...accounts,{...demo,id:"fusion2",server:"FusionMarkets-OtherDemo"}],"old",{}),"old");
  assert.equal(shadowPreferredDemo([{...demo,id:"fusion",server:"FusionMarkets-Demo",hot:false}],"old",{}),"old");
  assert.equal(shadowPreferredDemo([{...demo,id:"fusion",server:"FusionMarkets-Demo",readOnly:true}],"old",{}),"old");
+});
+
+test("Fusion trial authorization must match exact account, server, last4, and expiry",()=>{
+ const now=Date.UTC(2026,10,19,2),account={id:"fusion-id",broker:"mt5",
+  accountNumber:"****1964",server:"FusionMarkets-Demo",isDemo:true,hot:true,readOnly:false};
+ const approved={account_id:"fusion-id",expected_last4:"1964",expected_server:"FusionMarkets-Demo",
+  enabled:true,expires_at:new Date(now+3600000).toISOString(),risk_pct:.25};
+ assert.equal(c.authorizedFusionDemo(approved,account,now),true);
+ assert.equal(c.authorizedFusionDemo({...approved,enabled:false},account,now),false);
+ assert.equal(c.authorizedFusionDemo({...approved,account_id:"other"},account,now),false);
+ assert.equal(c.authorizedFusionDemo({...approved,expected_last4:"2925"},account,now),false);
+ assert.equal(c.authorizedFusionDemo({...approved,risk_pct:.5},account,now),false);
+ assert.equal(c.authorizedFusionDemo({...approved,expires_at:new Date(now-1).toISOString()},account,now),false);
+ assert.equal(c.authorizedFusionDemo(approved,{...account,isDemo:false},now),false);
+ assert.equal(c.authorizedFusionDemo(approved,{...account,server:"MetaQuotes-Demo"},now),false);
+ assert.equal(c.authorizedFusionDemo(approved,{...account,hot:false},now),false);
+});
+test("account-currency tick value must be broker verified before order sizing",()=>{
+ const spec={specSource:"broker",tickValueAccount:1,tickSize:.00001,volumeMin:.01,
+  volumeMax:100,volumeStep:.01,tickValueCurrency:{code:"USD",source:"wire"}};
+ assert.equal(c.verifyContract(spec,"USD").ok,true);
+ assert.equal(c.verifyContract(spec,"EUR").reason,"ACCOUNT_CURRENCY_TICK_VALUE_UNVERIFIED");
+ assert.equal(c.verifyContract({...spec,tickValueCurrency:{code:"USD",source:"heuristic"}},"USD").ok,false);
+ assert.equal(c.verifyContract({...spec,tickValueAccount:undefined},"USD").ok,false);
+ assert.equal(c.verifyContract({...spec,specSource:"derived"},"USD").ok,false);
 });
