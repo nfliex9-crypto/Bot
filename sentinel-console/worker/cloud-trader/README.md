@@ -25,3 +25,27 @@ Requires only existing TickerAll account connection, database, and stored encryp
 
 ## Closed broker deals and research provenance
 `sentinel_cloud_trader_fills` stores only complete matching broker-history closed trades, by previously recorded Sentinel order ticket, in deposit currency with broker commission and swap. Order acknowledgment is NOT realized P&L. `sentinel_autonomy_candidates` supplies research context, but OHLC paper hypotheses remain UNVERIFIED and NEVER auto-approve an execution strategy. Demo trial order gates remain OFF unless explicitly configured in a private worker after separate review.
+
+## Fusion DEMO cloud trial — 19 November 2026
+The broker must be linked through TickerAll, and its session must be hot, MT5,
+DEMO and trade-capable. Neon independently runs the research trigger every
+15 minutes and the cloud trader monitor every 5 minutes. The research engine
+prefers the single linked Fusion demo just like the cloud trader.
+
+The additive `sentinel_cloud_trader_authorizations` table is an alternative
+private-operator authorization mechanism. An entry must match the exact
+TickerAll account ID, exact Fusion broker server, masked last four digits,
+a future expiry, enabled=true and risk_pct in (0, 0.25]. The engine rechecks
+all of these and both broker account type and quote/contract specifications
+before every demo entry. Disabling or expiring the database row stops new
+orders; it does not close existing broker positions.
+
+Trade entries are unvalidated DEMO experiments, NOT strategy performance
+claims. A genuine signal is required from a closed M15 candle with H1 trend
+confirmation; never inject a dummy signal merely to force the first deal.
+A source missing broker-confirmed account-currency tick value cannot be
+used for risk sizing. No real-account orders are permitted.
+
+The research factory remains separate: OHLC-only datasets with unverified
+historic spreads can create labeled hypotheses but NEVER promote strategies
+to live capital. Forward broker fills and fees must be checked independently.
