@@ -64,6 +64,16 @@ test("read-only command view renders verified loss and escapes broker-supplied s
   assert.match(html,/آخر عينات Bid\/Ask الفعلية/);
 });
 
+test("broker-verified forward learning remains observational until enough completed demo trades",()=>{
+ const brain=get("worker/runner.js"),api=get("api/live.js"),ui=get("live-ui.js");
+ assert.match(brain,/forward_broker_feedback/);
+ assert.match(brain,/sentinel_cloud_trader_fills/);
+ assert.match(brain,/minimum_closed_for_review:30/);
+ assert.match(brain,/auto_promotion:false/);
+ assert.match(api,/forward_feedback/);
+ assert.match(ui,/VERIFIED BROKER FEEDBACK/);
+ assert.doesNotMatch(brain,/forward_broker_feedback\s*\.\s*execute/i);
+});
 test("unauthenticated live API cannot expose broker ledger or accept POST",async()=>{
   const handler=require("../api/live.js");
   const req=method=>({method,headers:{host:"sentinel-mt5-console.vercel.app"}});
