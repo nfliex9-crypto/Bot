@@ -1,0 +1,83 @@
+"use strict";
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const vm=require("node:vm");
+const root=path.resolve(__dirname,"..");
+const script=fs.readFileSync(path.join(root,"live-ui-v4.js"),"utf8");
+const now=Date.now();
+const at=offset=>new Date(now+offset).toISOString();
+const sample={
+ ok:true,generated_at:at(0),trader_at:at(-60000),
+ account:{last4:"1964",type:"MT5 DEMO",provider:"TickerAll",broker:"Fusion Markets"},
+ health:{trader:"FRESH",brain:"FRESH",trader_age_seconds:60,execution_mode:"UNVERIFIED_DEMO_TRIAL"},
+ authorization:{enabled:true,expires_at:at(3600000),risk_pct:.25},
+ trades:{intents:1,closed:1,net_by_currency:[{currency:"EUR",net:-43.66}],
+  recent:[{symbol:"BTCUSD",family:"trend_pullback",side:"SHORT",net:-43.66,currency:"EUR",closed_at:at(-90000)}],
+  orders:[{symbol:"BTCUSD",family:"trend_pullback",side:"SHORT",status:"BROKER_POSITION_OR_HISTORY_CONFIRMED",updated_at:at(-90000)}]},
+ brain:{cycles_24h:20,trade_cycles_24h:70,candidates:0,updated_at:at(-120000),last_market:{symbol:"BTCUSD",hypotheses:22,missing_spread_ratio:1,reason:"BROKER_DATA_QUALITY_GATE"}},
+ markets:[
+  {symbol:"XAUUSD",contract_status:"BROKER_CONTRACT_VERIFIED",quote_ready:true,quote_age_seconds:60,
+   quote:{bid:4000,ask:4000.2,mid:4000.1},spread_bps:.5,
+   history:[{at:at(-3600000),mid:3998},{at:at(-1800000),mid:3999},{at:at(-60000),mid:4000.1}]},
+  {symbol:"BTCUSD",contract_status:"BROKER_CONTRACT_VERIFIED",quote_ready:true,quote_age_seconds:60,
+   quote:{bid:93000,ask:93025,mid:93012.5},spread_bps:2.7,
+   history:[{at:at(-3600000),mid:93100},{at:at(-1800000),mid:93070},{at:at(-60000),mid:93012.5}]}
+ ],
+ scan_history:[{at:at(-60000),status:"COMPLETED",orders_sent:0,signals:0,blocked:0}],
+ research_history:[{at:at(-120000),status:"COMPLETED",symbol:"BTCUSD",reason:"BROKER_DATA_QUALITY_GATE",hypotheses:22}],
+ events:[{at:at(-90000),type:"BROKER_CLOSED",label:"<img src=x onerror=alert(1)>",symbol:"BTCUSD",detail:"SHORT",net:-43.66,currency:"EUR"}]
+};
+function boot(){
+ let handler=null,html="";
+ const page={set innerHTML(value){html=value},get innerHTML(){return html}};
+ const document={
+  addEventListener:(name,cb)=>{if(name==="click")handler=cb},
+  querySelector:()=>({}),getElementById:()=>page,visibilityState:"visible"
+ };
+ const ctx={window:{},document,fetch:async()=>({ok:true,json:async()=>sample}),
+  setInterval:()=>0,setTimeout,clearTimeout,AbortController,Intl,Date,Math,Number,String};
+ vm.runInNewContext(script,ctx,{filename:"live-ui-v4.js",timeout:2000});
+ return {api:ctx.window.SentinelLive,click:handler,page};
+}
+test("V4 terminal renders only broker-grounded metrics, trade P&L and quote history",async()=>{
+ const {api}=boot();
+ await new Promise(resolve=>setImmediate(resolve));
+ await api.refresh();
+ const html=api.render();
+ assert.match(html,/SENTINEL \/ TRADING INTELLIGENCE/);
+ assert.match(html,/1964/);
+ assert.match(html,/43\.66/);
+ assert.match(html,/BTCUSD/);
+ assert.match(html,/sc-chart-canvas/);
+ assert.match(html,/BROKER_DATA_QUALITY_GATE|نقص تكاليف تاريخية|البحث التاريخي محجوب/);
+ assert.match(html,/&lt;img src=x onerror=alert\(1\)&gt;/);
+ assert.doesNotMatch(html,/<img src=x onerror=alert\(1\)>/);
+ assert.doesNotMatch(script,/sampleTrades|mockSeries|Math\.random/);
+});
+test("market and time range selectors update actual chart without trade actions",async()=>{
+ const {api,click}=boot();
+ await new Promise(resolve=>setImmediate(resolve));
+ const trigger=(selector,data)=>click({target:{closest:query=>query===selector?{dataset:data}:null}});
+ trigger("[data-sc-market]",{scMarket:"BTCUSD"});
+ trigger("[data-sc-range]",{scRange:"1"});
+ let html=api.render();
+ assert.match(html,/بيتكوين <span class='sc-symbol'>BTCUSD/);
+ assert.match(html,/data-sc-range='1' class='active'/);
+ trigger("[data-sc-ledger]",{scLedger:"orders"});
+ html=api.render();
+ assert.match(html,/BROKER POSITION OR HISTORY CONFIRMED|BROKER_POSITION_OR_HISTORY_CONFIRMED/);
+ assert.doesNotMatch(script,/placeOrder|order_send|executeTrade/);
+});
+test("V4 API stays read-only and exposes real bounded scan/research histories",()=>{
+ const api=fs.readFileSync(path.join(root,"api/live.js"),"utf8");
+ const html=fs.readFileSync(path.join(root,"index.html"),"utf8");
+ assert.match(api,/req\.method!=="GET"/);
+ assert.match(api,/scan_history:scanHistory\.map/);
+ assert.match(api,/research_history:researchHistory\.map/);
+ assert.match(api,/sentinel_autonomy_spread_observations/);
+ assert.match(html,/live-ui-v4\.js/);
+ assert.match(html,/styles-v4\.css/);
+ assert.doesNotMatch(html,/live-ui\.js\?v=sentinel-live-v3/);
+});

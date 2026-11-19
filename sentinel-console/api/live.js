@@ -54,7 +54,7 @@ module.exports=async function liveHandler(req,res){
       mode:"READ_ONLY",account:null,health:{trader:"NOT_STARTED",brain:research?.status||"NOT_STARTED"},
       trades:{intents:0,closed:0,net:null,currency:null,recent:[]},markets:[],events:[]});
     const accountId=String(last.account_id||"");
-    const [intents,fills,quotes,counts,auth,totalsByCurrency]=await Promise.all([
+    const [intents,fills,quotes,counts,auth,totalsByCurrency,scanHistory,researchHistory]=await Promise.all([
       sql`SELECT signal_hash,symbol,family,side,status,created_at,updated_at,
           CASE WHEN broker_ticket IS NULL THEN false ELSE true END AS broker_ticket_recorded
           FROM sentinel_cloud_trader_intents WHERE account_id=${accountId}
@@ -67,7 +67,8 @@ module.exports=async function liveHandler(req,res){
           WHERE f.account_id=${accountId}
           ORDER BY f.close_time DESC LIMIT 30`,
       sql`SELECT symbol,observed_at,bid,ask,spread FROM sentinel_autonomy_spread_observations
-          WHERE account_id=${accountId} ORDER BY observed_at DESC LIMIT 240`,
+          WHERE account_id=${accountId} AND observed_at>NOW()-INTERVAL '12 hours'
+          ORDER BY observed_at DESC LIMIT 520`,
       sql`SELECT
            (SELECT COUNT(*)::int FROM sentinel_cloud_trader_intents WHERE account_id=${accountId}) AS order_intents,
            (SELECT COUNT(*)::int FROM sentinel_cloud_trader_fills WHERE account_id=${accountId}) AS closed_fills,
@@ -81,7 +82,13 @@ module.exports=async function liveHandler(req,res){
       sql`SELECT currency,COUNT(*)::int AS trades,
           SUM(profit+swap+commission) AS net
           FROM sentinel_cloud_trader_fills WHERE account_id=${accountId}
-          GROUP BY currency ORDER BY currency`
+          GROUP BY currency ORDER BY currency`,
+      sql`SELECT observed_at,status,mode,orders_sent,reason,observations
+          FROM sentinel_cloud_trader_cycles WHERE account_id=${accountId}
+          ORDER BY observed_at DESC LIMIT 18`,
+      sql`SELECT started_at,finished_at,status,totals,markets_checked
+          FROM sentinel_autonomy_cycles WHERE account_id=${accountId}
+          ORDER BY started_at DESC LIMIT 8`
     ]);
     const sumByCurrency=new Map(totalsByCurrency.map(x=>[x.currency,numeric(x.net)]));
     const cleanFills=fills.map(f=>{
@@ -104,7 +111,7 @@ module.exports=async function liveHandler(req,res){
     const observations=(Array.isArray(last.observations)?last.observations:[])
       .map(sanitizedObservation).filter(Boolean);
     const markets=observations.map(s=>{
-      const samples=(series.get(s.symbol)||[]).slice(-45),quote=samples[samples.length-1]||null;
+      const samples=(series.get(s.symbol)||[]).slice(-130),quote=samples[samples.length-1]||null;
       const isFresh=quote&&ageSeconds(quote.at,now)<=600;
       return {...s,quote:isFresh?quote:null,quote_at:quote?.at||null,
         quote_age_seconds:quote?ageSeconds(quote.at,now):null,
@@ -156,6 +163,20 @@ module.exports=async function liveHandler(req,res){
         trade_cycles_24h:counts[0].trade_cycles_24h,
         last_market:research?.markets_checked?.[0]||null,
         notes:research?.totals||null},
+      scan_history:scanHistory.map(row=>({
+        at:row.observed_at,status:String(row.status||"UNKNOWN").slice(0,60),
+        mode:String(row.mode||"UNKNOWN").slice(0,60),
+        orders_sent:Number(row.orders_sent)||0,
+        signals:Array.isArray(row.observations)?row.observations.filter(x=>x?.side&&x?.strategy).length:0,
+        blocked:Array.isArray(row.observations)?row.observations.filter(x=>x?.status&&x.status!=="NO_VALID_CLOSED_BAR_SIGNAL").length:0
+      })),
+      research_history:researchHistory.map(row=>({
+        at:row.finished_at||row.started_at,status:String(row.status||"UNKNOWN").slice(0,60),
+        candidates:Number(row.totals?.candidates)||0,
+        symbol:String(row.markets_checked?.[0]?.symbol||"").slice(0,24),
+        reason:String(row.markets_checked?.[0]?.reason||"").slice(0,90),
+        hypotheses:Number(row.markets_checked?.[0]?.hypotheses)||0
+      })),
       markets,events:events.slice(0,12)};
     return send(res,200,result);
   }catch(e){
