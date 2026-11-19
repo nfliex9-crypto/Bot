@@ -43,12 +43,30 @@ function effAt(bars,i,n=20){
  for(let j=i-n+1;j<=i;j++)sum+=Math.abs(bars[j].close-bars[j-1].close);
  return sum>0?Math.abs(bars[i].close-bars[i-n].close)/sum:0;
 }
-function regimeAt(bars,i){
- const efficiency=effAt(bars,i,20),atr=atrAt(bars,i,14);
+function precompute(bars){
+ const n=bars.length;
+ const atr=Array(n).fill(null),eff=Array(n).fill(null);
+ const e20=Array(n).fill(null),e50=Array(n).fill(null);
+ let a20=0,a50=0;
+ for(let i=0;i<n;i++){
+  if(i<20)a20+=bars[i].close;
+  if(i<50)a50+=bars[i].close;
+  if(i===19)e20[i]=a20/20;
+  else if(i>19)e20[i]=e20[i-1]+2/21*(bars[i].close-e20[i-1]);
+  if(i===49)e50[i]=a50/50;
+  else if(i>49)e50[i]=e50[i-1]+2/51*(bars[i].close-e50[i-1]);
+  if(i>=14)atr[i]=atrAt(bars,i,14);
+  if(i>=20)eff[i]=effAt(bars,i,20);
+ }
+ return {atr,eff,e20,e50};
+}
+function regimeAt(bars,i,cache=null){
+ const efficiency=cache?cache.eff[i]:effAt(bars,i,20);
+ const atr=cache?cache.atr[i]:atrAt(bars,i,14);
  if(efficiency===null||atr===null||atr<=0)return null;
  const samples=[];
  for(let j=Math.max(20,i-64);j<i;j+=3){
-  const a=atrAt(bars,j,14);if(a>0)samples.push(a);
+  const a=cache?cache.atr[j]:atrAt(bars,j,14);if(a>0)samples.push(a);
  }
  samples.sort((a,b)=>a-b);
  const median=samples.length?samples[Math.floor(samples.length/2)]:atr;
@@ -56,13 +74,13 @@ function regimeAt(bars,i){
  return {label:shock>=1.9?"SHOCK":efficiency>=.38?"TREND":
    efficiency<=.19?"RANGE":"MIXED",efficiency,atr,atrRatio:shock};
 }
-function signalAt(bars,i,family){
+function signalAt(bars,i,family,cache=null){
  if(!FAMILY.includes(family)||i<100||i>=bars.length)return null;
- const b=bars[i],state=regimeAt(bars,i),prior=bars.slice(i-20,i);
+ const b=bars[i],state=regimeAt(bars,i,cache),prior=bars.slice(i-20,i);
  if(!state||state.label==="SHOCK"||!(state.atr>0))return null;
  const top=Math.max(...prior.map(x=>x.high)),bottom=Math.min(...prior.map(x=>x.low));
  const range=Math.max(b.high-b.low,1e-12),body=Math.abs(b.close-b.open)/range;
- const ema20=emaAt(bars,i,20),ema50=emaAt(bars,i,50);
+ const ema20=cache?cache.e20[i]:emaAt(bars,i,20),ema50=cache?cache.e50[i]:emaAt(bars,i,50);
  let side=0;
  if(family==="sweep_reclaim"){
   if(state.label==="TREND")return null; // no systematic countertrend in strong trend
@@ -74,7 +92,7 @@ function signalAt(bars,i,family){
   // True contraction must precede the signal bar. Never include it in range.
   const recent=bars.slice(i-12,i),rh=Math.max(...recent.map(x=>x.high));
   const rl=Math.min(...recent.map(x=>x.low));
-  const prevAtr=atrAt(bars,i-1,14);
+  const prevAtr=cache?cache.atr[i-1]:atrAt(bars,i-1,14);
   if(!(prevAtr>0)||(rh-rl)/prevAtr>4.4||body<.60||state.atrRatio>1.65)return null;
   if(b.close>rh+.13*prevAtr&&ema20>ema50&&state.efficiency>=.25)side=1;
   else if(b.close<rl-.13*prevAtr&&ema20<ema50&&state.efficiency>=.25)side=-1;
@@ -140,13 +158,14 @@ function evaluate(barsRaw,{spreads=[],minBars=480}={}){
  // Calendar-order partitions are fixed BEFORE evaluating candidates.
  const p1=Math.floor(bars.length*.60),p2=Math.floor(bars.length*.80);
  const boundary=[bars[p1].time,bars[p2].time];
+ const cache=precompute(bars);
  const out=[];
  for(const family of FAMILY){
   const datasets={train:[],validation:[],holdout:[]};
   const stress={train:[],validation:[]};
   let lastExit=-Infinity;
   for(let i=100;i<bars.length-9;i++){
-   const sig=signalAt(bars,i,family);if(!sig||bars[i].time<=lastExit)continue;
+   const sig=signalAt(bars,i,family,cache);if(!sig||bars[i].time<=lastExit)continue;
    const t=resolve(bars,i,sig,proxy);
    if(!t)continue;
    const split=t.entry_time<boundary[0]?"train":t.entry_time<boundary[1]?"validation":"holdout";
@@ -177,5 +196,5 @@ function evaluate(barsRaw,{spreads=[],minBars=480}={}){
    split:{train_end:new Date(boundary[0]).toISOString(),validation_end:new Date(boundary[1]).toISOString()},
    families:out,execution_enabled:false,broker_verified_edge:false};
 }
-module.exports={VERSION,FAMILY,normalize,atrAt,emaAt,regimeAt,signalAt,
+module.exports={VERSION,FAMILY,normalize,atrAt,emaAt,precompute,regimeAt,signalAt,
   costPriceFromQuotes,resolve,stats,evaluate};
