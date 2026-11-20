@@ -2,7 +2,7 @@ name: Sentinel Console Build Checks
 
 on:
   push:
-    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118, sentinel-independent-trader-v1, sentinel-ui-v4-live, sentinel-edge-lab-v1, sentinel-amt-curriculum-v1]
+    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118, sentinel-independent-trader-v1, sentinel-ui-v4-live, sentinel-edge-lab-v1, sentinel-amt-curriculum-v1, sentinel-source-execution-v1]
   workflow_dispatch:
 
 jobs:
@@ -59,6 +59,8 @@ jobs:
           node --check sentinel-console/worker/cloud-trader/core.js
           node --check sentinel-console/worker/cloud-trader/provider.js
           node --check sentinel-console/worker/cloud-trader/runner.js
+          node --check sentinel-console/worker/cloud-trader/source-signals.js
+          node --test sentinel-console/tests/source-demo-signals.test.cjs
           node --test sentinel-console/tests/cloud-trader.test.cjs
           node --check sentinel-console/worker/cloud-trader/service.js
           node --check sentinel-console/worker/cloud-trader/cron.js
