@@ -1,7 +1,8 @@
 "use strict";
 // Pure, deterministic MT5 DEMO signals and preflight. No credentials or HTTP here.
 const crypto=require("node:crypto");
-const FAMILIES=new Set(["trend_pullback","donchian_breakout"]);
+const sourceSignals=require("./source-signals.js");
+const FAMILIES=new Set(["trend_pullback","donchian_breakout",...Object.keys(sourceSignals.RULES)]);
 function finite(v){return typeof v==="number"&&Number.isFinite(v)?v:null}
 function asUTC(v){if(typeof v==="number")return v<1e11?v*1000:v;const t=Date.parse(String(v||""));return Number.isFinite(t)?t:NaN}
 function parseCandles(raw,tf,now=Date.now()){
@@ -20,7 +21,12 @@ function parseCandles(raw,tf,now=Date.now()){
 }
 function ema(values,length){if(values.length<length)throw Error("INSUFFICIENT_EMA");let x=values.slice(0,length).reduce((a,b)=>a+b,0)/length;const k=2/(length+1);for(const v of values.slice(length))x+=k*(v-x);return x}
 function atr(bars){if(bars.length<16)throw Error("INSUFFICIENT_ATR");const tr=[];for(let i=1;i<bars.length;i++){const b=bars[i],p=bars[i-1];tr.push(Math.max(b.high-b.low,Math.abs(b.high-p.close),Math.abs(b.low-p.close)))}return tr.slice(-14).reduce((a,b)=>a+b,0)/14}
-function decide(symbol,m15,h1,now=Date.now()){
+function decide(symbol,m15,h1,now=Date.now(),strategyMode="baseline"){
+ if(!["baseline","source_only","source_first"].includes(strategyMode))throw Error("INVALID_STRATEGY_MODE");
+ if(strategyMode!=="baseline"){
+  const source=sourceSignals.researchSignal(symbol,m15,h1,now);
+  if(source||strategyMode==="source_only")return source;
+ }
  if(m15.length<110||h1.length<90)return null;
  if(now-(m15.at(-1).time+900000)>16*60000||now-(h1.at(-1).time+3600000)>4*3600000)return null;
  const m=m15.map(b=>b.close),h=h1.map(b=>b.close),fast=ema(m,20),slow=ema(m,50),hfast=ema(h,20),hslow=ema(h,50),a=atr(m15);
