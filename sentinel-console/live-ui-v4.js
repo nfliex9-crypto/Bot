@@ -227,6 +227,33 @@ window.SentinelLive=(()=>{
       "<div class='sc-edge-rows'>"+(rows||"<div class='sc-empty-inline'>بانتظار تشغيل أول دورة بحث مستقلة</div>")+
       "</div></section>";
   }
+  function pdfPlaybookPanel(d){
+    const runs=Array.isArray(d.pdf_playbook)?d.pdf_playbook:[];
+    const cards=runs.map(run=>
+      "<div class='sc-pdf-market'><div class='sc-pdf-market-head'><strong>"+
+      safe(run.symbol)+"</strong><span>"+safe(date(run.at))+"</span></div>"+
+      "<p>شموع M15: "+n(run.closed_bars,0)+" · تغطية H1 مغلقة: "+
+        (run.higher_tf_coverage===null||run.higher_tf_coverage===undefined?
+          "—":n(Number(run.higher_tf_coverage)*100,1)+"%")+"</p>"+
+      (run.families||[]).map(f=>
+        "<div class='sc-pdf-family'><div><b>"+safe(f.family)+"</b><small>"+
+        safe(f.status==="MANUAL_SHADOW_REVIEW_ONLY"?"مراجعة بحثية فقط":"غير مثبت")+
+        "</small></div><div><span>Validation "+n(f.validation_n,0)+"</span>"+
+        "<strong dir='ltr'>"+n(f.val_expectancy_r,3)+" R</strong>"+
+        "<small>2× spread: "+n(f.val_cost_stress_r,3)+" R</small>"+
+        "</div></div>").join("")+
+      "</div>").join("");
+    return "<section class='sc-panel sc-pdf-lab'><div class='sc-section-header'><div>"+
+      "<div class='sc-overline'>OWNER PDFS / CAUSAL STRATEGY LAB</div>"+
+      "<h2>مختبر المعرفة من 8 ملفات</h2>"+
+      "<p>تجربة اختراق السيولة مع التأكيد وعودة FVG بعد حركة قوية</p></div>"+
+      "<span class='sc-chip sc-chip-muted'><i></i>SHADOW ONLY</span></div>"+
+      "<div class='sc-pdf-notice'>لا تُعرض ادعاءات التلاعب أو السيولة المؤسسية كحقائق مؤكدة. "+
+      "بيانات M15 لا تحتوي تدفق أوامر حقيقي، ونتائج الاختبار تستخدم سبريد حديثاً تقديرياً. "+
+      "لا توجد صلاحية فتح صفقات من هذا المختبر.</div>"+
+      "<div class='sc-pdf-results'>"+(cards||"<div class='sc-empty-inline'>بانتظار أول دورة بحث على بيانات Fusion</div>")+
+      "</div></section>";
+  }
   function amtPanel(d){
     const curriculum=d.amt_curriculum||{};
     const sources=Array.isArray(curriculum.sources)?curriculum.sources:[];
@@ -301,7 +328,7 @@ window.SentinelLive=(()=>{
       metric("استراتيجيات معتمدة",n(b.candidates,0),"لا نخلط الفرضيات بالاعتماد","")+"</div>"+
       markets(d)+"<div class='sc-content-grid'><div class='sc-main-column'>"+
       ledger(d)+cycles(d)+"</div><div class='sc-side-column'>"+
-      brainPanel(d)+edgePanel(d)+amtPanel(d)+feed(d)+"</div></div>"+
+      brainPanel(d)+edgePanel(d)+pdfPlaybookPanel(d)+amtPanel(d)+feed(d)+"</div></div>"+
       "<div class='sc-provenance'><span>SENTINEL / DATA INTEGRITY</span>"+
       "<p>الأسعار لقطات دورية من TickerAll / MT5، وليست بث Tick لحظياً. نتائج الصفقات من سجل الوسيط المطابق في Neon. لا تُعرض أرباح غير محققة أو رصيد غير موثّق. لا توجد أوامر تداول من المتصفح.</p>"+
       "<span>آخر تحديث للبيانات: "+safe(date(d.generated_at))+" بتوقيت بلجيكا</span></div></div>";
