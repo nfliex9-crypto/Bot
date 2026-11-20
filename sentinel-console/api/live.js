@@ -220,7 +220,8 @@ module.exports=async function liveHandler(req,res){
         ...amtCurriculum.curriculumStatus(),
         sources:amtCurriculum.SOURCE_CATALOG.map(x=>({
           id:x.id,order:x.order,url:x.url,content_status:x.content_status,
-          transcript_verified:x.transcript_verified
+          transcript_verified:x.transcript_verified,captions_indexed:x.captions_indexed,
+          evidence_anchors:x.evidence_anchors
         }))
       },
       edge_lab:[...edgeLatest.values()],markets,events:events.slice(0,12)};
