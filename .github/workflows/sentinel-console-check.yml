@@ -60,7 +60,9 @@ jobs:
           node --check sentinel-console/worker/cloud-trader/provider.js
           node --check sentinel-console/worker/cloud-trader/runner.js
           node --check sentinel-console/worker/cloud-trader/source-signals.js
+          node --check sentinel-console/worker/cloud-trader/weekly-selector.js
           node --test sentinel-console/tests/source-demo-signals.test.cjs
+          node --test sentinel-console/tests/weekly-demo-review.test.cjs
           node --test sentinel-console/tests/cloud-trader.test.cjs
           node --check sentinel-console/worker/cloud-trader/service.js
           node --check sentinel-console/worker/cloud-trader/cron.js
