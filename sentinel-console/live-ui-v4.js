@@ -227,6 +227,32 @@ window.SentinelLive=(()=>{
       "<div class='sc-edge-rows'>"+(rows||"<div class='sc-empty-inline'>بانتظار تشغيل أول دورة بحث مستقلة</div>")+
       "</div></section>";
   }
+  function amtPanel(d){
+    const curriculum=d.amt_curriculum||{};
+    const sources=Array.isArray(curriculum.sources)?curriculum.sources:[];
+    const concepts=Array.isArray(curriculum.concept_research)?curriculum.concept_research:[];
+    const conceptRows=concepts.map(c=>
+      "<div class='sc-amt-concept'><div><strong>"+safe(c.label)+"</strong>"+
+      "<small>"+safe(c.notice)+"</small></div><span class='"+(c.missing_inputs?.length?"sc-amt-disabled":"sc-amt-pending")+"'>"+
+      (c.missing_inputs?.length?"بحاجة بيانات":"بانتظار مراجعة المصادر")+"</span></div>").join("");
+    const sourceRows=sources.map(v=>
+      "<a class='sc-amt-source' href='"+safe(v.url)+"' target='_blank' rel='noopener noreferrer'>"+
+      "<span>"+safe(String(v.order).padStart(2,"0"))+"</span>"+
+      "<strong>الحلقة "+safe(v.order)+"</strong><small>النص غير متحقق</small>"+
+      "<span aria-hidden='true'>↗</span></a>").join("");
+    return "<section class='sc-panel sc-amt'><div class='sc-section-header'><div>"+
+      "<div class='sc-overline'>AMT BOOTCAMP / SOURCE INTELLIGENCE</div>"+
+      "<h2>مكتبة تعلّم السوق</h2><p>14 مصدراً من المستخدم، والحالة من سجل التحقق لا من التخمين</p></div>"+
+      "<span class='sc-chip sc-chip-muted'><i></i>بانتظار النصوص</span></div>"+
+      "<div class='sc-amt-overview'><div><strong>"+n(curriculum.linked_sources,0)+"</strong><span>مصادر مسجّلة</span></div>"+
+      "<div><strong>"+n(curriculum.transcripts_verified,0)+"</strong><span>نصوص تم التحقق منها</span></div>"+
+      "<div><strong>"+n(curriculum.video_specific_claims,0)+"</strong><span>قواعد موثّقة من الحلقات</span></div></div>"+
+      "<div class='sc-amt-note'>الفهم الحقيقي يتطلب نصاً مؤقتاً موثّقاً للحلقة، ثم قاعدة قابلة للاختبار، ثم Forward Testing. لا توجد استراتيجية معتمدة من هالحلقات حالياً.</div>"+
+      "<div class='sc-research-title'>مفاهيم ممكن نختبرها — حسب البيانات المتاحة</div>"+
+      "<div class='sc-amt-concepts'>"+conceptRows+"</div>"+
+      "<details class='sc-amt-details'><summary>الروابط الـ14 الأصلية</summary>"+
+      "<div class='sc-amt-sources'>"+sourceRows+"</div></details></section>";
+  }
   function cycles(d){
     const rows=(d.scan_history||[]).slice().reverse();
     const bars=rows.map(x=>{
@@ -275,7 +301,7 @@ window.SentinelLive=(()=>{
       metric("استراتيجيات معتمدة",n(b.candidates,0),"لا نخلط الفرضيات بالاعتماد","")+"</div>"+
       markets(d)+"<div class='sc-content-grid'><div class='sc-main-column'>"+
       ledger(d)+cycles(d)+"</div><div class='sc-side-column'>"+
-      brainPanel(d)+edgePanel(d)+feed(d)+"</div></div>"+
+      brainPanel(d)+edgePanel(d)+amtPanel(d)+feed(d)+"</div></div>"+
       "<div class='sc-provenance'><span>SENTINEL / DATA INTEGRITY</span>"+
       "<p>الأسعار لقطات دورية من TickerAll / MT5، وليست بث Tick لحظياً. نتائج الصفقات من سجل الوسيط المطابق في Neon. لا تُعرض أرباح غير محققة أو رصيد غير موثّق. لا توجد أوامر تداول من المتصفح.</p>"+
       "<span>آخر تحديث للبيانات: "+safe(date(d.generated_at))+" بتوقيت بلجيكا</span></div></div>";
