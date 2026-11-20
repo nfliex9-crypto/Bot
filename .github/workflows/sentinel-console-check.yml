@@ -67,6 +67,7 @@ jobs:
           node --check sentinel-console/live-ui-v4.js
           node --check sentinel-console/brain/edge-lab.js
           node --test sentinel-console/tests/edge-lab.test.cjs
+          node --check sentinel-console/brain/amt-evidence.js
           node --check sentinel-console/brain/amt-curriculum.js
           node --test sentinel-console/tests/amt-curriculum.test.cjs
           node --test sentinel-console/tests/live-ui-v4.test.cjs
