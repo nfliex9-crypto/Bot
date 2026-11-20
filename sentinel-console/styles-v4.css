@@ -276,3 +276,22 @@ border-radius:7px;padding:8px 9px;background:#112433;color:#d1e7ec;font-size:10p
 .sc-amt-source small{font-size:9px;color:#839da9}
 .sc-amt-source>span:last-child{margin-right:auto;color:#87cdb6}
 @media(max-width:540px){.sc-amt-sources{grid-template-columns:1fr}.sc-amt-concept{flex-direction:column;gap:6px}}
+
+/* Owner supplied PDF hypothesis research: visually separate from broker execution. */
+.sc-pdf-notice{font-size:10px;line-height:1.9;padding:13px 16px;border-top:1px solid #6b593b;
+ border-bottom:1px solid #6b593b;background:#332d21;color:#e5ceaa}
+.sc-pdf-results{padding:4px 16px 13px}
+.sc-pdf-market{padding:13px 0;border-bottom:1px solid #2c4150}
+.sc-pdf-market:last-child{border-bottom:0}
+.sc-pdf-market-head{display:flex;justify-content:space-between;align-items:center;gap:9px}
+.sc-pdf-market-head strong{font:700 13px 'IBM Plex Mono',monospace;color:#baf7df}
+.sc-pdf-market-head span{font-size:9px;color:#91adba}
+.sc-pdf-market>p{font-size:9px;color:#90a9b7;line-height:1.8;margin:6px 0}
+.sc-pdf-family{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:10px 0;
+ border-top:1px solid #263d49}
+.sc-pdf-family>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sc-pdf-family b{font:650 10px 'IBM Plex Mono',monospace;overflow-wrap:anywhere;direction:ltr}
+.sc-pdf-family small{font-size:9px;color:#99aeb9}
+.sc-pdf-family>div:last-child{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.sc-pdf-family strong{font:700 13px 'IBM Plex Mono',monospace;color:#d8e9ee}
+.sc-pdf-family span{font:10px 'IBM Plex Mono',monospace;color:#97b7be}
