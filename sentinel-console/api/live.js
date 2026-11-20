@@ -55,7 +55,7 @@ module.exports=async function liveHandler(req,res){
       mode:"READ_ONLY",account:null,health:{trader:"NOT_STARTED",brain:research?.status||"NOT_STARTED"},
       trades:{intents:0,closed:0,net:null,currency:null,recent:[]},markets:[],events:[]});
     const accountId=String(last.account_id||"");
-    const [intents,fills,quotes,counts,auth,totalsByCurrency,scanHistory,researchHistory,edgeRuns]=await Promise.all([
+    const [intents,fills,quotes,counts,auth,totalsByCurrency,scanHistory,researchHistory,edgeRuns,pdfRuns]=await Promise.all([
       sql`SELECT signal_hash,symbol,family,side,status,created_at,updated_at,
           CASE WHEN broker_ticket IS NULL THEN false ELSE true END AS broker_ticket_recorded
           FROM sentinel_cloud_trader_intents WHERE account_id=${accountId}
@@ -92,7 +92,10 @@ module.exports=async function liveHandler(req,res){
           ORDER BY started_at DESC LIMIT 8`,
       sql`SELECT symbol,version,evaluated_at,report
           FROM sentinel_edge_lab_runs WHERE account_id=${accountId}
-          ORDER BY evaluated_at DESC LIMIT 16`
+          ORDER BY evaluated_at DESC LIMIT 16`,
+      sql`SELECT symbol,version,evaluated_at,report
+          FROM sentinel_pdf_playbook_runs WHERE account_id=${accountId}
+          ORDER BY evaluated_at DESC LIMIT 12`
     ]);
     const sumByCurrency=new Map(totalsByCurrency.map(x=>[x.currency,numeric(x.net)]));
     const cleanFills=fills.map(f=>{
@@ -164,6 +167,29 @@ module.exports=async function liveHandler(req,res){
           holdout_report_only:true,execution_enabled:false
         }))});
     }
+    const pdfRecent=new Map();
+    for(const row of pdfRuns){
+      const symbol=String(row.symbol||"").slice(0,24);
+      if(!symbol||pdfRecent.has(symbol))continue;
+      const r=row.report||{};
+      pdfRecent.set(symbol,{
+        symbol,at:row.evaluated_at,version:String(row.version||"").slice(0,80),
+        status:String(r.status||"UNKNOWN").slice(0,70),
+        source:"FUSION_BROKER_OHLC_AND_RECENT_SPREAD_PROXY",
+        evidence_documents:Number(r.source_documents)||0,
+        closed_bars:Number(r.bars)||0,higher_tf_coverage:numeric(r.higher_tf_coverage),
+        execution_enabled:false,broker_verified_edge:false,
+        families:(Array.isArray(r.families)?r.families:[]).slice(0,3).map(f=>({
+          family:String(f.family||"").slice(0,70),
+          status:String(f.status||"RESEARCH_NOT_PROVEN").slice(0,50),
+          train_n:Number(f.train?.trades)||0,validation_n:Number(f.validation?.trades)||0,
+          val_expectancy_r:numeric(f.validation?.expectancy_r),
+          val_cost_stress_r:numeric(f.validation_stressed?.expectancy_r),
+          holdout_n:Number(f.holdout?.trades)||0,
+          execution_enabled:false,holdout_report_only:true
+        }))
+      });
+    }
     const result={ok:true,mode:"READ_ONLY_LIVE_SNAPSHOTS",
       generated_at:new Date(now).toISOString(),
       trader_at:last.observed_at,
@@ -223,6 +249,7 @@ module.exports=async function liveHandler(req,res){
           transcript_verified:x.transcript_verified
         }))
       },
+      pdf_playbook:[...pdfRecent.values()],
       edge_lab:[...edgeLatest.values()],markets,events:events.slice(0,12)};
     return send(res,200,result);
   }catch(e){
