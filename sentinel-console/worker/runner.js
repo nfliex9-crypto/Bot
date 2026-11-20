@@ -10,6 +10,7 @@ const broker=require("../brain/broker-ingestion.js");
 const {recordBrokerHypotheses}=require("../brain/broker-hypotheses.js");
 const {recordQuote}=require("../brain/quote-observer.js");
 const edgeLab=require("../brain/edge-lab.js");
+const pdfPlaybook=require("../brain/pdf-playbook-lab.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -104,6 +105,35 @@ async function runEdgeLab(sql,{account,symbol,now=new Date()}){
    stressed_validation_exp_r:x.validation_stressed.expectancy_r,
    holdout_n:x.holdout.trades,holdout_report_only:true
   }))};
+}
+/**
+ * Separate, read-only owner-PDF setup hypothesis research.
+ * Never changes approved candidates, live slots, risk, MT5 orders or trades.
+ */
+async function runPdfPlaybook(sql,{account,symbol,now=new Date()}){
+ const candles=await cacheBars(sql,account,symbol,"M15");
+ const closed=candles.filter(b=>Number.isSafeInteger(b.timestamp)&&b.timestamp+900000<=now.getTime());
+ if(!closed.length)return {status:"NO_CLOSED_M15_BARS",symbol};
+ const quotes=await sql`SELECT spread FROM sentinel_autonomy_spread_observations
+  WHERE account_id=${account} AND symbol=${symbol}
+  AND observed_at>=NOW()-INTERVAL '7 days' AND spread>0
+  ORDER BY observed_at DESC LIMIT 250`;
+ const research=pdfPlaybook.evaluate(closed,{spreads:quotes.map(q=>({spread:Number(q.spread)}))});
+ const last=new Date(closed.at(-1).timestamp).toISOString();
+ await sql`INSERT INTO sentinel_pdf_playbook_runs
+  (id,account_id,symbol,timeframe,version,dataset_last_bar,report)
+  VALUES(${crypto.randomUUID()},${account},${symbol},'M15',${pdfPlaybook.VERSION},
+   ${last},${JSON.stringify(research)}::jsonb)
+  ON CONFLICT(account_id,symbol,timeframe,version,dataset_last_bar) DO NOTHING`;
+ return {symbol,timeframe:"M15",status:research.status,version:research.version,
+  closed_bars:research.bars||closed.length,account_source:"FUSION_MT5_DEMO_CLOSED_BROKER_CANDLES",
+  causal_h1_coverage:research.higher_tf_coverage??null,
+  broker_verified_edge:false,execution_enabled:false,
+  families:(research.families||[]).map(x=>({family:x.family,
+    status:x.status,train_n:x.train.trades,validation_n:x.validation.trades,
+    val_expectancy_r:x.validation.expectancy_r,
+    val_cost_stress_r:x.validation_stressed.expectancy_r,
+    holdout_n:x.holdout.trades,holdout_is_report_only:true}))};
 }
 async function assess(sql,{account,symbol,tf,bars,coverage,truncated,cycleId,now}){
  const old=await sql`SELECT spec FROM sentinel_autonomy_candidates WHERE account_id=${account} AND symbol=${symbol}
@@ -253,6 +283,9 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
     if(laboratorySymbol)try{
       notes.edge_lab=await runEdgeLab(sql,{account:demo.id,symbol:laboratorySymbol,now});
     }catch(e){notes.edge_lab_error=clean(e.message)}
+    if(laboratorySymbol)try{
+      notes.pdf_playbook=await runPdfPlaybook(sql,{account:demo.id,symbol:laboratorySymbol,now});
+    }catch(e){notes.pdf_playbook_error=clean(e.message)}
 
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
@@ -321,4 +354,4 @@ async function main(){
  }
 }
 if(require.main===module)main().catch(e=>{console.error(clean(e.message));process.exitCode=1});
-module.exports={decrypt,fetchJSON,selectMarkets,researchCycle,runOnce,assess,harvest,runEdgeLab};
+module.exports={decrypt,fetchJSON,selectMarkets,researchCycle,runOnce,assess,harvest,runEdgeLab,runPdfPlaybook};
