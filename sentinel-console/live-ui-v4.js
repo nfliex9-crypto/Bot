@@ -238,16 +238,16 @@ window.SentinelLive=(()=>{
     const sourceRows=sources.map(v=>
       "<a class='sc-amt-source' href='"+safe(v.url)+"' target='_blank' rel='noopener noreferrer'>"+
       "<span>"+safe(String(v.order).padStart(2,"0"))+"</span>"+
-      "<strong>الحلقة "+safe(v.order)+"</strong><small>النص غير متحقق</small>"+
+      "<strong>الحلقة "+safe(v.order)+"</strong><small>"+safe(v.evidence_anchors?.[0]?.timestamp||"—")+" · فهرسة غير مدققة</small>"+
       "<span aria-hidden='true'>↗</span></a>").join("");
     return "<section class='sc-panel sc-amt'><div class='sc-section-header'><div>"+
       "<div class='sc-overline'>AMT BOOTCAMP / SOURCE INTELLIGENCE</div>"+
       "<h2>مكتبة تعلّم السوق</h2><p>14 مصدراً من المستخدم، والحالة من سجل التحقق لا من التخمين</p></div>"+
-      "<span class='sc-chip sc-chip-muted'><i></i>بانتظار النصوص</span></div>"+
+      "<span class='sc-chip sc-chip-muted'><i></i>نصوص مفهرسة · غير مدققة</span></div>"+
       "<div class='sc-amt-overview'><div><strong>"+n(curriculum.linked_sources,0)+"</strong><span>مصادر مسجّلة</span></div>"+
-      "<div><strong>"+n(curriculum.transcripts_verified,0)+"</strong><span>نصوص تم التحقق منها</span></div>"+
-      "<div><strong>"+n(curriculum.video_specific_claims,0)+"</strong><span>قواعد موثّقة من الحلقات</span></div></div>"+
-      "<div class='sc-amt-note'>الفهم الحقيقي يتطلب نصاً مؤقتاً موثّقاً للحلقة، ثم قاعدة قابلة للاختبار، ثم Forward Testing. لا توجد استراتيجية معتمدة من هالحلقات حالياً.</div>"+
+      "<div><strong>"+n(curriculum.captions_indexed,0)+"</strong><span>نصوص موقّتة مفهرسة</span></div>"+
+      "<div><strong>"+n(curriculum.caption_evidence_leads,0)+"</strong><span>مواضع تعلّم محددة</span></div></div>"+
+      "<div class='sc-amt-note'>فهرسنا ترجمة آلية موقّتة للحلقات الـ14 وحددنا مواضع تعليمية، لكنها لم تُراجع مقابل الصوت. لا تعتبر الأفكار استراتيجيات رابحة أو معتمدة قبل الاختبار المستقل.</div>"+
       "<div class='sc-research-title'>مفاهيم ممكن نختبرها — حسب البيانات المتاحة</div>"+
       "<div class='sc-amt-concepts'>"+conceptRows+"</div>"+
       "<details class='sc-amt-details'><summary>الروابط الـ14 الأصلية</summary>"+
