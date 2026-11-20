@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           npm install --no-save --no-package-lock @neondatabase/serverless@1 esbuild@0.25
           mkdir -p /tmp/sentinel-function
-          ./node_modules/.bin/esbuild worker/neon-entry-bundle.mjs --bundle --platform=node --target=node24 --format=esm --outfile=/tmp/sentinel-function/index.mjs
+          ./node_modules/.bin/esbuild worker/neon-entry-bundle.mjs --bundle --platform=node --target=node24 --format=esm --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);' --outfile=/tmp/sentinel-function/index.mjs
           node --check /tmp/sentinel-function/index.mjs
           node --input-type=module -e '
             const m=await import("file:///tmp/sentinel-function/index.mjs");
