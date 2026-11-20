@@ -31,7 +31,12 @@ const sample={
  ],
  amt_curriculum:{...curriculum.curriculumStatus(),
   sources:curriculum.SOURCE_CATALOG.map(x=>({order:x.order,id:x.id,url:x.url,
-    content_status:x.content_status,transcript_verified:false}))},
+    content_status:x.content_status,captions_accessible:x.captions_accessible,
+    transcript_verified:false})),
+  research_notes:curriculum.CAPTION_EVIDENCE.map(x=>({
+    source_id:x.id,seconds:x.seconds,concept:x.concept,note:x.note,
+    source_url:x.source_url,review:x.review
+  }))},
  pdf_playbook:[{symbol:"BTCUSD",at:at(-60000),closed_bars:780,higher_tf_coverage:.74,
   status:"OHLC_PLUS_RECENT_SPREAD_COST_PROXY_ONLY",execution_enabled:false,families:[
     {family:"sweep_displacement_confirm",status:"RESEARCH_NOT_PROVEN",train_n:7,
@@ -67,7 +72,10 @@ test("V4 terminal renders only broker-grounded metrics, trade P&L and quote hist
  assert.match(html,/sc-chart-canvas/);
  assert.match(html,/مكتبة تعلّم السوق/);
  assert.match(html,/الروابط الـ14 الأصلية/);
- assert.match(html,/نصوص تم التحقق منها/);
+ assert.match(html,/نصوص مترجمة متاحة/);
+ assert.match(html,/نصوص متاحة · دون مراجعة مستقلة/);
+ assert.match(html,/ملاحظات زمنية مرتبطة بمصادرها/);
+ assert.match(html,/https:\/\/www.youtube.com\/watch\?v=dqONJMI1rYM&amp;t=311s/);
  assert.match(html,/https:\/\/www.youtube.com\/watch\?v=z4Lq1IGmrS8/);
  assert.match(html,/بحاجة بيانات/);
  assert.match(html,/sc-decision-strip/);

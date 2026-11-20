@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path");
 const a=require("../brain/amt-curriculum.js");
-test("all 14 exact video URLs are preserved, none falsely marked processed",()=>{
+test("all 14 exact videos retain accessible caption provenance with no claims of verified visual lessons",()=>{
  assert.equal(a.validateCatalog(),true);
  assert.equal(a.SOURCE_CATALOG.length,14);
  assert.equal(new Set(a.IDS).size,14);
@@ -11,14 +11,23 @@ test("all 14 exact video URLs are preserved, none falsely marked processed",()=>
  "ddp6ZIqmaOc","sZhdaMr-fFY","8jtLFS7ZJxo","nLCeDXzJiI8",
  "GeWGu7mBvIc","7HXYhinEkRI"
  ]);
- assert.ok(a.SOURCE_CATALOG.every(s=>s.content_status==="AWAITING_ACCESSIBLE_TRANSCRIPT"&&
-  !s.transcript_verified&&!s.orders_authorized));
+ assert.ok(a.SOURCE_CATALOG.every(s=>s.content_status==="CAPTIONS_RETRIEVED_UNREVIEWED"&&
+  s.captions_accessible===true&&s.captions_language==="en"&&
+  !s.video_verified&&!s.transcript_verified&&!s.orders_authorized));
+ assert.equal(a.CAPTION_EVIDENCE.length,14);
+ assert.deepEqual(a.CAPTION_EVIDENCE.map(x=>x.id),a.IDS);
+ assert.ok(a.CAPTION_EVIDENCE.every(x=>Number.isInteger(x.seconds)&&x.seconds>=0&&
+   x.source_url.includes("&t="+x.seconds+"s")&&x.review==="CAPTION_PARAPHRASE_UNVERIFIED"&&
+   x.orders_authorized===false));
 });
 test("MT5 OHLC cannot masquerade as CVD, footprint, L2 iceberg or true Volume Profile",()=>{
  const r=a.curriculumStatus();
  assert.equal(r.linked_sources,14);
- assert.equal(r.content_read,0);
+ assert.equal(r.content_read,14);
+ assert.equal(r.captions_accessible,14);
  assert.equal(r.transcripts_verified,0);
+ assert.equal(r.timestamped_research_notes,14);
+ assert.equal(r.reviewed_research_rules,0);
  assert.equal(r.autonomous_broker_orders,false);
  assert.equal(r.concept_research.find(x=>x.id==="volume_profile").status,"DATA_UNAVAILABLE");
  assert.equal(r.concept_research.find(x=>x.id==="delta_absorption").status,"DATA_UNAVAILABLE");

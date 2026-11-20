@@ -245,8 +245,13 @@ module.exports=async function liveHandler(req,res){
       amt_curriculum:{
         ...amtCurriculum.curriculumStatus(),
         sources:amtCurriculum.SOURCE_CATALOG.map(x=>({
-          id:x.id,order:x.order,url:x.url,content_status:x.content_status,
-          transcript_verified:x.transcript_verified
+          id:x.id,order:x.order,url:x.url,title:x.title,
+          content_status:x.content_status,captions_accessible:x.captions_accessible,
+          captions_language:x.captions_language,transcript_verified:x.transcript_verified
+        })),
+        research_notes:amtCurriculum.CAPTION_EVIDENCE.map(x=>({
+          source_id:x.id,seconds:x.seconds,concept:x.concept,
+          note:x.note,source_url:x.source_url,review:x.review,orders_authorized:false
         }))
       },
       pdf_playbook:[...pdfRecent.values()],
