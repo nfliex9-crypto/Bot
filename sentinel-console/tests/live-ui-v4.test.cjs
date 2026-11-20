@@ -5,6 +5,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const vm=require("node:vm");
 const root=path.resolve(__dirname,"..");
+const curriculum=require("../brain/amt-curriculum.js");
 const script=fs.readFileSync(path.join(root,"live-ui-v4.js"),"utf8");
 const now=Date.now();
 const at=offset=>new Date(now+offset).toISOString();
@@ -28,6 +29,9 @@ const sample={
    quote:{bid:93000,ask:93025,mid:93012.5},spread_bps:2.7,
    history:[{at:at(-3600000),mid:93100},{at:at(-1800000),mid:93070},{at:at(-60000),mid:93012.5}]}
  ],
+ amt_curriculum:{...curriculum.curriculumStatus(),
+  sources:curriculum.SOURCE_CATALOG.map(x=>({order:x.order,id:x.id,url:x.url,
+    content_status:x.content_status,transcript_verified:false}))},
  scan_history:[{at:at(-60000),status:"COMPLETED",orders_sent:0,signals:0,blocked:0}],
  research_history:[{at:at(-120000),status:"COMPLETED",symbol:"BTCUSD",reason:"BROKER_DATA_QUALITY_GATE",hypotheses:22}],
  events:[{at:at(-90000),type:"BROKER_CLOSED",label:"<img src=x onerror=alert(1)>",symbol:"BTCUSD",detail:"SHORT",net:-43.66,currency:"EUR"}]
@@ -54,6 +58,11 @@ test("V4 terminal renders only broker-grounded metrics, trade P&L and quote hist
  assert.match(html,/43\.66/);
  assert.match(html,/BTCUSD/);
  assert.match(html,/sc-chart-canvas/);
+ assert.match(html,/مكتبة تعلّم السوق/);
+ assert.match(html,/الروابط الـ14 الأصلية/);
+ assert.match(html,/نصوص تم التحقق منها/);
+ assert.match(html,/https:\/\/www.youtube.com\/watch\?v=z4Lq1IGmrS8/);
+ assert.match(html,/بحاجة بيانات/);
  assert.match(html,/sc-decision-strip/);
  assert.match(html,/بانتظار إشارة/);
  assert.match(html,/FORWARD \/ BROKER-VERIFIED DEMO/);
@@ -85,6 +94,8 @@ test("V4 API stays read-only and exposes real bounded scan/research histories",(
  const html=fs.readFileSync(path.join(root,"index.html"),"utf8");
  assert.match(api,/req\.method!=="GET"/);
  assert.match(api,/scan_history:scanHistory\.map/);
+ assert.match(api,/amt_curriculum:/);
+ assert.match(api,/amtCurriculum\.curriculumStatus/);
  assert.match(api,/research_history:researchHistory\.map/);
  assert.match(api,/forward_broker_feedback:research\?\.notes/);
  assert.match(api,/sentinel_autonomy_spread_observations/);
