@@ -247,3 +247,32 @@ body{background:#070d15}
 .sc-edge-figures{display:flex;align-items:flex-end;flex-direction:column;gap:3px}
 .sc-edge-figures strong{font:700 12px 'IBM Plex Mono',monospace;color:#dee9ee}
 .sc-edge-figures small{font:9px 'IBM Plex Mono',monospace;color:#92a6b6}
+
+/* AMT video-source curriculum: provenance first, no fictional lecture notes. */
+.sc-amt-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:14px;gap:9px}
+.sc-amt-overview>div{background:#102230;border:1px solid #2b4756;border-radius:10px;padding:12px 10px}
+.sc-amt-overview strong{font:700 23px 'IBM Plex Mono',monospace;color:#a8f4d7;display:block}
+.sc-amt-overview span{display:block;font-size:9px;color:#8da9b8;margin-top:5px}
+.sc-amt-note{background:#382d22;border-top:1px solid #605040;border-bottom:1px solid #605040;
+padding:12px 15px;font-size:10px;color:#e5cbb1;line-height:1.95}
+.sc-amt-concepts{padding:0 15px 10px}
+.sc-amt-concept{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #293d4b}
+.sc-amt-concept:last-child{border-bottom:0}
+.sc-amt-concept>div{flex:1;min-width:0}
+.sc-amt-concept strong{font:650 10px 'IBM Plex Mono',monospace;color:#d8e9f2;display:block;direction:ltr;text-align:right}
+.sc-amt-concept small{display:block;font-size:9px;color:#899eae;line-height:1.7;margin-top:5px}
+.sc-amt-concept>span{font-size:9px;flex-shrink:0;padding:5px 7px;border-radius:6px}
+.sc-amt-disabled{color:#d7bb9d;background:#342c26;border:1px solid #5e5042}
+.sc-amt-pending{color:#97dbc5;background:#18372e;border:1px solid #35624f}
+.sc-amt-details{border-top:1px solid #314453}
+.sc-amt-details summary{cursor:pointer;color:#d8e8f0;font-weight:750;font-size:11px;padding:15px 18px}
+.sc-amt-details summary:hover{color:#adf5d8}
+.sc-amt-sources{padding:0 15px 15px;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.sc-amt-source{display:flex;align-items:center;gap:8px;text-decoration:none;border:1px solid #2d4150;
+border-radius:7px;padding:8px 9px;background:#112433;color:#d1e7ec;font-size:10px}
+.sc-amt-source:hover{border-color:#5a947f;background:#183b36}
+.sc-amt-source>span:first-child{font:650 11px 'IBM Plex Mono',monospace;color:#72d4b3}
+.sc-amt-source strong{font-weight:650;font-size:10px}
+.sc-amt-source small{font-size:9px;color:#839da9}
+.sc-amt-source>span:last-child{margin-right:auto;color:#87cdb6}
+@media(max-width:540px){.sc-amt-sources{grid-template-columns:1fr}.sc-amt-concept{flex-direction:column;gap:6px}}
