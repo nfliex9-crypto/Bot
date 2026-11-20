@@ -223,7 +223,9 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
         }catch(e){row.spread_record_error=clean(e.message)}
       }
     }catch(e){row.contract_status="BROKER_CONTRACT_READ_FAILED";row.contract_error=clean(e.message)}
-    const signal=c.decide(symbol,m15,h1,now);
+    // This isolated branch evaluates ONLY owner-PDF-derived setup families.
+    // Brokerage writes still require independent DEMO account authorizations.
+    const signal=c.decide(symbol,m15,h1,now,"source_only");
     if(!signal){row.status="NO_VALID_CLOSED_BAR_SIGNAL";continue}
     row.signal_hash=c.keyFor(a.id,signal).slice(0,20);
     // Actual Sentinel brain research registry is consulted, but an
@@ -233,6 +235,10 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
       ORDER BY last_evaluated_at DESC LIMIT 3`;
     row.brain_status=candidates.length?"RESEARCH_CANDIDATE_UNVERIFIED":"NO_VERIFIED_BRAIN_EVIDENCE";
     row.side=signal.side===1?"LONG":"SHORT";row.strategy=signal.family;
+    row.source_pdf=signal.source_pdf||null;
+    row.source_pages=signal.source_pages||[];
+    row.source_evidence=signal.evidence||"UNVERIFIED_SOURCE_HYPOTHESIS";
+    row.edge_verified=false;
     if(positions.length||orders.length){row.status="ACCOUNT_HAS_EXISTING_POSITION_OR_ORDER";continue}
     if(!quote||!specResult?.spec){row.status="BROKER_CONTRACT_UNAVAILABLE";continue}
     const ready=c.preflight({signal,quote,spec:specResult.spec,equity,
