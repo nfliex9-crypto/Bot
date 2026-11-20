@@ -17,7 +17,7 @@ test("Grok-derived research does not import credentials or enable broker orders"
  assert.equal(x.status,"COST_PROXY_RESEARCH_ONLY");
  assert.equal(x.execution_enabled,false);
  assert.equal(x.broker_verified_edge,false);
- assert.deepEqual(x.families.map(f=>f.family),["sweep_reclaim","compression_breakout"]);
+ assert.deepEqual(x.families.map(f=>f.family),["sweep_reclaim","compression_breakout","fvg_retest"]);
  assert.ok(x.families.every(f=>f.execution_enabled===false&&f.holdout_is_report_only===true));
  assert.match(x.cost_notice,/not historical bid\/ask/);
 });
@@ -34,6 +34,7 @@ test("cached features reproduce direct causal indicators at any closed bar",()=>
   assert.ok(Math.abs(cache.e50[i]-lab.emaAt(data,i,50))<1e-10);
   assert.deepEqual(lab.signalAt(data,i,"sweep_reclaim",cache),lab.signalAt(data,i,"sweep_reclaim"));
   assert.deepEqual(lab.signalAt(data,i,"compression_breakout",cache),lab.signalAt(data,i,"compression_breakout"));
+  assert.deepEqual(lab.signalAt(data,i,"fvg_retest",cache),lab.signalAt(data,i,"fvg_retest"));
  }
 });
 test("bar parsing rejects nonmonotonic, corrupt OHLC and timestamps",()=>{
