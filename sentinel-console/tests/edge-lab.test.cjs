@@ -73,3 +73,23 @@ test("chronological windows, cost stress and no execution permission across resu
  assert.ok(a.families.every(x=>x.train.trades>=0&&x.validation.trades>=0&&x.holdout.trades>=0));
  assert.ok(a.families.every(x=>x.status!=="APPROVED_FOR_EXECUTION"));
 });
+
+test("PDF FVG first-retest family needs a pre-existing wick gap and closed-bar rejection",()=>{
+ const start=Date.UTC(2026,8,1);
+ const data=Array.from({length:140},(_,i)=>{
+  const close=100+i*.1,open=close-.05;
+  return {timestamp:start+i*TF,open,close,high:close+.3,low:open-.3};
+ });
+ data[109]={...data[109],open:110.85,close:111.55,high:111.7,low:110.7};
+ data[110]={...data[110],open:111.7,close:111.95,high:112.1,low:111.5};
+ for(let i=111;i<=113;i++)
+  data[i]={...data[i],open:111.9,close:112,high:112.3,low:111.7};
+ data[114]={...data[114],open:111.7,close:111.9,high:112.1,low:111.45};
+ const normalized=lab.normalize(data);
+ const signal=lab.signalAt(normalized,114,"fvg_retest");
+ assert.ok(signal,"a first revisit after a previously formed bullish wick gap should be detectable");
+ assert.equal(signal.side,1);
+ assert.equal(signal.family,"fvg_retest");
+ const futureChanged=normalized.map((b,i)=>i>114?{...b,open:150,high:170,low:140,close:160}:b);
+ assert.deepEqual(lab.signalAt(futureChanged,114,"fvg_retest"),signal);
+});
