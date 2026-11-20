@@ -11,13 +11,16 @@ test("all 14 exact video URLs are preserved, none falsely marked processed",()=>
  "ddp6ZIqmaOc","sZhdaMr-fFY","8jtLFS7ZJxo","nLCeDXzJiI8",
  "GeWGu7mBvIc","7HXYhinEkRI"
  ]);
- assert.ok(a.SOURCE_CATALOG.every(s=>s.content_status==="AWAITING_ACCESSIBLE_TRANSCRIPT"&&
+ assert.ok(a.SOURCE_CATALOG.every(s=>s.content_status==="TIMECODED_CAPTIONS_INDEXED_UNAUDITED"&&
+  s.captions_indexed&&s.evidence_anchors.length>=2&&
   !s.transcript_verified&&!s.orders_authorized));
 });
 test("MT5 OHLC cannot masquerade as CVD, footprint, L2 iceberg or true Volume Profile",()=>{
  const r=a.curriculumStatus();
  assert.equal(r.linked_sources,14);
  assert.equal(r.content_read,0);
+ assert.equal(r.captions_indexed,14);
+ assert.equal(r.caption_evidence_leads,28);
  assert.equal(r.transcripts_verified,0);
  assert.equal(r.autonomous_broker_orders,false);
  assert.equal(r.concept_research.find(x=>x.id==="volume_profile").status,"DATA_UNAVAILABLE");
@@ -61,4 +64,14 @@ test("curriculum is separate from independent demo execution order path",()=>{
  const runner=fs.readFileSync(path.join(__dirname,"../worker/cloud-trader/runner.js"),"utf8");
  assert.doesNotMatch(core,/amt-curriculum/);
  assert.doesNotMatch(runner,/amt-curriculum/);
+});
+
+test("all 14 videos have caption-derived timecoded leads but no unverified authorizations",()=>{
+ const e=require("../brain/amt-evidence.js");
+ assert.equal(e.validate(),true);
+ assert.equal(e.EVIDENCE.length,14);
+ assert.deepEqual(e.EVIDENCE.map(x=>x.id),a.IDS);
+ assert.ok(e.EVIDENCE.every(x=>x.caption_accessed&&
+   !x.audio_verified&&x.anchors.length>=2&&
+   x.anchors.every(p=>!p.video_specific_strategy_validated&&!p.execution_enabled)));
 });
