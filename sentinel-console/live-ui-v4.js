@@ -231,6 +231,21 @@ window.SentinelLive=(()=>{
     const curriculum=d.amt_curriculum||{};
     const sources=Array.isArray(curriculum.sources)?curriculum.sources:[];
     const concepts=Array.isArray(curriculum.concept_research)?curriculum.concept_research:[];
+    const pdf=d.pdf_curriculum||{};
+    const pdfSources=Array.isArray(pdf.sources)?pdf.sources:[];
+    const pdfHypotheses=Array.isArray(pdf.hypotheses)?pdf.hypotheses:[];
+    const scan=d.source_patterns||null;
+    const pdfSourceRows=pdfSources.map(p=>
+      "<div class='sc-amt-pdf-source'><strong>"+safe(p.name)+"</strong>"+
+      "<small>"+n(p.pages,0)+" صفحة · "+n(p.reviewed_sections?.length,0)+" أقسام مفهرسة · "+safe(p.review_status)+"</small></div>").join("");
+    const pdfHypothesisRows=pdfHypotheses.map(h=>
+      "<div class='sc-amt-concept'><div><strong>"+safe(h.label)+"</strong>"+
+      "<small>"+safe(h.detector)+" · "+safe(h.source_refs?.map(r=>r[0]+" p."+r[1]).join(", ")||"")+"</small></div>"+
+      "<span class='"+(h.missing_inputs?.length?"sc-amt-disabled":"sc-amt-pending")+"'>"+
+      (h.missing_inputs?.length?"نقص بيانات":h.detector==="SEQUENCE_NOT_IMPLEMENTED"?"قيد التطوير":"بحث فقط")+
+      "</span></div>").join("");
+    const scanCounts=scan?.counts?Object.entries(scan.counts).map(([k,v])=>safe(k)+": "+n(v,0)).join(" · "):"لم يبدأ فحص النماذج من العامل المنشور بعد";
+
     const conceptRows=concepts.map(c=>
       "<div class='sc-amt-concept'><div><strong>"+safe(c.label)+"</strong>"+
       "<small>"+safe(c.notice)+"</small></div><span class='"+(c.missing_inputs?.length?"sc-amt-disabled":"sc-amt-pending")+"'>"+
@@ -250,6 +265,12 @@ window.SentinelLive=(()=>{
       "<div class='sc-amt-note'>فهرسنا ترجمة آلية موقّتة للحلقات الـ14 وحددنا مواضع تعليمية، لكنها لم تُراجع مقابل الصوت. لا تعتبر الأفكار استراتيجيات رابحة أو معتمدة قبل الاختبار المستقل.</div>"+
       "<div class='sc-research-title'>مفاهيم ممكن نختبرها — حسب البيانات المتاحة</div>"+
       "<div class='sc-amt-concepts'>"+conceptRows+"</div>"+
+      "<div class='sc-research-title'>8 ملفات PDF · "+n(pdf.proposed_rule_count,0)+" فرضيات بحث</div>"+
+      "<div class='sc-amt-note'>استخرجنا المفاهيم من صفحات محددة. الفرضيات غير مثبتة الربحية ولا تتيح أوامر تداول. بعض قواعد Order Flow تحتاج بيانات أعمق من MT5.</div>"+
+      "<div class='sc-amt-concepts'>"+pdfHypothesisRows+"</div>"+
+      "<div class='sc-amt-note'>رصد الشموع: "+scanCounts+"</div>"+
+      "<details class='sc-amt-details'><summary>مصادر PDF الثمانية وصفحاتها</summary>"+
+      "<div class='sc-amt-pdfs'>"+pdfSourceRows+"</div></details>"+
       "<details class='sc-amt-details'><summary>الروابط الـ14 الأصلية</summary>"+
       "<div class='sc-amt-sources'>"+sourceRows+"</div></details></section>";
   }
