@@ -7,6 +7,7 @@
 const crypto=require("node:crypto");
 const {provider}=require("./provider.js");
 const c=require("./core.js");
+const weekly=require("./weekly-selector.js");
 function decrypt(cipher,key){
  if(!/^[0-9a-f]{64}$/i.test(key||""))throw Error("CLOUD_ENCRYPTION_KEY_REQUIRED");
  const parts=String(cipher||"").split(".");
@@ -225,7 +226,18 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     }catch(e){row.contract_status="BROKER_CONTRACT_READ_FAILED";row.contract_error=clean(e.message)}
     // This isolated branch evaluates ONLY owner-PDF-derived setup families.
     // Brokerage writes still require independent DEMO account authorizations.
-    const signal=c.decide(symbol,m15,h1,now,"source_only");
+    // Run idempotent last-completed-week review from verified broker fills.
+    // A missing weekly table or bad data blocks this strategy's new entry.
+    let weeklyScore;
+    try{
+      weeklyScore=await weekly.ensureSnapshot(sql,a.id,symbol,now);
+      row.weekly_review_start=weeklyScore.weekStart;
+      row.strategy_priority=weeklyScore.policies;
+    }catch(e){
+      row.status="WEEKLY_STRATEGY_GATE_UNAVAILABLE";
+      row.error_code=clean(e?.message||"WEEKLY_REVIEW_FAILED");continue;
+    }
+    const signal=c.decide(symbol,m15,h1,now,"source_only",weeklyScore.policies);
     if(!signal){row.status="NO_VALID_CLOSED_BAR_SIGNAL";continue}
     row.signal_hash=c.keyFor(a.id,signal).slice(0,20);
     // Actual Sentinel brain research registry is consulted, but an
@@ -239,7 +251,14 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     row.source_pages=signal.source_pages||[];
     row.source_evidence=signal.evidence||"UNVERIFIED_SOURCE_HYPOTHESIS";
     row.edge_verified=false;
-    if(positions.length||orders.length){row.status="ACCOUNT_HAS_EXISTING_POSITION_OR_ORDER";continue}
+    row.weekly_priority=signal.weekly_priority;
+    // Permit other symbols while protecting existing MT5 positions.
+    // Unknown instrument tags or >1 existing account risk exposure fail closed.
+    const occupied=(items)=>items.some(x=>!x||typeof x.symbol!=="string"||
+      x.symbol.toUpperCase()===symbol.toUpperCase());
+    if(positions.length+orders.length>=2||occupied(positions)||occupied(orders)){
+      row.status="ACCOUNT_CAP_OR_SYMBOL_HAS_POSITION";continue;
+    }
     if(!quote||!specResult?.spec){row.status="BROKER_CONTRACT_UNAVAILABLE";continue}
     const ready=c.preflight({signal,quote,spec:specResult.spec,equity,
       accountCurrency:account.account?.currency,riskPct,now});
@@ -258,8 +277,9 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     // position snapshot taken before candle/spec requests.
     const [latestAccount,latestOrders]=await Promise.all([read.account(a.id),read.orders(a.id)]);
     if(latestAccount?.id!==a.id||latestAccount?.isDemo!==true||latestAccount?.status!=="online"||
-       latestAccount.account?.accountType!=="demo"||strictPositions(latestAccount.positions).length||
-       strictOrders(latestOrders).length){
+       latestAccount.account?.accountType!=="demo"||
+       strictPositions(latestAccount.positions).length+strictOrders(latestOrders).length>=2||
+       occupied(strictPositions(latestAccount.positions))||occupied(strictOrders(latestOrders))){
       row.status="STATE_CHANGED_BEFORE_ORDER";
       await sql`UPDATE sentinel_cloud_trader_intents SET status='NOT_SENT',updated_at=NOW()
        WHERE account_id=${a.id} AND signal_hash=${digest}`;
