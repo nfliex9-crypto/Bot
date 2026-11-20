@@ -6,7 +6,7 @@
  * M15 broker OHLC has no historical spread. Recent real quotes supply a
  * STRESSED COST PROXY, never a claim about historical execution costs.
  */
-const FAMILY=["sweep_reclaim","compression_breakout"];
+const FAMILY=["sweep_reclaim","compression_breakout","fvg_retest"];
 const VERSION="edge-lab-2026-11-19-v1";
 const TF=15*60000;
 function finite(x){return typeof x==="number"&&Number.isFinite(x)}
@@ -88,6 +88,23 @@ function signalAt(bars,i,family,cache=null){
     (b.high-Math.max(b.open,b.close))/range>=.42&&b.close<b.open)side=-1;
   else if(b.low<bottom-state.atr*.045&&b.close>bottom&&
     (Math.min(b.open,b.close)-b.low)/range>=.42&&b.close>b.open)side=1;
+ }else if(family==="fvg_retest"){
+  // Three-candle wick non-overlap from the owner-supplied Price Action
+  // Imbalance PDF (physical page 2). Test a FIRST revisit/rejection of the
+  // recorded zone, never an assumed guaranteed fill or real order-flow void.
+  // Signal on closed bar i, enter next bar using the existing cost proxy.
+  if(state.label==="RANGE")return null;
+  for(let j=i-3;j>=Math.max(52,i-28);j--){
+   const a=bars[j-2],m=bars[j-1],z=bars[j];
+   const bullGap=z.low>a.high+state.atr*.08&&m.close>m.open;
+   const bearGap=z.high<a.low-state.atr*.08&&m.close<m.open;
+   if(bullGap&&ema20>ema50&&b.low<=z.low&&b.close>z.low&&b.close>b.open){
+    if(!bars.slice(j+1,i).some(x=>x.low<=z.low)){side=1;break}
+   }
+   if(bearGap&&ema20<ema50&&b.high>=z.high&&b.close<z.high&&b.close<b.open){
+    if(!bars.slice(j+1,i).some(x=>x.high>=z.high)){side=-1;break}
+   }
+  }
  }else{
   // True contraction must precede the signal bar. Never include it in range.
   const recent=bars.slice(i-12,i),rh=Math.max(...recent.map(x=>x.high));
