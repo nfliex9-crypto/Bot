@@ -10,6 +10,7 @@ const broker=require("../brain/broker-ingestion.js");
 const {recordBrokerHypotheses}=require("../brain/broker-hypotheses.js");
 const {recordQuote}=require("../brain/quote-observer.js");
 const edgeLab=require("../brain/edge-lab.js");
+const sourcePatterns=require("../brain/source-patterns.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -89,6 +90,8 @@ async function runEdgeLab(sql,{account,symbol,now=new Date()}){
    AND observed_at>=NOW()-INTERVAL '7 days' AND spread>0
   ORDER BY observed_at DESC LIMIT 250`;
  const result=edgeLab.evaluate(closed,{spreads:quotes.map(q=>({spread:Number(q.spread)}))});
+ // Causal source-informed observations; no source can place broker orders.
+ const source_patterns=sourcePatterns.scanRecent(closed,{now:now.getTime(),tfMs:900000});
  const lastTime=new Date(closed.at(-1).timestamp).toISOString();
  await sql`INSERT INTO sentinel_edge_lab_runs
   (id,account_id,symbol,timeframe,version,dataset_last_bar,report)
@@ -98,6 +101,7 @@ async function runEdgeLab(sql,{account,symbol,now=new Date()}){
   DO NOTHING`;
  return {status:result.status,source:"BROKER_OHLC_WITH_RECENT_COST_PROXY",
   symbol,tf:"M15",last_bar:lastTime,broker_verified_edge:false,
+  source_patterns,
   families:result.families.map(x=>({
    family:x.family,status:x.status,train_n:x.train.trades,
    validation_n:x.validation.trades,validation_exp_r:x.validation.expectancy_r,
