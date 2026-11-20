@@ -3,8 +3,10 @@
  * AMT Bootcamp source registry and educational-data gate for Sentinel.
  * User supplied 14 URL IDs on 2026-11-20.
  *
- * No captions were available at registration time. The list is not a
- * transcription, summary, endorsement or attribution of any lesson.
+ * The owner-provided videos' accessible English caption tracks were inspected
+ * with vidIQ on 2026-11-20; auto-captions and visual explanations are
+ * NOT independently verified. Only short, original, timestamped research
+ * notes are stored, not the copyrighted full transcripts.
  * No source or inferred rule can authorize a brokerage order.
  */
 const crypto=require("node:crypto");
@@ -14,11 +16,44 @@ const IDS=Object.freeze([
  "ddp6ZIqmaOc","sZhdaMr-fFY","8jtLFS7ZJxo","nLCeDXzJiI8",
  "GeWGu7mBvIc","7HXYhinEkRI"
 ]);
+const TITLES=Object.freeze([
+ "Session 1 Q&A with Andrea Cimi",
+ "Session 2 Orderflow Bootcamp with Fabio Valentini",
+ "Session 3 Q&A with Andrea Cimi",
+ "Session 4 Orderflow Bootcamp with Fabio Valentini",
+ "Session 5 Q&A with Andrea Cimi",
+ "Session 6 Orderflow Bootcamp with Fabio Valentini",
+ "Session 7 Q&A with Andrea Cimi",
+ "Session 8 Orderflow Bootcamp with Fabio Valentini",
+ "Session 9 Orderflow with Fabio Valentini",
+ "Session 10 Orderflow with Andrea Cimi",
+ "Session 11 Orderflow with Andrea Cimi",
+ "Session 12 Orderflow with Fabio Valentini",
+ "Session 13 Orderflow with Fabio Valentini",
+ "Session 14 Orderflow with Fabio Valentini"
+]);
+const CAPTION_EVIDENCE=Object.freeze([
+ {id:IDS[0],seconds:2127,concept:"auction_balance",note:"Session value-area levels contextualize the auction; real volume-at-price is necessary for genuine VAH and VAL."},
+ {id:IDS[1],seconds:311,concept:"auction_balance",note:"A directional auction can flip through an earlier point of control and leave the previous balance."},
+ {id:IDS[2],seconds:2604,concept:"failed_auction",note:"After breakout, a pullback to the participating order-flow imbalance cluster can be an entry hypothesis; footprint data is required to confirm that cluster."},
+ {id:IDS[3],seconds:1002,concept:"failed_auction",note:"Compare effort and achieved price result when one side fails and the other drives the auction."},
+ {id:IDS[4],seconds:3174,concept:"auction_balance",note:"Avoid assuming directional edge in the middle of a range where price oscillates."},
+ {id:IDS[5],seconds:805,concept:"auction_balance",note:"Form a market narrative using direction, location and timing rather than an isolated candle."},
+ {id:IDS[6],seconds:2782,concept:"failed_auction",note:"Evaluate failed auction at a range boundary rather than automatically chasing every breakout."},
+ {id:IDS[7],seconds:3484,concept:"failed_auction",note:"The close back into a value area distinguishes acceptance from a rejection attempt."},
+ {id:IDS[8],seconds:1155,concept:"failed_auction",note:"A level break that fails on subsequent price action calls for context, not an immediate mechanical entry."},
+ {id:IDS[9],seconds:3696,concept:"delta_absorption",note:"Failed auction examples distinguish low-aggression exhaustion from absorption supported by footprint evidence."},
+ {id:IDS[10],seconds:303,concept:"auction_balance",note:"Define higher-timeframe directional bias, then wait for range failure or successful breakout confirmation."},
+ {id:IDS[11],seconds:2099,concept:"delta_absorption",note:"Large order-flow effort without matching price movement is proposed as evidence to investigate, not proof of future direction."},
+ {id:IDS[12],seconds:3058,concept:"delta_absorption",note:"Session control can be assessed from actual aggressive buying and selling; broker OHLC alone cannot verify this."},
+ {id:IDS[13],seconds:6351,concept:"auction_balance",note:"Price accepting progressively higher auction levels can suggest a regime transition requiring confirmation."}
+].map(x=>Object.freeze({...x,review:"CAPTION_PARAPHRASE_UNVERIFIED",orders_authorized:false,
+ source_url:"https://www.youtube.com/watch?v="+x.id+"&t="+x.seconds+"s"})));
 const SOURCE_CATALOG=Object.freeze(IDS.map((id,i)=>Object.freeze({
  id,order:i+1,url:"https://www.youtube.com/watch?v="+id,
- title:"Bootcamp — episode "+(i+1)+" (title not verified)",
- submitted_by:"owner",content_status:"AWAITING_ACCESSIBLE_TRANSCRIPT",
- video_verified:false, transcript_verified:false,notes_verified:false,
+ title:TITLES[i],submitted_by:"owner",content_status:"CAPTIONS_RETRIEVED_UNREVIEWED",
+ captions_accessible:true,captions_language:"en",caption_accessed_on:"2026-11-20",
+ video_verified:false,transcript_verified:false,notes_verified:false,
  orders_authorized:false
 })));
 const SOURCE_SET=new Set(IDS);
@@ -55,7 +90,7 @@ const DEMO_FEED=Object.freeze({
 function validateCatalog(){
  if(SOURCE_CATALOG.length!==14||SOURCE_SET.size!==14)throw Error("INVALID_BOOTCAMP_CATALOG");
  for(const s of SOURCE_CATALOG){
-  if(!/^[A-Za-z0-9_-]{11}$/.test(s.id)||!s.url.endsWith(s.id)||s.content_status!=="AWAITING_ACCESSIBLE_TRANSCRIPT"||
+  if(!/^[A-Za-z0-9_-]{11}$/.test(s.id)||!s.url.endsWith(s.id)||s.content_status!=="CAPTIONS_RETRIEVED_UNREVIEWED"||s.captions_accessible!==true||
      s.orders_authorized!==false)throw Error("INVALID_SOURCE_OR_STATUS");
  }
  return true;
@@ -63,9 +98,12 @@ function validateCatalog(){
 function curriculumStatus(feed=DEMO_FEED){
  return {
   linked_sources:SOURCE_CATALOG.length,
-  content_read:0,transcripts_verified:0,video_specific_claims:0,
+  content_read:SOURCE_CATALOG.length,captions_accessible:SOURCE_CATALOG.length,
+  transcript_language:"en",transcripts_verified:0,video_specific_claims:0,
+  timestamped_research_notes:CAPTION_EVIDENCE.length,
+  reviewed_research_rules:0,
   auto_train_model:false,autonomous_broker_orders:false,
-  state:"WAITING_FOR_VERIFIED_TRANSCRIPTS",
+  state:"CAPTIONS_RETRIEVED_RULES_UNREVIEWED",
   concept_research:CONCEPTS.map(c=>{
    const missing=c.required.filter(k=>feed[k]!==true);
    return {id:c.id,label:c.label,status:missing.length?"DATA_UNAVAILABLE":"RESEARCH_DATA_PRESENT_SOURCE_UNVERIFIED",
@@ -110,5 +148,5 @@ function proposedRule({conceptId,sourceId,evidenceTimestampSeconds,transcriptSha
   data_requirements:[...known.required],proven_in_backtest:false,
   proven_out_of_sample:false,forward_evidence:0,approved_for_execution:false};
 }
-module.exports={IDS,SOURCE_CATALOG,CONCEPTS,DEMO_FEED,validateCatalog,
+module.exports={IDS,TITLES,SOURCE_CATALOG,CAPTION_EVIDENCE,CONCEPTS,DEMO_FEED,validateCatalog,
   curriculumStatus,stageTranscript,proposedRule};
