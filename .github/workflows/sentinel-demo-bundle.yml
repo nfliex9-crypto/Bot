@@ -1,0 +1,46 @@
+name: Build isolated Sentinel DEMO Neon bundle
+
+on:
+  push:
+    branches: [sentinel-source-execution-v1]
+    paths:
+      - '.github/workflows/sentinel-demo-bundle.yml'
+      - 'sentinel-console/worker/**'
+      - 'sentinel-console/brain/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build self-contained DEMO research and order engine
+        working-directory: sentinel-console
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock @neondatabase/serverless@1 esbuild@0.25
+          mkdir -p /tmp/sentinel-function
+          ./node_modules/.bin/esbuild worker/neon-entry-bundle.mjs --bundle --platform=node --target=node24 --format=esm --outfile=/tmp/sentinel-function/index.mjs
+          node --check /tmp/sentinel-function/index.mjs
+          (cd /tmp/sentinel-function && zip -q /tmp/sentinel-function.zip index.mjs)
+          echo "BUNDLE_BYTES=$(stat -c%s /tmp/sentinel-function.zip)"
+          echo "BUNDLE_SHA256=$(sha256sum /tmp/sentinel-function.zip | cut -d' ' -f1)"
+      - name: Upload reproducible bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-demo-neon-bundle
+          path: /tmp/sentinel-function.zip
+          retention-days: 1
+      - name: Publish non-secret ZIP transport chunks for operator API deployment
+        run: |
+          set -euo pipefail
+          echo "ZIPCHUNKS_BEGIN"
+          base64 -w0 /tmp/sentinel-function.zip | fold -w 6000 | sed 's/^/ZIPCHUNK:/'
+          echo "ZIPCHUNKS_END"
