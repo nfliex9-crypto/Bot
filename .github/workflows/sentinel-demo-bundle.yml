@@ -29,6 +29,15 @@ jobs:
           mkdir -p /tmp/sentinel-function
           ./node_modules/.bin/esbuild worker/neon-entry-bundle.mjs --bundle --platform=node --target=node24 --format=esm --outfile=/tmp/sentinel-function/index.mjs
           node --check /tmp/sentinel-function/index.mjs
+          node --input-type=module -e '
+            const m=await import("file:///tmp/sentinel-function/index.mjs");
+            if(!m.default || typeof m.default.fetch!=="function") throw Error("INVALID_NEON_EXPORT");
+            const get=await m.default.fetch(new Request("https://test.invalid",{method:"GET"}));
+            if(get.status!==405) throw Error("GET_AUTH_GUARD_FAILED");
+            const post=await m.default.fetch(new Request("https://test.invalid",{method:"POST",body:"{}"}));
+            if(post.status!==401) throw Error("POST_AUTH_GUARD_FAILED");
+            console.log("NEON_BUNDLE_IMPORT_AND_AUTH_SMOKE_SUCCESS");
+          '
           (cd /tmp/sentinel-function && zip -q /tmp/sentinel-function.zip index.mjs)
           echo "BUNDLE_BYTES=$(stat -c%s /tmp/sentinel-function.zip)"
           echo "BUNDLE_SHA256=$(sha256sum /tmp/sentinel-function.zip | cut -d' ' -f1)"
