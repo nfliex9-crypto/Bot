@@ -6,6 +6,7 @@
  */
 const {neon}=require("@neondatabase/serverless");
 const amtCurriculum=require("../brain/amt-curriculum.js");
+const pdfCurriculum=require("../brain/pdf-curriculum.js");
 function send(res,status,body){
   res.setHeader("Cache-Control","private, no-store, max-age=0");
   res.setHeader("X-Content-Type-Options","nosniff");
@@ -224,6 +225,8 @@ module.exports=async function liveHandler(req,res){
           evidence_anchors:x.evidence_anchors
         }))
       },
+      pdf_curriculum:pdfCurriculum.status(),
+      source_patterns:research?.notes?.edge_lab?.source_patterns||null,
       edge_lab:[...edgeLatest.values()],markets,events:events.slice(0,12)};
     return send(res,200,result);
   }catch(e){
