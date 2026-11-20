@@ -8,6 +8,7 @@
  * No source or inferred rule can authorize a brokerage order.
  */
 const crypto=require("node:crypto");
+const captionEvidence=require("./amt-evidence.js");
 const IDS=Object.freeze([
  "z4Lq1IGmrS8","dqONJMI1rYM","LwDarLLYg8w","mQ45-sOiQ24",
  "9Ikd_J41kGw","YNersT1IG9s","I-6yE7UtJ5U","M4b8WVfqDtM",
@@ -17,8 +18,10 @@ const IDS=Object.freeze([
 const SOURCE_CATALOG=Object.freeze(IDS.map((id,i)=>Object.freeze({
  id,order:i+1,url:"https://www.youtube.com/watch?v="+id,
  title:"Bootcamp — episode "+(i+1)+" (title not verified)",
- submitted_by:"owner",content_status:"AWAITING_ACCESSIBLE_TRANSCRIPT",
+ submitted_by:"owner",content_status:"TIMECODED_CAPTIONS_INDEXED_UNAUDITED",
  video_verified:false, transcript_verified:false,notes_verified:false,
+ captions_indexed:captionEvidence.INDEX.get(id)?.caption_accessed===true,
+ evidence_anchors:captionEvidence.INDEX.get(id)?.anchors||[],
  orders_authorized:false
 })));
 const SOURCE_SET=new Set(IDS);
@@ -55,17 +58,20 @@ const DEMO_FEED=Object.freeze({
 function validateCatalog(){
  if(SOURCE_CATALOG.length!==14||SOURCE_SET.size!==14)throw Error("INVALID_BOOTCAMP_CATALOG");
  for(const s of SOURCE_CATALOG){
-  if(!/^[A-Za-z0-9_-]{11}$/.test(s.id)||!s.url.endsWith(s.id)||s.content_status!=="AWAITING_ACCESSIBLE_TRANSCRIPT"||
+  if(!/^[A-Za-z0-9_-]{11}$/.test(s.id)||!s.url.endsWith(s.id)||s.content_status!=="TIMECODED_CAPTIONS_INDEXED_UNAUDITED"||
+     s.captions_indexed!==true||
      s.orders_authorized!==false)throw Error("INVALID_SOURCE_OR_STATUS");
  }
- return true;
+ return captionEvidence.validate();
 }
 function curriculumStatus(feed=DEMO_FEED){
  return {
   linked_sources:SOURCE_CATALOG.length,
+  captions_indexed:captionEvidence.EVIDENCE.length,
+  caption_evidence_leads:captionEvidence.EVIDENCE.reduce((n,e)=>n+e.anchors.length,0),
   content_read:0,transcripts_verified:0,video_specific_claims:0,
   auto_train_model:false,autonomous_broker_orders:false,
-  state:"WAITING_FOR_VERIFIED_TRANSCRIPTS",
+  state:"TIMECODED_CAPTIONS_INDEXED_UNAUDITED",
   concept_research:CONCEPTS.map(c=>{
    const missing=c.required.filter(k=>feed[k]!==true);
    return {id:c.id,label:c.label,status:missing.length?"DATA_UNAVAILABLE":"RESEARCH_DATA_PRESENT_SOURCE_UNVERIFIED",
