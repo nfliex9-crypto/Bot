@@ -21,10 +21,10 @@ function parseCandles(raw,tf,now=Date.now()){
 }
 function ema(values,length){if(values.length<length)throw Error("INSUFFICIENT_EMA");let x=values.slice(0,length).reduce((a,b)=>a+b,0)/length;const k=2/(length+1);for(const v of values.slice(length))x+=k*(v-x);return x}
 function atr(bars){if(bars.length<16)throw Error("INSUFFICIENT_ATR");const tr=[];for(let i=1;i<bars.length;i++){const b=bars[i],p=bars[i-1];tr.push(Math.max(b.high-b.low,Math.abs(b.high-p.close),Math.abs(b.low-p.close)))}return tr.slice(-14).reduce((a,b)=>a+b,0)/14}
-function decide(symbol,m15,h1,now=Date.now(),strategyMode="baseline"){
+function decide(symbol,m15,h1,now=Date.now(),strategyMode="baseline",weeklyPriorities={}){
  if(!["baseline","source_only","source_first"].includes(strategyMode))throw Error("INVALID_STRATEGY_MODE");
  if(strategyMode!=="baseline"){
-  const source=sourceSignals.researchSignal(symbol,m15,h1,now);
+  const source=sourceSignals.researchSignal(symbol,m15,h1,now,weeklyPriorities);
   if(source||strategyMode==="source_only")return source;
  }
  if(m15.length<110||h1.length<90)return null;
