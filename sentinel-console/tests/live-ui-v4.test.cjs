@@ -60,7 +60,9 @@ test("V4 terminal renders only broker-grounded metrics, trade P&L and quote hist
  assert.match(html,/sc-chart-canvas/);
  assert.match(html,/مكتبة تعلّم السوق/);
  assert.match(html,/الروابط الـ14 الأصلية/);
- assert.match(html,/نصوص تم التحقق منها/);
+ assert.match(html,/نصوص موقّتة مفهرسة/);
+ assert.match(html,/مواضع تعلّم محددة/);
+ assert.match(html,/نصوص مفهرسة · غير مدققة/);
  assert.match(html,/https:\/\/www.youtube.com\/watch\?v=z4Lq1IGmrS8/);
  assert.match(html,/بحاجة بيانات/);
  assert.match(html,/sc-decision-strip/);
