@@ -295,3 +295,10 @@ border-radius:7px;padding:8px 9px;background:#112433;color:#d1e7ec;font-size:10p
 .sc-pdf-family>div:last-child{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
 .sc-pdf-family strong{font:700 13px 'IBM Plex Mono',monospace;color:#d8e9ee}
 .sc-pdf-family span{font:10px 'IBM Plex Mono',monospace;color:#97b7be}
+
+/* Accessible captions provenance: paraphrases, not approved signals. */
+.sc-amt-note-rows{padding:1px 15px 14px;display:grid;grid-template-columns:1fr;gap:7px}
+.sc-amt-research-note{padding:10px 11px;background:#102330;border:1px solid #2e4957;border-radius:9px}
+.sc-amt-research-note a{font:650 10px 'IBM Plex Mono',monospace;color:#8ce8c8;text-decoration:none;direction:ltr;display:block}
+.sc-amt-research-note a:hover{text-decoration:underline}
+.sc-amt-research-note p{font-size:10px;color:#9eb5c5;line-height:1.75;margin-top:5px}
