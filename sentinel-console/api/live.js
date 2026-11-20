@@ -54,7 +54,7 @@ module.exports=async function liveHandler(req,res){
       mode:"READ_ONLY",account:null,health:{trader:"NOT_STARTED",brain:research?.status||"NOT_STARTED"},
       trades:{intents:0,closed:0,net:null,currency:null,recent:[]},markets:[],events:[]});
     const accountId=String(last.account_id||"");
-    const [intents,fills,quotes,counts,auth,totalsByCurrency,scanHistory,researchHistory]=await Promise.all([
+    const [intents,fills,quotes,counts,auth,totalsByCurrency,scanHistory,researchHistory,edgeRuns]=await Promise.all([
       sql`SELECT signal_hash,symbol,family,side,status,created_at,updated_at,
           CASE WHEN broker_ticket IS NULL THEN false ELSE true END AS broker_ticket_recorded
           FROM sentinel_cloud_trader_intents WHERE account_id=${accountId}
@@ -88,7 +88,10 @@ module.exports=async function liveHandler(req,res){
           ORDER BY observed_at DESC LIMIT 18`,
       sql`SELECT started_at,finished_at,status,totals,markets_checked
           FROM sentinel_autonomy_cycles WHERE account_id=${accountId}
-          ORDER BY started_at DESC LIMIT 8`
+          ORDER BY started_at DESC LIMIT 8`,
+      sql`SELECT symbol,version,evaluated_at,report
+          FROM sentinel_edge_lab_runs WHERE account_id=${accountId}
+          ORDER BY evaluated_at DESC LIMIT 16`
     ]);
     const sumByCurrency=new Map(totalsByCurrency.map(x=>[x.currency,numeric(x.net)]));
     const cleanFills=fills.map(f=>{
@@ -138,6 +141,28 @@ module.exports=async function liveHandler(req,res){
     if(research?.finished_at)events.push({at:research.finished_at,type:"BRAIN_CYCLE",
       label:"دورة تحليل العقل",detail:research.status+" · "+(research.totals?.candidates??0)+" candidates"});
     events.sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
+    const edgeLatest=new Map();
+    for(const run of edgeRuns){
+      const symbol=String(run.symbol||"").slice(0,24);
+      if(!symbol||edgeLatest.has(symbol))continue;
+      const report=run.report||{};
+      edgeLatest.set(symbol,{symbol,at:run.evaluated_at,
+        version:String(run.version||"").slice(0,70),
+        status:String(report.status||"UNKNOWN").slice(0,70),
+        source:"BROKER_OHLC_RECENT_SPREAD_PROXY_NOT_HISTORICAL",
+        broker_verified_edge:false,execution_enabled:false,
+        bar_count:Number(report.bar_count)||0,
+        reference_spread_p90:numeric(report.reference_spread_p90),
+        families:(Array.isArray(report.families)?report.families:[]).slice(0,3).map(f=>({
+          family:String(f.family||"").slice(0,60),
+          status:String(f.status||"UNKNOWN").slice(0,60),
+          validation_n:Number(f.validation?.trades)||0,
+          validation_expectancy_r:numeric(f.validation?.expectancy_r),
+          stressed_expectancy_r:numeric(f.validation_stressed?.expectancy_r),
+          holdout_n:Number(f.holdout?.trades)||0,
+          holdout_report_only:true,execution_enabled:false
+        }))});
+    }
     const result={ok:true,mode:"READ_ONLY_LIVE_SNAPSHOTS",
       generated_at:new Date(now).toISOString(),
       trader_at:last.observed_at,
@@ -190,7 +215,7 @@ module.exports=async function liveHandler(req,res){
         reason:String(row.markets_checked?.[0]?.reason||"").slice(0,90),
         hypotheses:Number(row.markets_checked?.[0]?.hypotheses)||0
       })),
-      markets,events:events.slice(0,12)};
+      edge_lab:[...edgeLatest.values()],markets,events:events.slice(0,12)};
     return send(res,200,result);
   }catch(e){
     console.error("sentinel_live_api_error",String(e?.code||"READ_ERROR").slice(0,50));

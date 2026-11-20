@@ -9,6 +9,7 @@ const {refreshPublic}=require("../brain/public-feed.js");
 const broker=require("../brain/broker-ingestion.js");
 const {recordBrokerHypotheses}=require("../brain/broker-hypotheses.js");
 const {recordQuote}=require("../brain/quote-observer.js");
+const edgeLab=require("../brain/edge-lab.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -74,6 +75,35 @@ async function cacheBars(sql,account,symbol,tf){
  return rows.reverse().map(r=>({timestamp:new Date(r.bar_time).getTime(),open:Number(r.open),high:Number(r.high),
  low:Number(r.low),close:Number(r.close),spread:r.spread===null?null:Number(r.spread),
  tickVolume:r.tick_volume===null?null:Number(r.tick_volume)}));
+}
+/**
+ * Research-only: perform sealed train / validation / holdout evaluations.
+ * Never changes approved strategies, account configuration, or trading orders.
+ */
+async function runEdgeLab(sql,{account,symbol,now=new Date()}){
+ const recent=await cacheBars(sql,account,symbol,"M15");
+ const closed=recent.filter(b=>Number.isSafeInteger(b.timestamp)&&b.timestamp+900000<=now.getTime());
+ if(!closed.length)return {status:"NO_CLOSED_BARS"};
+ const quotes=await sql`SELECT spread FROM sentinel_autonomy_spread_observations
+  WHERE account_id=${account} AND symbol=${symbol}
+   AND observed_at>=NOW()-INTERVAL '7 days' AND spread>0
+  ORDER BY observed_at DESC LIMIT 250`;
+ const result=edgeLab.evaluate(closed,{spreads:quotes.map(q=>({spread:Number(q.spread)}))});
+ const lastTime=new Date(closed.at(-1).timestamp).toISOString();
+ await sql`INSERT INTO sentinel_edge_lab_runs
+  (id,account_id,symbol,timeframe,version,dataset_last_bar,report)
+  VALUES(${crypto.randomUUID()},${account},${symbol},'M15',
+   ${edgeLab.VERSION},${lastTime},${JSON.stringify(result)}::jsonb)
+  ON CONFLICT(account_id,symbol,timeframe,version,dataset_last_bar)
+  DO NOTHING`;
+ return {status:result.status,source:"BROKER_OHLC_WITH_RECENT_COST_PROXY",
+  symbol,tf:"M15",last_bar:lastTime,broker_verified_edge:false,
+  families:result.families.map(x=>({
+   family:x.family,status:x.status,train_n:x.train.trades,
+   validation_n:x.validation.trades,validation_exp_r:x.validation.expectancy_r,
+   stressed_validation_exp_r:x.validation_stressed.expectancy_r,
+   holdout_n:x.holdout.trades,holdout_report_only:true
+  }))};
 }
 async function assess(sql,{account,symbol,tf,bars,coverage,truncated,cycleId,now}){
  const old=await sql`SELECT spec FROM sentinel_autonomy_candidates WHERE account_id=${account} AND symbol=${symbol}
@@ -200,6 +230,7 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
       results.push(attempt);
       try{await recordAttempt(sql,demo.id,symbol,tf,attempt)}
       catch(e){notes.attempt_record_error=clean(e.message)}
+
     }else{
       notes.broker_imports="UP_TO_DATE";
       results.push({status:"HISTORY_REFRESH_NOT_DUE"});
@@ -216,6 +247,13 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
     }));
     notes.quotes=observations;
     notes.quote=observations.find(x=>x.status==="OBSERVED")||observations[0]||null;
+    // The broker-import queue can be idle while cached M15 is researchable.
+    // Rotate one market per 15-minute research slot, with no broker writes.
+    const laboratorySymbol=eligible[Math.floor(now.getUTCMinutes()/15)%Math.max(1,eligible.length)];
+    if(laboratorySymbol)try{
+      notes.edge_lab=await runEdgeLab(sql,{account:demo.id,symbol:laboratorySymbol,now});
+    }catch(e){notes.edge_lab_error=clean(e.message)}
+
   }else{
    notes.mode="CACHED_BROKER_REPLAY_ONLY";
    const cached=await sql`SELECT account_id,symbol,timeframe,MAX(bar_time) AS last_bar
@@ -283,4 +321,4 @@ async function main(){
  }
 }
 if(require.main===module)main().catch(e=>{console.error(clean(e.message));process.exitCode=1});
-module.exports={decrypt,fetchJSON,selectMarkets,researchCycle,runOnce,assess,harvest};
+module.exports={decrypt,fetchJSON,selectMarkets,researchCycle,runOnce,assess,harvest,runEdgeLab};
