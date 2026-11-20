@@ -5,6 +5,7 @@
  * no simulated equity curves, no fabricated quotes or strategy profitability.
  */
 const {neon}=require("@neondatabase/serverless");
+const amtCurriculum=require("../brain/amt-curriculum.js");
 function send(res,status,body){
   res.setHeader("Cache-Control","private, no-store, max-age=0");
   res.setHeader("X-Content-Type-Options","nosniff");
@@ -215,6 +216,13 @@ module.exports=async function liveHandler(req,res){
         reason:String(row.markets_checked?.[0]?.reason||"").slice(0,90),
         hypotheses:Number(row.markets_checked?.[0]?.hypotheses)||0
       })),
+      amt_curriculum:{
+        ...amtCurriculum.curriculumStatus(),
+        sources:amtCurriculum.SOURCE_CATALOG.map(x=>({
+          id:x.id,order:x.order,url:x.url,content_status:x.content_status,
+          transcript_verified:x.transcript_verified
+        }))
+      },
       edge_lab:[...edgeLatest.values()],markets,events:events.slice(0,12)};
     return send(res,200,result);
   }catch(e){
