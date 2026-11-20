@@ -32,6 +32,13 @@ const sample={
  amt_curriculum:{...curriculum.curriculumStatus(),
   sources:curriculum.SOURCE_CATALOG.map(x=>({order:x.order,id:x.id,url:x.url,
     content_status:x.content_status,transcript_verified:false}))},
+ pdf_playbook:[{symbol:"BTCUSD",at:at(-60000),closed_bars:780,higher_tf_coverage:.74,
+  status:"OHLC_PLUS_RECENT_SPREAD_COST_PROXY_ONLY",execution_enabled:false,families:[
+    {family:"sweep_displacement_confirm",status:"RESEARCH_NOT_PROVEN",train_n:7,
+     validation_n:3,val_expectancy_r:-.24,val_cost_stress_r:-.51,holdout_n:2},
+    {family:"displacement_fvg_retest",status:"RESEARCH_NOT_PROVEN",train_n:6,
+     validation_n:3,val_expectancy_r:.11,val_cost_stress_r:-.18,holdout_n:2}
+  ]}],
  scan_history:[{at:at(-60000),status:"COMPLETED",orders_sent:0,signals:0,blocked:0}],
  research_history:[{at:at(-120000),status:"COMPLETED",symbol:"BTCUSD",reason:"BROKER_DATA_QUALITY_GATE",hypotheses:22}],
  events:[{at:at(-90000),type:"BROKER_CLOSED",label:"<img src=x onerror=alert(1)>",symbol:"BTCUSD",detail:"SHORT",net:-43.66,currency:"EUR"}]
@@ -66,6 +73,10 @@ test("V4 terminal renders only broker-grounded metrics, trade P&L and quote hist
  assert.match(html,/sc-decision-strip/);
  assert.match(html,/بانتظار إشارة/);
  assert.match(html,/FORWARD \/ BROKER-VERIFIED DEMO/);
+ assert.match(html,/OWNER PDFS \/ CAUSAL STRATEGY LAB/);
+ assert.match(html,/مختبر المعرفة من 8 ملفات/);
+ assert.match(html,/sweep_displacement_confirm/);
+ assert.match(html,/SHADOW ONLY/);
  assert.match(html,/1 \/ 30/);
  assert.match(html,/<progress class='sc-feedback-track'/);
  assert.doesNotMatch(html,/style='/);
@@ -98,6 +109,8 @@ test("V4 API stays read-only and exposes real bounded scan/research histories",(
  assert.match(api,/amtCurriculum\.curriculumStatus/);
  assert.match(api,/research_history:researchHistory\.map/);
  assert.match(api,/forward_broker_feedback:research\?\.notes/);
+ assert.match(api,/sentinel_pdf_playbook_runs/);
+ assert.match(api,/pdf_playbook:\[\.\.\.pdfRecent.values\(\)\]/);
  assert.match(api,/sentinel_autonomy_spread_observations/);
  assert.match(html,/live-ui-v4\.js/);
  assert.match(html,/styles-v4\.css/);
