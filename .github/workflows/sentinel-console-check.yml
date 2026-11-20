@@ -2,7 +2,7 @@ name: Sentinel Console Build Checks
 
 on:
   push:
-    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118, sentinel-independent-trader-v1, sentinel-ui-v4-live, sentinel-edge-lab-v1, sentinel-amt-curriculum-v1, sentinel-pdf-research-v1]
+    branches: [sentinel-console-isolated-v1, sentinel-quant-hardening-20261118, sentinel-independent-trader-v1, sentinel-ui-v4-live, sentinel-edge-lab-v1, sentinel-amt-curriculum-v1, sentinel-pdf-research-v1, sentinel-amt-evidence-v2]
   workflow_dispatch:
 
 jobs:
