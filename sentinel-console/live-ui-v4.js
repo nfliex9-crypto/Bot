@@ -257,6 +257,7 @@ window.SentinelLive=(()=>{
   function amtPanel(d){
     const curriculum=d.amt_curriculum||{};
     const sources=Array.isArray(curriculum.sources)?curriculum.sources:[];
+    const researchNotes=Array.isArray(curriculum.research_notes)?curriculum.research_notes:[];
     const concepts=Array.isArray(curriculum.concept_research)?curriculum.concept_research:[];
     const conceptRows=concepts.map(c=>
       "<div class='sc-amt-concept'><div><strong>"+safe(c.label)+"</strong>"+
@@ -265,20 +266,28 @@ window.SentinelLive=(()=>{
     const sourceRows=sources.map(v=>
       "<a class='sc-amt-source' href='"+safe(v.url)+"' target='_blank' rel='noopener noreferrer'>"+
       "<span>"+safe(String(v.order).padStart(2,"0"))+"</span>"+
-      "<strong>الحلقة "+safe(v.order)+"</strong><small>النص غير متحقق</small>"+
+      "<strong>الحلقة "+safe(v.order)+"</strong>"+
+      "<small>"+(v.captions_accessible?"Captions EN":"الترجمة غير متاحة")+"</small>"+
       "<span aria-hidden='true'>↗</span></a>").join("");
+    const noteRows=researchNotes.map(n=>
+      "<div class='sc-amt-research-note'><a href='"+safe(n.source_url)+
+      "' target='_blank' rel='noopener noreferrer'>"+safe(n.concept)+" · "+
+      Math.floor(Number(n.seconds)/60)+":"+String(Number(n.seconds)%60).padStart(2,"0")+
+      "</a><p>"+safe(n.note)+"</p></div>").join("");
     return "<section class='sc-panel sc-amt'><div class='sc-section-header'><div>"+
       "<div class='sc-overline'>AMT BOOTCAMP / SOURCE INTELLIGENCE</div>"+
       "<h2>مكتبة تعلّم السوق</h2><p>14 مصدراً من المستخدم، والحالة من سجل التحقق لا من التخمين</p></div>"+
-      "<span class='sc-chip sc-chip-muted'><i></i>بانتظار النصوص</span></div>"+
+      "<span class='sc-chip sc-chip-muted'><i></i>نصوص متاحة · دون مراجعة مستقلة</span></div>"+
       "<div class='sc-amt-overview'><div><strong>"+n(curriculum.linked_sources,0)+"</strong><span>مصادر مسجّلة</span></div>"+
-      "<div><strong>"+n(curriculum.transcripts_verified,0)+"</strong><span>نصوص تم التحقق منها</span></div>"+
-      "<div><strong>"+n(curriculum.video_specific_claims,0)+"</strong><span>قواعد موثّقة من الحلقات</span></div></div>"+
-      "<div class='sc-amt-note'>الفهم الحقيقي يتطلب نصاً مؤقتاً موثّقاً للحلقة، ثم قاعدة قابلة للاختبار، ثم Forward Testing. لا توجد استراتيجية معتمدة من هالحلقات حالياً.</div>"+
+      "<div><strong>"+n(curriculum.captions_accessible,0)+"</strong><span>نصوص مترجمة متاحة</span></div>"+
+      "<div><strong>"+n(curriculum.reviewed_research_rules,0)+"</strong><span>قواعد اجتازت المراجعة</span></div></div>"+
+      "<div class='sc-amt-note'>استُرجعت الترجمة الإنجليزية لكل الحلقات الـ14، وتمت صياغة ملاحظات بحثية مرتبطة بتوقيتها. دقة الترجمة والسياق البصري لم تتم مراجعتهما مستقلاً، ولا توجد استراتيجية معتمدة من هالحلقات.</div>"+
       "<div class='sc-research-title'>مفاهيم ممكن نختبرها — حسب البيانات المتاحة</div>"+
       "<div class='sc-amt-concepts'>"+conceptRows+"</div>"+
       "<details class='sc-amt-details'><summary>الروابط الـ14 الأصلية</summary>"+
-      "<div class='sc-amt-sources'>"+sourceRows+"</div></details></section>";
+      "<div class='sc-amt-sources'>"+sourceRows+"</div>"+
+      "<div class='sc-research-title'>ملاحظات زمنية مرتبطة بمصادرها (غير معتمدة)</div>"+
+      "<div class='sc-amt-note-rows'>"+noteRows+"</div></details></section>";
   }
   function cycles(d){
     const rows=(d.scan_history||[]).slice().reverse();
