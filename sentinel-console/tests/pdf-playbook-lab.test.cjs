@@ -26,7 +26,7 @@ test("H1 bars must contain exactly four consecutive real M15 candles, no gap fil
  assert.equal(first.source,"FOUR_REAL_CONSECUTIVE_M15_BROKER_CANDLES");
  const trend=lab.trendSeries(lab.normalize(bars(600)));
  assert.equal(trend.trend[0],null);
- assert.equal(trend.trend[199],null); // only 49 completed H1 bars as of 200th M15
+ assert.equal(trend.trend[198],null); // 50th H1 closes only when M15 bar 199 closes
  assert.ok(trend.covered>0);
 });
 test("FVG requires three correctly ordered CLOSED candles, displacement and nontrivial gap",()=>{
