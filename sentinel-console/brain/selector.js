@@ -49,9 +49,8 @@ function expectancy(trades){
   winning_days:[...days.values()].filter(x=>sum(x)>0).length
  };
 }
-function assessForward(trades,{costStressR=.15,symbol=null}={}){
+function assessForward(trades,{symbol=null}={}){
  if(!Array.isArray(trades))throw Error("FORWARD_TRADES_EXPECTED");
- if(!Number.isFinite(costStressR)||costStressR<0||costStressR>2)throw Error("INVALID_COST_STRESS");
  const groups=new Map();
  const quality={records:trades.length,qualified:0,untagged:0,missing_risk:0,
   invalid_tags:0,invalid_time:0,duplicates:0,filtered_other_symbols:0,clipped_outliers:0};
@@ -80,7 +79,7 @@ function assessForward(trades,{costStressR=.15,symbol=null}={}){
   }
   quality.qualified++;
   // Winsorize extreme R outcomes for LEARNING only; raw broker P/L remains unchanged in Neon.
-  const rawR=profit/risk-costStressR;
+  const rawR=profit/risk;
   const netR=clamp(rawR,-5,5);
   if(netR!==rawR)quality.clipped_outliers++;
   const list=groups.get(strategy)||[];
@@ -94,7 +93,7 @@ function assessForward(trades,{costStressR=.15,symbol=null}={}){
   if(m.count>=25&&m.mean_r<-.1&&m.recent_mean_r<0&&
     m.profit_factor!==null&&m.profit_factor<.85){
    status="PAUSE_PAPER_RESEARCH";multiplier=0;
-   reason="Persistent negative expectancy after conservative cost stress";
+   reason="Persistent negative gross expectancy";
   }else if(m.count>=30&&m.last_10_mean_r<-.2&&m.recent_mean_r<0){
    status="PAUSE_PAPER_RESEARCH_DRIFT";multiplier=0;
    reason="Recent performance deterioration despite earlier results";
@@ -111,8 +110,9 @@ function assessForward(trades,{costStressR=.15,symbol=null}={}){
    relative_research_multiplier:multiplier,metrics:m,reason});
  }
  return {quality,strategy_results,orders_enabled:false,capital_risk_multiplier:1,
-  version:"adaptive-selector-v2",
-  note:"2X applies ONLY to paper research frequency/priority; never to position size. Costs are estimated and broker P/L may omit fees."};
+  version:"adaptive-selector-gross-v3",
+  score_basis:"BROKER_PROFIT_ONLY_NO_ESTIMATED_COSTS",
+  note:"2X applies ONLY to paper research frequency/priority; never to position size. Gross research scores are not broker net earnings."};
 }
 function scheduleResearch(backtest,forward){
  const findings=Array.isArray(backtest?.strategies)?backtest.strategies:[];
