@@ -78,16 +78,17 @@ test("incomplete source data cannot promote a strategy",()=>{
  assert.equal(r.portfolio.candidate_count,0);
  assert.ok(r.strategies.every(x=>x.status==="DATA_INCOMPLETE"));
 });
-test("missing spread history cannot promote a strategy",()=>{
- const r=brain.research(fixture(1000,{missingSpread:true}),{coverage:"complete",truncated:false});
- assert.equal(r.portfolio.candidate_count,0);
- assert.ok(r.strategies.every(x=>x.status==="COST_DATA_WEAK"));
+test("missing spread history does not change gross research assessment",()=>{
+ const a=brain.research(fixture(1000,{missingSpread:true}),{coverage:"complete",truncated:false});
+ const b=brain.research(fixture(1000,{missingSpread:false}),{coverage:"complete",truncated:false});
+ assert.deepEqual(a.strategies,b.strategies);
+ assert.ok(a.strategies.every(x=>x.score_basis==="GROSS_PRICE_ONLY_NO_TRANSACTION_COSTS"));
 });
-test("zero-priced spreads cannot masquerade as cost-free broker execution",()=>{
- const bars=fixture(950).map(b=>({...b,spread:0}));
- const result=brain.research(bars,{coverage:"complete",truncated:false});
- assert.equal(result.portfolio.candidate_count,0);
- assert.ok(result.strategies.every(x=>x.status==="COST_DATA_WEAK"));
+test("zero spread field is ignored for all gross backtest scoring",()=>{
+ const source=fixture(950),zero=source.map(b=>({...b,spread:0}));
+ const a=brain.research(source,{coverage:"complete",truncated:false});
+ const b=brain.research(zero,{coverage:"complete",truncated:false});
+ assert.deepEqual(a.strategies,b.strategies);
 });
 test("small candle samples cannot produce a trained strategy",()=>{
  const r=brain.research(fixture(250),{coverage:"complete",truncated:false});
@@ -111,7 +112,7 @@ test("intelligence code makes no requests to order execution routes",()=>{
 
 test("regime-aware research records trade market context without trading",()=>{
  const r=brain.research(fixture(1200),{coverage:"complete",truncated:false,timeframe:"M15"});
- assert.equal(r.version,"brain-research-v3");
+ assert.equal(r.version,"brain-research-gross-v4");
  assert.equal(r.quality.source_timeframe,"M15");
  assert.equal(r.quality.time_gap_events,0);
  for(const strat of r.strategies){
