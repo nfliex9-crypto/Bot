@@ -30,6 +30,12 @@ function buildBars(trades,opts){
   delete bar._levels;
   bar.cvd=sessionCvd;bar.cvdOverVolume=sessionVolume?sessionCvd/sessionVolume:0;
   bar.closed=bar.closeTime<=now;
+  bar.deltaPriceDisagreement=(bar.close>bar.open&&bar.delta<0)||
+    (bar.close<bar.open&&bar.delta>0);
+  bar.intrabarDeltaShift=bar.maxIntrabarDelta>0&&bar.minIntrabarDelta<0?
+    (bar.minIntrabarDeltaAt<bar.maxIntrabarDeltaAt?"MIN_TO_MAX":"MAX_TO_MIN"):
+    "NO_TWO_SIDED_EXTREMA";
+  bar.absorptionProven=false; // Divergence can suggest absorption, never prove an iceberg.
   out.push(bar);
  };
  for(const t of trades){
@@ -49,6 +55,7 @@ function buildBars(trades,opts){
    bar={venue,symbol,sessionId:t.sessionId,barMs,openTime,closeTime:openTime+barMs,
     open:t.price,high:t.price,low:t.price,close:t.price,volume:0,
     buyVolume:0,sellVolume:0,delta:0,maxIntrabarDelta:0,minIntrabarDelta:0,
+    maxIntrabarDeltaAt:openTime,minIntrabarDeltaAt:openTime,
     sourceQuality:QUALITY,_levels:new Map()};
   }
   const signed=t.aggressorSide==="BUY"?t.size:-t.size;
@@ -56,8 +63,8 @@ function buildBars(trades,opts){
   bar.volume+=t.size;
   if(signed>0)bar.buyVolume+=t.size;else bar.sellVolume+=t.size;
   bar.delta+=signed;
-  bar.maxIntrabarDelta=Math.max(bar.maxIntrabarDelta,bar.delta);
-  bar.minIntrabarDelta=Math.min(bar.minIntrabarDelta,bar.delta);
+  if(bar.delta>bar.maxIntrabarDelta){bar.maxIntrabarDelta=bar.delta;bar.maxIntrabarDeltaAt=t.time;}
+  if(bar.delta<bar.minIntrabarDelta){bar.minIntrabarDelta=bar.delta;bar.minIntrabarDeltaAt=t.time;}
   sessionCvd+=signed;sessionVolume+=t.size;
   const tick=Math.round(t.price/tickSize),price=Number((tick*tickSize).toFixed(10));
   let level=bar._levels.get(tick);
