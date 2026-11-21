@@ -99,8 +99,8 @@ function candidate(id,side,bars,detail){return {id,side,source:"ORDERFLOWS_DELTA
 function detectSurge(bars){
  const x=bars.slice(-4);if(x.length!==4||!contiguous(x))return [];
  const [a,b,c,d]=x.map(y=>y.delta);
- if(a<0&&b>0&&c>b&&d>c)return [candidate("delta_surge","LONG",x,{pattern:"negative_then_three_increasing_positive_deltas"})];
- if(a>0&&b<0&&c<b&&d<c)return [candidate("delta_surge","SHORT",x,{pattern:"positive_then_three_decreasing_negative_deltas"})];
+ if(a<0&&b>0&&c>b&&d>c)return [candidate("delta_surge","LONG",x,{pattern:"negative_then_three_increasing_positive_deltas",variant:"FOUR_BAR_VISUAL_EXAMPLE_NOT_UNIVERSAL_REQUIREMENT"})];
+ if(a>0&&b<0&&c<b&&d<c)return [candidate("delta_surge","SHORT",x,{pattern:"positive_then_three_decreasing_negative_deltas",variant:"FOUR_BAR_VISUAL_EXAMPLE_NOT_UNIVERSAL_REQUIREMENT"})];
  return [];
 }
 function detectDivergence(bars,{swingLookback,equalTolerance}={}){
@@ -142,14 +142,32 @@ function detectFlips(bars,{nearExtremeTolerance,allowOneInterveningBar=false}={}
  }
  return {signals,blocked:null};
 }
+
+// Lesson 3 ~26:37: session CVD/volume near zero (balance) followed by strong
+// directional Delta. The instructor gives NO numerical cutoffs. Research only.
+function detectCvdVolumeBalanceBreak(bars,{nearZeroRatioTolerance,strongDeltaThreshold}={}){
+ if(!finite(nearZeroRatioTolerance)||nearZeroRatioTolerance<0||nearZeroRatioTolerance>1||
+    !finite(strongDeltaThreshold)||strongDeltaThreshold<=0)
+  return {signals:[],blocked:"RESEARCH_CVD_VOLUME_BALANCE_AND_STRONG_DELTA_THRESHOLDS_REQUIRED"};
+ const x=bars.slice(-2);
+ if(x.length!==2||!contiguous(x)||!x.every(b=>finite(b.cvdOverVolume)))
+  return {signals:[],blocked:null};
+ const [prior,last]=x;
+ if(Math.abs(prior.cvdOverVolume)>nearZeroRatioTolerance||
+    Math.abs(last.delta)<strongDeltaThreshold)return {signals:[],blocked:null};
+ return {signals:[candidate("cvd_volume_balance_break",last.delta>0?"LONG":"SHORT",x,
+  {nearZeroRatioTolerance,strongDeltaThreshold,sourceNote:"LESSON_3_26M37S"})],blocked:null};
+}
+
 /** Evaluate only research signals; never submit MT5 orders. */
 function evaluate(bars,params={},now=Date.now()){
  const error=validateBars(bars,now);
  if(error)return {status:"DATA_BLOCKED",reason:error,signals:[],executionEnabled:false};
- const divergence=detectDivergence(bars,params),flips=detectFlips(bars,params);
- return {status:"RESEARCH_ONLY",signals:[...detectSurge(bars),...divergence.signals,...flips.signals],
-  blockedParameters:[divergence.blocked,flips.blocked].filter(Boolean),
+ const divergence=detectDivergence(bars,params),flips=detectFlips(bars,params),
+  cvdBalance=detectCvdVolumeBalanceBreak(bars,params);
+ return {status:"RESEARCH_ONLY",signals:[...detectSurge(bars),...divergence.signals,...flips.signals,...cvdBalance.signals],
+  blockedParameters:[divergence.blocked,flips.blocked,cvdBalance.blocked].filter(Boolean),
   unimplementedFromVideo:["delta_transition","delta_tails","delta_bulges","delta_reversal"],
   executionEnabled:false};
 }
-module.exports={QUALITY,buildBars,validateBars,detectSurge,detectDivergence,detectFlips,evaluate};
+module.exports={QUALITY,buildBars,validateBars,detectSurge,detectDivergence,detectFlips,detectCvdVolumeBalanceBreak,evaluate};
