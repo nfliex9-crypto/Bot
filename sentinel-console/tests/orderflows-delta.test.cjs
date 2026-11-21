@@ -72,6 +72,19 @@ test("lesson 3 CVD/volume balance break requires researched numerical thresholds
  assert.equal(r.signals[0].side,"LONG");
  assert.equal(r.signals[0].executionEnabled,false);
 });
+
+test("delta-price disagreement and Min->Max/Max->Min shifts are diagnostics, not proven icebergs",()=>{
+ const t=mk(0,[2,-5,4]);
+ t[0].price=100;t[1].price=101;t[2].price=102;
+ const b=e.buildBars(t,opts)[0];
+ assert.equal(b.deltaPriceDisagreement,false); // positive final Delta and rising price
+ assert.equal(b.intrabarDeltaShift,"MAX_TO_MIN"); // first +2 then -3, later +1
+ assert.equal(b.absorptionProven,false);
+ const t2=mk(1,[-5,1]);t2[0].price=100;t2[1].price=101;
+ const b2=e.buildBars(t2,opts)[0];
+ assert.equal(b2.deltaPriceDisagreement,true);
+ assert.equal(b2.absorptionProven,false);
+});
 test("Sentinel core exposes the course without enabling broker execution",()=>{
  const core=require("../worker/cloud-trader/core.js");
  assert.equal(core.deltaCurriculum.status().setupCount,7);
