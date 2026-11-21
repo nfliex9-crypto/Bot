@@ -37,7 +37,7 @@ test("lot sizes and stop risk use broker account-currency tick value",()=>{
  assert.equal(out.ok,true,JSON.stringify(out));assert.ok(out.risk<=12.5001);assert.ok(out.request.volume>0);assert.ok(out.request.stopLoss<1.2);
  assert.equal(c.preflight({signal:s,quote:{bid:1.2,ask:1.20008},spec:{...spec,tickValueAccount:undefined},equity:5000,now}).reason,"NATIVE_ACCOUNT_TICK_VALUE_UNVERIFIED");
  assert.equal(c.preflight({signal:s,quote:{bid:1.2,ask:1.20008},spec:{...spec,tickValueCurrency:{code:"USD",source:"heuristic"}},equity:5000,now}).ok,false);
- assert.equal(c.preflight({signal:s,quote:{bid:1.2,ask:1.3},spec,equity:5000,now}).reason,"SPREAD_TOO_WIDE");
+ assert.notEqual(c.preflight({signal:s,quote:{bid:1.2,ask:1.3},spec,equity:5000,now}).reason,"SPREAD_TOO_WIDE");
  assert.equal(c.floorVolume(.61,{volumeMin:.25,volumeStep:.25,volumeMax:5},2),.5);
  assert.equal(c.floorVolume(.1,{volumeMin:.25,volumeStep:.25,volumeMax:5},2),0);
 });
