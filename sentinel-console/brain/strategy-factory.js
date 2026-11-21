@@ -67,7 +67,7 @@ function signal(spec,bars,ind,i){
  }
  return 0;
 }
-function simulate(bars,ind,spec,start,end,costFactor=1){
+function simulate(bars,ind,spec,start,end){
  if(start<LOOKBACK||end>bars.length||start>=end)throw Error("INVALID_FOLD");
  const trades=[];let position=null;
  for(let i=start;i<end;i++){
@@ -80,10 +80,7 @@ function simulate(bars,ind,spec,start,end,costFactor=1){
    else if(targetHit){exit=p.target;reason="target";}
    else if(i-p.entryIndex>=spec.hold||i===end-1){exit=b.close;reason="time";}
    if(exit!==null){
-    // Per-side price-adjusted spread + slippage proxy. Can only make outcomes worse.
-    const spread=b.spread??b.close*.00015,drag=Math.max(spread,b.close*.0001)*costFactor/2+b.close*.00002*costFactor;
-    const filledExit=exit-p.dir*drag;
-    const rr=(filledExit-p.entry)*p.dir/p.risk;
+    const rr=(exit-p.entry)*p.dir/p.risk;
     if(Number.isFinite(rr))trades.push({rr,entryTime:p.entryTime,time:b.timestamp,reason});
     position=null;
    }
@@ -91,10 +88,8 @@ function simulate(bars,ind,spec,start,end,costFactor=1){
   if(position||i>=end-1||!Number.isFinite(ind[i].atr)||ind[i].atr<=0)continue;
   const dir=signal(spec,bars,ind,i);
   if(!dir)continue;
-  const next=bars[i+1],risk=Math.max(ind[i].atr*spec.stopATR,next.open*.00015);
-  const spread=next.spread??next.open*.00015;
-  const cost=Math.max(spread,next.open*.0001)*costFactor/2+next.open*.00002*costFactor;
-  const entry=next.open+dir*cost;
+  const next=bars[i+1],risk=ind[i].atr*spec.stopATR;
+  const entry=next.open;
   position={entry,dir,entryIndex:i+1,risk,entryTime:next.timestamp,
     stop:entry-dir*risk,target:entry+dir*risk*spec.rewardR};
  }
@@ -106,18 +101,18 @@ function scoreFamily(candles,options={}){
  const allSpecs=[...seeds(),...createChildren(options.parents||[],options.cycleId||"")];
  const unique=[...new Map(allSpecs.map(s=>[s.id,s])).values()];
  const info={source:"broker_OHLC_only",coverage:options.coverage||"unknown",truncated:options.truncated===true,
-    count:bars.length,missing_spread_ratio:quality.missing_spread_ratio,
+    count:bars.length,score_basis:"GROSS_PRICE_ONLY_NO_TRANSACTION_COSTS",
     rejected_rows:quality.rejected_rows,sampled_candidates:unique.length};
- if(bars.length<900||!complete||quality.missing_spread_ratio>.25||
+ if(bars.length<900||!complete||
     quality.rejected_rows>0||quality.duplicate_rows>0){
   return {status:"INSUFFICIENT_REAL_HISTORY",quality:info,
    candidates:[],orders_enabled:false,reason:bars.length<900?"MIN_900_BARS_REQUIRED":
-    !complete?"INCOMPLETE_PROVIDER_COVERAGE":"BROKER_COST_OR_DATA_QUALITY_WEAK"};
+    !complete?"INCOMPLETE_PROVIDER_COVERAGE":"PRICE_HISTORY_QUALITY_WEAK"};
  }
  const indicators=core.indicators(bars),n=bars.length,validationStart=Math.floor(n*.5),heldStart=Math.floor(n*.75);
  const candidates=unique.map(spec=>{
-  const validation=simulate(bars,indicators,spec,validationStart,heldStart,2);
-  const heldout=simulate(bars,indicators,spec,heldStart,n,2);
+  const validation=simulate(bars,indicators,spec,validationStart,heldStart);
+  const heldout=simulate(bars,indicators,spec,heldStart,n);
   const val=core.metrics(validation),test=core.metrics(heldout);
   const bootstrap=blockBootstrap(validation,{strategyId:spec.id,
     strategyCount:unique.length,minDays:12,resamples:512});
