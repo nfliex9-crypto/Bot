@@ -170,8 +170,8 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
   // increased risk, or fresh order is allowed from a small sample.
   if(demo)try{
     const feedback=await sql`SELECT symbol,family,currency,COUNT(*)::int AS closed,
-       COUNT(*) FILTER (WHERE profit+swap+commission>0)::int AS winners,
-       SUM(profit+swap+commission) AS booked_net,
+       COUNT(*) FILTER (WHERE profit>0)::int AS winners,
+       SUM(profit) AS booked_gross,
        MAX(close_time) AS last_close
        FROM sentinel_cloud_trader_fills WHERE account_id=${demo.id}
        GROUP BY symbol,family,currency ORDER BY MAX(close_time) DESC LIMIT 12`;
@@ -184,7 +184,7 @@ async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
       strategies:feedback.map(r=>({symbol:r.symbol,family:r.family,
         currency:r.currency,closed:Number(r.closed)||0,
         winners:Number(r.winners)||0,
-        booked_net:Number(r.booked_net)||0,last_close:r.last_close}))
+        booked_gross:Number(r.booked_gross)||0,score_basis:"BROKER_PROFIT_ONLY",last_close:r.last_close}))
     };
   }catch(e){notes.forward_feedback_error=clean(e.message)}
   notes.selected_demo_last4=demo?String(demo.accountNumber||'').slice(-4):null;
