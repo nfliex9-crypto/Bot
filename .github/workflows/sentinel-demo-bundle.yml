@@ -7,6 +7,8 @@ on:
       - '.github/workflows/sentinel-demo-bundle.yml'
       - 'sentinel-console/worker/**'
       - 'sentinel-console/brain/**'
+  pull_request:
+    branches: [sentinel-source-execution-v1]
   workflow_dispatch:
 
 permissions:
