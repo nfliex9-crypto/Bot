@@ -11,6 +11,7 @@ const {recordBrokerHypotheses}=require("../brain/broker-hypotheses.js");
 const {recordQuote}=require("../brain/quote-observer.js");
 const edgeLab=require("../brain/edge-lab.js");
 const sourcePatterns=require("../brain/source-patterns.js");
+const deltaVideoCourse=require("../brain/orderflows-delta-curriculum.js");
 const SERVICE="sentinel-autonomy";
 const API="https://api.tickerall.com";
 function clean(x){return String(x??"").replace(/[\r\n\x00-\x1f]/g," ").slice(0,120)}
@@ -147,6 +148,9 @@ async function harvest(sql,now,fetcher){
 }
 async function researchCycle(sql,{now=new Date(),fetcher=fetchJSON}={}){
  const id=crypto.randomUUID(),results=[],notes={};let status="COMPLETED",accountId=null;
+ // Persist transparent course readiness in each RESEARCH cycle; no tape or
+ // Delta-derived broker order is invented from an MT5 candle-only feed.
+ notes.delta_course=deltaVideoCourse.status();
  await sql`INSERT INTO sentinel_autonomy_cycles(cycle_id,status) VALUES(${id},'RUNNING')`;
  try{
   const config=await sql`SELECT cipher_value FROM sentinel_mt5_cloud_config WHERE config_key='tickerall_api_token' LIMIT 1`;
