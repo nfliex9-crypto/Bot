@@ -66,7 +66,9 @@ test("source-derived four-bar surge LONG and SHORT, with no order permission",()
  assert.equal(r.events.every(x=>x.execution_enabled===false),true);
 });
 test("a four-bar pattern across missing candles cannot count as surge",()=>{
- const b=onePerBar([-2,1,3,5]);b[2]={...b[2],start:b[2].start+MS,end:b[2].end+MS};
+ const b=onePerBar([-2,1,3,5]);
+ b[2]={...b[2],start:b[2].start+MS,end:b[2].end+MS};
+ b[3]={...b[3],start:b[3].start+MS,end:b[3].end+MS};
  assert.equal(e.scan(b).events.filter(x=>x.id==="delta_surge").length,0);
 });
 test("divergence requires explicit research pivot and equality convention",()=>{
