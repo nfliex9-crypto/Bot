@@ -89,7 +89,8 @@ test("delta flips require real intrabar extrema and explicit near fraction",()=>
  assert.equal(r.events[0].execution_enabled,false);
 });
 test("allowing a single intervening bar is opt-in and documented",()=>{
- const b=onePerBar([-5,1,7]);
+ const b=aggregate([trade(0,1,"SELL",5),trade(1,2,"BUY",2),
+  trade(1,3,"SELL",2),trade(2,4,"BUY",7)]).closed_bars;
  assert.equal(e.scan(b,{nearExtremeFraction:0}).events.filter(x=>x.id==="delta_flips").length,0);
  assert.ok(e.scan(b,{nearExtremeFraction:0,allowInterveningFlip:true}).events.some(
   x=>x.id==="delta_flips"&&x.gap_bars===1&&x.side==="LONG"));
