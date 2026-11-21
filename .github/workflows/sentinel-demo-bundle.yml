@@ -2,7 +2,7 @@ name: Build isolated Sentinel DEMO Neon bundle
 
 on:
   push:
-    branches: [sentinel-source-execution-v1]
+    branches: [sentinel-source-execution-v1, sentinel-orderflows-delta-course-v1]
     paths:
       - '.github/workflows/sentinel-demo-bundle.yml'
       - 'sentinel-console/worker/**'
