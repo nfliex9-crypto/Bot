@@ -39,14 +39,14 @@ test("two recent losses never cause deletion, even if PnL negative",()=>{
 test("bad or unverified records must not be treated as real broker fills",()=>{
  assert.throws(()=>weekly.evaluate([{...trade("pdf_fvg_retest","2026-11-12",10),brokerVerified:false}],
   {symbol:"XAUUSD",now}),/UNVERIFIED/);
- assert.throws(()=>weekly.evaluate([{...trade("pdf_fvg_retest","2026-11-12",10),commission:null}],
-  {symbol:"XAUUSD",now}),/INCOMPLETE/);
+ assert.throws(()=>weekly.evaluate([{...trade("pdf_fvg_retest","2026-11-12",10),profit:null}],
+  {symbol:"XAUUSD",now}),/MISSING_BROKER_PROFIT/);
 });
-test("scoring uses net fees and correct symbol",()=>{
+test("weekly scoring uses gross broker profit and correct symbol",()=>{
  const x=[trade("pdf_sweep_bos","2026-11-12",10,-15),
           trade("pdf_fvg_retest","2026-11-12",500,0,"BTCUSD")];
  const p=weekly.evaluate(x,{symbol:"XAUUSD",now});
- assert.equal(p.profiles.find(x=>x.family==="pdf_sweep_bos").week.net,-5);
+ assert.equal(p.profiles.find(x=>x.family==="pdf_sweep_bos").week.net,10);
  assert.equal(p.profiles.find(x=>x.family==="pdf_fvg_retest").week.trades,0);
 });
 test("source selector refuses paused family and never increases per-trade risk",()=>{
