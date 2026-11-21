@@ -23,6 +23,10 @@ test("five original owner videos indexed with immutable hashes and no invented w
  assert.equal(c.SETUPS.filter(s=>s.status==="RULE_FROM_VISIBLE_SLIDE").length,3);
  assert.equal(c.SETUPS.filter(s=>s.status==="NAMED_NOT_EXPLAINED").length,4);
  assert.equal(c.status().complete_spoken_coverage,false);
+ assert.equal(c.SOURCES.find(x=>x.id==="delta_l4a").file.endsWith("Delta Trade Setups.mp4"),true);
+ assert.equal(c.SOURCES.find(x=>x.id==="delta_l4b").file.endsWith("Delta Trade Setups(1).mp4"),true);
+ assert.ok(c.INDEX.some(x=>x.at==="26:37"&&x.source==="delta_l3"));
+ assert.equal(c.CONTEXT_HYPOTHESES.every(x=>x.execution_enabled===false),true);
  assert.equal(c.status().execution_enabled,false);
 });
 test("trade-by-trade maximum/minimum delta includes interim extremes and initial zero",()=>{
@@ -30,6 +34,8 @@ test("trade-by-trade maximum/minimum delta includes interim extremes and initial
  const b=r.closed_bars[0];
  assert.equal(b.buy_volume,2);assert.equal(b.sell_volume,5);
  assert.equal(b.delta,-3);assert.equal(b.max_delta,2);assert.equal(b.min_delta,-3);
+ assert.equal(b.buy_trade_count,1);assert.equal(b.sell_trade_count,1);
+ assert.equal(b.count_delta,0); // Never confuse trade counts with executed-size Delta.
  assert.equal(b.executed_volume,7);assert.equal(b.cvd,-3);
  assert.equal(b.cvd_over_volume,-3/7);
  assert.equal(b.footprint.length,2);
