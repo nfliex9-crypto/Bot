@@ -5,7 +5,7 @@
  * scores and paper-only rankings. No trading APIs, no synthetic candles,
  * no future-bar signals or use of backtest labels as forward evidence.
  */
-const VERSION="brain-research-v3";
+const VERSION="brain-research-gross-v4";
 const {blockBootstrap}=require("./robustness.js");
 const STRATEGIES=[
  {id:"ema_pullback",label:"EMA pullback",family:"trend"},
@@ -123,7 +123,7 @@ function marketRegime(ind,i){
  if(strength<.25)return "ranging";
  return "transition";
 }
-function simulateFold(bars,ind,strategy,start,end,costMultiplier=1){
+function simulateFold(bars,ind,strategy,start,end){
  const trades=[];let position=null;
  const count=Math.min(end,bars.length);
  const epsilon=1e-10;
@@ -139,9 +139,7 @@ function simulateFold(bars,ind,strategy,start,end,costMultiplier=1){
    else if(targetHit){rawExit=target;reason="target";}
    else if(i-entryIndex>=36||i===count-1){rawExit=b.close;reason="time";}
    if(rawExit!==null){
-    const rawSpread=(b.spread===null?Math.max(b.close*.00015,epsilon):b.spread);
-    const cost=Math.max(rawSpread,b.close*.0001)*costMultiplier/2+b.close*.00002*costMultiplier;
-    const exit=rawExit-dir*cost;
+    const exit=rawExit;
     const rr=(exit-entry)*dir/initialRisk;
     if(Number.isFinite(rr))trades.push({time:b.timestamp,entryTime,regime,dir,rr,reason});
     position=null;
@@ -150,10 +148,8 @@ function simulateFold(bars,ind,strategy,start,end,costMultiplier=1){
   if(position||i>=count-1||!Number.isFinite(ind[i].atr)||ind[i].atr<=epsilon)continue;
   const dir=signal(strategy,bars,ind,i);
   if(!dir)continue;
-  const next=bars[i+1],risk=Math.max(ind[i].atr*1.5,next.open*.00015);
-  const spread=next.spread===null?next.open*.00015:next.spread;
-  const entryCost=Math.max(spread,next.open*.0001)*costMultiplier/2+next.open*.00002*costMultiplier;
-  const entry=next.open+dir*entryCost;
+  const next=bars[i+1],risk=ind[i].atr*1.5;
+  const entry=next.open;
   position={dir,entry,stop:entry-dir*risk,target:entry+dir*risk*2,
    initialRisk:risk,entryIndex:i+1,entryTime:next.timestamp,regime:marketRegime(ind,i)};
  }
@@ -187,46 +183,39 @@ function research(candleInput,sourceQuality={}){
  const starts=[Math.floor(last*.4),Math.floor(last*.6),Math.floor(last*.8)];
  const ends=[Math.floor(last*.6),Math.floor(last*.8),last];
  const incomplete=quality.source_truncated||quality.source_coverage!=="complete";
- const weakCosts=quality.missing_spread_ratio>.35;
  const findings=STRATEGIES.map(({id,label,family})=>{
   const folds=starts.map((from,k)=>{
     const to=ends[k],trades=simulateFold(bars,ind,id,from,to);
-    const stressed=simulateFold(bars,ind,id,from,to,2);
     return {start:new Date(bars[from].timestamp).toISOString(),end:new Date(bars[to-1].timestamp).toISOString(),
-      ...metrics(trades),stress_expectancy_r:metrics(stressed).expectancy_r};
+      ...metrics(trades)};
   });
   const all=starts.flatMap((from,k)=>simulateFold(bars,ind,id,from,ends[k]));
-  const stressed=starts.flatMap((from,k)=>simulateFold(bars,ind,id,from,ends[k],2));
-  const m=metrics(all),sm=metrics(stressed);
-  const integrity=blockBootstrap(stressed,{strategyId:id,strategyCount:STRATEGIES.length});
+  const m=metrics(all);
+  const integrity=blockBootstrap(all,{strategyId:id,strategyCount:STRATEGIES.length});
   const regimes=Object.fromEntries(["trending","ranging","volatile","transition"].map(regime=>{
    const observed=all.filter(t=>t.regime===regime);
-   const stressedRegime=stressed.filter(t=>t.regime===regime);
-   const om=metrics(observed),stressM=metrics(stressedRegime);
-   const status=observed.length<12?"LOW_SAMPLE":
-    om.expectancy_r<=0||stressM.expectancy_r<=0?"AVOID_PAPER":"RESEARCH_ONLY";
-   return [regime,{status,trades:om.trades,expectancy_r:om.expectancy_r,
-     double_cost_expectancy_r:stressM.expectancy_r,drawdown_r:om.drawdown_r}];
+   const om=metrics(observed);
+   const status=observed.length<12?"LOW_SAMPLE":om.expectancy_r<=0?"AVOID_PAPER":"RESEARCH_ONLY";
+   return [regime,{status,trades:om.trades,expectancy_r:om.expectancy_r,drawdown_r:om.drawdown_r}];
   }));
   const minFold=Math.min(...folds.map(f=>f.trades)),positiveFolds=folds.filter(f=>f.expectancy_r>0).length;
   // Fixed strategy rules and non-overlapping, chronological OOS windows.
   // Genuine paper promotion needs further *forward* evidence on tagged executed trades.
   let status="WATCH",reason="Insufficient confidence for paper candidate";
   if(incomplete){status="DATA_INCOMPLETE";reason="Provider truncated / incomplete candle window";}
-  else if(weakCosts){status="COST_DATA_WEAK";reason="Spread missing in more than 35% of candles";}
   else if(m.trades<30||minFold<5){status="INSUFFICIENT";reason="Fewer than 30 OOS trades or fewer than 5 in a fold";}
-  else if(m.expectancy_r<=0||sm.expectancy_r<=0||positiveFolds<2){
-    status="PAUSE_RESEARCH";reason="Non-positive OOS or double-cost expectancy / unstable folds";
+  else if(m.expectancy_r<=0||positiveFolds<2){
+    status="PAUSE_RESEARCH";reason="Non-positive gross OOS expectancy / unstable folds";
   }else if((m.lower_confidence_expectancy_r??-1)>.03&&m.drawdown_r<=12){
     if(integrity.eligible_for_paper_research){
-     status="PAPER_CANDIDATE";reason="OOS and double-cost evidence survives day-block multiple-test correction";
+     status="PAPER_CANDIDATE";reason="Gross OOS evidence survives day-block multiple-test correction";
     }else{
      status="MULTIPLE_TESTS_UNCERTAIN";
      reason="OOS trades appear positive, but independent day-level bootstrap cannot confirm edge after screening all strategies";
     }
   }
   return {strategy_id:id,label,family,status,reason,folds,regimes,
-   integrity,oos:m,double_costs:sm,positive_folds:positiveFolds,
+   integrity,oos:m,score_basis:"GROSS_PRICE_ONLY_NO_TRANSACTION_COSTS",positive_folds:positiveFolds,
    relative_research_priority:0};
  });
  // Per-symbol paper research priority ONLY; not lots, orders, or risk settings.
