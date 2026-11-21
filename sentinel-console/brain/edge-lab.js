@@ -3,11 +3,10 @@
  * Sentinel Edge Lab v1 — original research inspired by Grok export's
  * failed-level / volatility ideas, NOT its source code or trading settings.
  * All outputs are shadow hypotheses; no orders, lot sizing, or live permissions.
- * M15 broker OHLC has no historical spread. Recent real quotes supply a
- * STRESSED COST PROXY, never a claim about historical execution costs.
+ * Gross price-only OHLC research. No simulated transaction costs or spread gates.
  */
 const FAMILY=["sweep_reclaim","compression_breakout","fvg_retest"];
-const VERSION="edge-lab-2026-11-19-v1";
+const VERSION="edge-lab-gross-2026-11-21-v2";
 const TF=15*60000;
 function finite(x){return typeof x==="number"&&Number.isFinite(x)}
 function normalize(raw){
@@ -117,39 +116,31 @@ function signalAt(bars,i,family,cache=null){
  return side?{family,side,signal_time:b.time,atr:state.atr,regime:state.label,
    close:b.close,efficiency:Number(state.efficiency.toFixed(4))}:null;
 }
-function costPriceFromQuotes(quotes,model="P90"){
- const spreads=(quotes||[]).map(q=>Number(q.spread??(Number(q.ask)-Number(q.bid))))
-  .filter(x=>Number.isFinite(x)&&x>0).sort((a,b)=>a-b);
- if(spreads.length<5)return null;
- const q=model==="P95"?.95:.90;
- return spreads[Math.min(spreads.length-1,Math.floor(q*(spreads.length-1)))];
-}
-function resolve(bars,i,signal,spread,maxHold=8){
+function resolve(bars,i,signal,maxHold=8){
  const entryBar=bars[i+1];
  if(!entryBar||entryBar.time-signal.signal_time!==TF)return null;
  const atr=signal.atr;
- const distance=Math.max(atr*1.5,spread*8);
+ const distance=atr*1.5;
  if(!(distance>0))return null;
- const side=signal.side,entry=entryBar.open+(side===1?spread:0);
+ const side=signal.side,entry=entryBar.open;
  const stop=entry-side*distance,tp=entry+side*2*distance;
  let exit=null,reason="TIME",exitTime=null;
  for(let j=i+1;j<=Math.min(bars.length-1,i+maxHold);j++){
   const b=bars[j],prev=bars[j-1];
   // Missing 15-minute bar invalidates future path; do not assume a fill.
   if(b.time-prev.time!==TF)return null;
-  const hi=b.high+(side===-1?spread:0);
-  const lo=b.low+(side===-1?spread:0);
+  const hi=b.high;
+  const lo=b.low;
   const stopHit=side===1?lo<=stop:hi>=stop;
   const tpHit=side===1?hi>=tp:lo<=tp;
   if(stopHit){exit=stop;reason=tpHit?"AMBIGUOUS_STOP_FIRST":"STOP";exitTime=b.time;break}
   if(tpHit){exit=tp;reason="TARGET";exitTime=b.time;break}
-  if(j===i+maxHold){exit=b.close+(side===-1?spread:0);exitTime=b.time}
+  if(j===i+maxHold){exit=b.close;exitTime=b.time}
  }
  if(exit===null)return null;
  return {family:signal.family,side,entry_time:entryBar.time,exit_time:exitTime,
   regime:signal.regime,r:Number((side*(exit-entry)/distance).toFixed(5)),
-  exit_reason:reason,fill_quality:"BROKER_OHLC_PROXY_STOP_FIRST",
-  reference_spread:spread};
+  exit_reason:reason,fill_quality:"GROSS_OHLC_STOP_FIRST"};
 }
 function stats(trades){
  const rs=trades.map(x=>x.r);const n=rs.length;
@@ -165,12 +156,9 @@ function stats(trades){
    positive_weeks:byWeek.size?Number((positiveWeeks/byWeek.size).toFixed(3)):null,
    net_r:Number(sum.toFixed(4)),stop_first_ambiguous:trades.filter(x=>x.exit_reason==="AMBIGUOUS_STOP_FIRST").length};
 }
-function evaluate(barsRaw,{spreads=[],minBars=480}={}){
+function evaluate(barsRaw,{minBars=480}={}){
  const bars=normalize(barsRaw);
  if(bars.length<minBars||bars.length<120)return {version:VERSION,status:"INSUFFICIENT_BARS",
-   bar_count:bars.length,families:[],execution_enabled:false};
- const proxy=costPriceFromQuotes(spreads);
- if(proxy===null)return {version:VERSION,status:"MISSING_REAL_SPREAD_SAMPLE",
    bar_count:bars.length,families:[],execution_enabled:false};
  // Calendar-order partitions are fixed BEFORE evaluating candidates.
  const p1=Math.floor(bars.length*.60),p2=Math.floor(bars.length*.80);
@@ -179,39 +167,31 @@ function evaluate(barsRaw,{spreads=[],minBars=480}={}){
  const out=[];
  for(const family of FAMILY){
   const datasets={train:[],validation:[],holdout:[]};
-  const stress={train:[],validation:[]};
   let lastExit=-Infinity;
   for(let i=100;i<bars.length-9;i++){
    const sig=signalAt(bars,i,family,cache);if(!sig||bars[i].time<=lastExit)continue;
-   const t=resolve(bars,i,sig,proxy);
+   const t=resolve(bars,i,sig);
    if(!t)continue;
    const split=t.entry_time<boundary[0]?"train":t.entry_time<boundary[1]?"validation":"holdout";
    if(split==="train"&&t.exit_time>=boundary[0]||split==="validation"&&t.exit_time>=boundary[1])continue;
    datasets[split].push(t);
-   // 2x observed P90 spread is a scenario, not an actual historical spread.
-   if(split!=="holdout"){
-    const st=resolve(bars,i,sig,proxy*2);
-    if(st)stress[split].push(st);
-   }
    lastExit=t.exit_time;
   }
   const train=stats(datasets.train),validation=stats(datasets.validation),
-    holdout=stats(datasets.holdout),validationStress=stats(stress.validation);
+    holdout=stats(datasets.holdout);
   const review=train.trades>=30&&validation.trades>=15&&
     train.expectancy_r>0&&validation.expectancy_r>0&&
     (train.profit_factor??0)>1.10&&(validation.profit_factor??0)>1.05&&
-    (validation.positive_weeks??0)>=.5&&validationStress.expectancy_r>0;
+    (validation.positive_weeks??0)>=.5;
   out.push({family,status:review?"SHADOW_REVIEW_ELIGIBLE":"RESEARCH_UNPROVEN",
-    train,validation,holdout,validation_stressed:validationStress,
+    train,validation,holdout,score_basis:"GROSS_PRICE_ONLY_NO_TRANSACTION_COSTS",
     holdout_is_report_only:true,execution_enabled:false,
     signal_count:Object.values(datasets).reduce((n,x)=>n+x.length,0)});
  }
- return {version:VERSION,status:"COST_PROXY_RESEARCH_ONLY",bar_count:bars.length,
+ return {version:VERSION,status:"GROSS_PRICE_RESEARCH_ONLY",bar_count:bars.length,
    start:new Date(bars[0].time).toISOString(),end:new Date(bars.at(-1).time).toISOString(),
-   reference_spread_p90:proxy,stress_multiple:2,
-   cost_notice:"Recent broker quote P90 proxy (not historical bid/ask); commissions/slippage are not fully verified",
    split:{train_end:new Date(boundary[0]).toISOString(),validation_end:new Date(boundary[1]).toISOString()},
    families:out,execution_enabled:false,broker_verified_edge:false};
 }
 module.exports={VERSION,FAMILY,normalize,atrAt,emaAt,precompute,regimeAt,signalAt,
-  costPriceFromQuotes,resolve,stats,evaluate};
+  resolve,stats,evaluate};
