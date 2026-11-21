@@ -28,16 +28,15 @@ test("generates bounded rule variants with stable content IDs",()=>{
  assert.ok(offspring.length>0&&offspring.length<=8);
  assert.ok(offspring.every(s=>!list.some(p=>p.id===s.id)));
 });
-test("historical research does not accept missing broker spread, or incomplete provider coverage",()=>{
- for(const [bars,source] of [
-  [fixture(1400,{missingSpread:true}),{coverage:"complete",truncated:false}],
-  [fixture(1400),{coverage:"partial",truncated:true}]
- ]){
-  const r=factory.scoreFamily(bars,source);
-  assert.equal(r.status,"INSUFFICIENT_REAL_HISTORY");
-  assert.equal(r.candidates.length,0);
-  assert.equal(r.orders_enabled,false);
- }
+test("gross research ignores missing spread, but blocks incomplete coverage",()=>{
+ const gross=factory.scoreFamily(fixture(1400,{missingSpread:true}),{coverage:"complete",truncated:false});
+ const normal=factory.scoreFamily(fixture(1400),{coverage:"complete",truncated:false});
+ assert.deepEqual(gross.candidates,normal.candidates);
+ assert.equal(gross.status,"RESEARCH_ONLY");
+ const incomplete=factory.scoreFamily(fixture(1400),{coverage:"partial",truncated:true});
+ assert.equal(incomplete.status,"INSUFFICIENT_REAL_HISTORY");
+ assert.equal(incomplete.candidates.length,0);
+ assert.equal(gross.orders_enabled,false);
 });
 test("factory evaluates disjoint OOS windows without enabling any order",()=>{
  const r=factory.scoreFamily(fixture(3400),{coverage:"complete",truncated:false,cycleId:"unit"});
