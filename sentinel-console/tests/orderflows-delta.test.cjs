@@ -63,6 +63,15 @@ test("closed-only no lookahead, venue/session continuity and no execution",()=>{
  assert.equal(sig([{...b[0],sourceQuality:"MT5_OHLC"},...b.slice(1)]).status,"DATA_BLOCKED");
  assert.equal(e.detectSurge([b[0],b[1],{...b[2],sessionId:"other"},b[3]]).length,0);
 });
+
+test("lesson 3 CVD/volume balance break requires researched numerical thresholds",()=>{
+ const b=bars([[2,-2],[6]]);
+ assert.equal(e.detectCvdVolumeBalanceBreak(b).blocked,
+  "RESEARCH_CVD_VOLUME_BALANCE_AND_STRONG_DELTA_THRESHOLDS_REQUIRED");
+ const r=e.detectCvdVolumeBalanceBreak(b,{nearZeroRatioTolerance:0.01,strongDeltaThreshold:5});
+ assert.equal(r.signals[0].side,"LONG");
+ assert.equal(r.signals[0].executionEnabled,false);
+});
 test("Sentinel core exposes the course without enabling broker execution",()=>{
  const core=require("../worker/cloud-trader/core.js");
  assert.equal(core.deltaCurriculum.status().setupCount,7);
