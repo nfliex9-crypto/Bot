@@ -20,12 +20,12 @@ function windowAt(now=Date.now()){
 function verifyRow(row){
  if(!row||!FAMILIES.includes(row.family)||typeof row.symbol!=="string"||
    row.symbol.length<2||row.complete!==true||row.brokerVerified!==true)throw Error("UNVERIFIED_WEEKLY_TRADE");
- const n=[row.profit,row.swap,row.commission].map(Number);
- if(n.some((v,i)=>row[["profit","swap","commission"][i]]===null||
-   !Number.isFinite(v)))throw Error("INCOMPLETE_NET_PNL");
+ const gross=Number(row.profit);
+ if(row.profit===null||row.profit===undefined||!Number.isFinite(gross))
+   throw Error("MISSING_BROKER_PROFIT");
  const close=Date.parse(String(row.closeTime||""));
  if(!Number.isFinite(close))throw Error("INVALID_TRADE_CLOSE_TIME");
- return {...row,net:n[0]+n[1]+n[2],closedAt:close};
+ return {...row,net:gross,scoreBasis:"BROKER_PROFIT_ONLY_GROSS",closedAt:close};
 }
 function stats(trades){
  const days=new Set(trades.map(x=>new Date(x.closedAt).toISOString().slice(0,10)));
@@ -83,14 +83,14 @@ async function ensureSnapshot(sql,accountId,symbol,now=Date.now()){
  if(registered.length===FAMILIES.length){
   return {weekStart:window.weekStart,policies:policyFromScores(registered.map(x=>({...x,symbol})),symbol)};
  }
- const raw=await sql`SELECT symbol,family,close_time,profit,swap,commission
+ const raw=await sql`SELECT symbol,family,close_time,profit
  FROM sentinel_cloud_trader_fills WHERE account_id=${accountId}
  AND close_time >= ${window.lookbackStart}::timestamptz
  AND close_time < ${window.weekEnd}::timestamptz
  AND family IN ('pdf_sweep_bos','pdf_fvg_retest')
  ORDER BY close_time ASC`;
  const approved=raw.map(x=>({symbol:x.symbol,family:x.family,closeTime:x.close_time,
-  profit:x.profit,swap:x.swap,commission:x.commission,
+  profit:x.profit,
   complete:true,brokerVerified:true}));
  const assessed=evaluate(approved,{symbol,now});
  for(const p of assessed.profiles){
@@ -100,7 +100,7 @@ async function ensureSnapshot(sql,accountId,symbol,now=Date.now()){
    VALUES(${accountId},${symbol},${p.family},${window.weekStart}::date,
     ${p.status},${p.priority},${p.week.trades},${p.week.net},
     ${p.rolling.trades},${p.rolling.net},${JSON.stringify({
-     week:p.week,rolling:p.rolling,rules:"complete_broker_fills_rolling_28d_v1"})}::jsonb)
+     week:p.week,rolling:p.rolling,rules:"gross_broker_profit_only_rolling_28d_v2"})}::jsonb)
    ON CONFLICT (account_id,symbol,family,week_start) DO NOTHING`;
  }
  const final=await sql`SELECT family,status,priority FROM sentinel_cloud_strategy_weekly
