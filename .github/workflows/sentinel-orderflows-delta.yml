@@ -7,6 +7,8 @@ on:
       - 'sentinel-console/worker/orderflow/**'
       - 'sentinel-console/tests/orderflows-delta-course.test.cjs'
       - '.github/workflows/sentinel-orderflows-delta.yml'
+  pull_request:
+    branches: [sentinel-source-execution-v1]
   workflow_dispatch:
 permissions:
   contents: read
