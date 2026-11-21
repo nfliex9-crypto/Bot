@@ -37,6 +37,7 @@
 - `Max Delta` is the highest **running intra-bar delta**, `Min Delta` the lowest **running intra-bar delta**, including the starting zero (around 10:00–22:00). These are not extrema of the last N final bar deltas.
 - Cumulative Delta is a running signed sum across the venue session; it can lag or conceal local changes (around 23:00–25:00).
 - `Cumulative Delta / Volume` is running session Delta divided by running session executed volume; can flatten as the denominator grows (around 26:00–31:00).
+- **Important lesson 3 ~26:37 detail:** instructor looks for CVD/Volume **near zero**, suggesting near-balanced buyers/sellers and consolidation/absorption, **then a strong directional Delta** as a possible trade cue. This is represented by a separate research detector with explicit `nearZeroRatioTolerance` and `strongDeltaThreshold`; neither cutoff is provided by the source.
 
 ## Lesson 4 — Trade Setups (4A 00:00–14:12, 4B 00:00–15:29)
 
@@ -44,8 +45,9 @@ The course names **seven**: Delta Surge, Delta Divergence, Delta Flips, Delta Tr
 
 ### Delta Surge — 4A ~07:50–14:12, 4B ~00:00
 
-- **Long**: four consecutive closed bars `d1<0`, `d2>0`, `d3>d2`, `d4>d3`.
-- **Short**: `d1>0`, `d2<0`, `d3<d2`, `d4<d3`.
+- **General source concept:** Delta strengthens in a positive or negative direction over **several** bars, especially near consolidation/turning points. The instructor does **not** prescribe four bars as a universal requirement.
+- **Four-bar example variant — long**: `d1<0`, `d2>0`, `d3>d2`, `d4>d3`.
+- **Four-bar example variant — short**: `d1>0`, `d2<0`, `d3<d2`, `d4<d3`.
 - Course context: around turning points, consolidation and especially emergence from sideways activity (4B ~00:15). This is context, **not an independently quantified mandatory filter**.
 - No verified stop, target, risk/reward, win rate, or fixed threshold from the source.
 
