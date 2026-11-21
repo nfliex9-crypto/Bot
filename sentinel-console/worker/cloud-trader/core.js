@@ -52,23 +52,23 @@ function selectAccount(accounts,explicitId,preferredId){
  if(preferredId){const a=matches.find(x=>x.id===preferredId);if(a)return {account:a,status:"EXISTING_SENTINEL_DEMO_SELECTED"}}
  return matches.length===1?{account:matches[0],status:"ONLY_HOT_DEMO_SELECTED"}:{account:null,status:matches.length?"MULTIPLE_DEMOS_AMBIGUOUS":"NO_HOT_MT5_DEMO"};
 }
-function floorVolume(raw,spec,maxLots=.5){
+function floorVolume(raw,spec,maxLots=Infinity){
  const min=finite(spec.volumeMin),max=finite(spec.volumeMax),step=finite(spec.volumeStep);
  if(min===null||max===null||step===null||min<=0||max<min||step<=0||!Number.isFinite(raw)||raw<min)return 0;
  const ceiling=Math.min(maxLots,max,raw);const count=Math.floor((ceiling-min)/step+1e-9);
  return Number((min+count*step).toFixed(8));
 }
-function preflight({signal,quote,spec,equity,accountCurrency=null,riskPct=.25,maxSpreadBps=25,maxLots=.5,now=Date.now()}){
+function preflight({signal,quote,spec,equity,accountCurrency=null,riskPct=.25,maxLots=Infinity,now=Date.now()}){
  if(!signal||!FAMILIES.has(signal.family)||![-1,1].includes(signal.side)||!Number.isSafeInteger(signal.bar_time)||now-signal.bar_time-900000<0||now-signal.bar_time-900000>900000)return {ok:false,reason:"SIGNAL_NOT_FRESH_OR_ALLOWED"};
  const bid=finite(quote?.bid),ask=finite(quote?.ask),point=finite(spec?.point),tickSize=finite(spec?.tickSize),value=finite(spec?.tickValueAccount),digits=spec?.digits;
  if(bid===null||ask===null||bid<=0||ask<=bid)return {ok:false,reason:"QUOTE_UNAVAILABLE"};
  if(!Number.isInteger(digits)||digits<0||digits>10||point===null||point<=0||tickSize===null||tickSize<=0||value===null||value<=0||spec?.specSource!=="broker"||!['wire','override'].includes(spec.tickValueCurrency?.source)||spec.tickValueCurrency?.code===undefined)return {ok:false,reason:"NATIVE_ACCOUNT_TICK_VALUE_UNVERIFIED"};
- if(finite(equity)===null||equity<=0||riskPct<=0||riskPct>.5)return {ok:false,reason:"EQUITY_OR_RISK_UNAVAILABLE"};
+ if(finite(equity)===null||equity<=0||!Number.isFinite(riskPct)||riskPct<=0||riskPct>=100)return {ok:false,reason:"EQUITY_OR_RISK_UNAVAILABLE"};
  if(accountCurrency!==null){
   const verified=verifyContract(spec,accountCurrency);
   if(!verified.ok)return verified;
  }
- const spread=(ask-bid)/((ask+bid)/2)*10000;if(spread>maxSpreadBps)return {ok:false,reason:"SPREAD_TOO_WIDE"};
+ const spread=(ask-bid)/((ask+bid)/2)*10000; // Quote telemetry only. Not a cost deduction or arbitrary entry veto.
  if(!Number.isFinite(signal.reference_close)||signal.reference_close<=0||
     Math.abs((ask+bid)/2-signal.reference_close)>3*signal.atr+(ask-bid))
    return {ok:false,reason:"PRICE_DIVERGED_FROM_CLOSED_BAR"};
