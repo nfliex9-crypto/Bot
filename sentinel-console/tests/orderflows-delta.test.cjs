@@ -63,3 +63,14 @@ test("closed-only no lookahead, venue/session continuity and no execution",()=>{
  assert.equal(sig([{...b[0],sourceQuality:"MT5_OHLC"},...b.slice(1)]).status,"DATA_BLOCKED");
  assert.equal(e.detectSurge([b[0],b[1],{...b[2],sessionId:"other"},b[3]]).length,0);
 });
+test("Sentinel core exposes the course without enabling broker execution",()=>{
+ const core=require("../worker/cloud-trader/core.js");
+ assert.equal(core.deltaCurriculum.status().setupCount,7);
+ assert.equal(core.analyzeOrderflowTape(null).status,"DATA_BLOCKED");
+ const tape=[[-5],[1],[2],[3]].flatMap((v,i)=>mk(i,v));
+ const report=core.analyzeOrderflowTape(tape,opts,
+  {swingLookback:2,equalTolerance:0,nearExtremeTolerance:0.1},NOW);
+ assert.equal(report.status,"RESEARCH_ONLY");
+ assert.equal(report.executionEnabled,false);
+ assert.ok(report.signals.some(s=>s.id==="delta_surge"));
+});
