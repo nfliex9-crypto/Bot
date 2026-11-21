@@ -4,6 +4,7 @@ on:
     branches: [sentinel-orderflows-delta-curriculum-v1]
     paths:
       - 'sentinel-console/worker/orderflow/**'
+      - 'sentinel-console/worker/cloud-trader/core.js'
       - 'sentinel-console/brain/orderflows-delta-curriculum.js'
       - 'sentinel-console/tests/orderflows-delta.test.cjs'
       - '.github/workflows/sentinel-delta-ci.yml'
@@ -23,4 +24,4 @@ jobs:
         run: |
           node --check sentinel-console/worker/orderflow/delta-engine.js
           node --check sentinel-console/brain/orderflows-delta-curriculum.js
-          node --test sentinel-console/tests/orderflows-delta.test.cjs
+          node --test sentinel-console/tests/orderflows-delta.test.cjs sentinel-console/tests/source-demo-signals.test.cjs sentinel-console/tests/cloud-trader.test.cjs
