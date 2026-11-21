@@ -2,6 +2,8 @@
 // Pure, deterministic MT5 DEMO signals and preflight. No credentials or HTTP here.
 const crypto=require("node:crypto");
 const sourceSignals=require("./source-signals.js");
+const orderflow=require("../orderflow/delta-engine.js");
+const deltaCurriculum=require("../../brain/orderflows-delta-curriculum.js");
 const FAMILIES=new Set(["trend_pullback","donchian_breakout",...Object.keys(sourceSignals.RULES)]);
 function finite(v){return typeof v==="number"&&Number.isFinite(v)?v:null}
 function asUTC(v){if(typeof v==="number")return v<1e11?v*1000:v;const t=Date.parse(String(v||""));return Number.isFinite(t)?t:NaN}
@@ -107,4 +109,14 @@ function verifyContract(spec,accountCurrency){
 function demoExecutionAllowed(env,account){
  return env.SENTINEL_CLOUD_MODE==="demo_execution"&&env.SENTINEL_CLOUD_ENABLE_DEMO==="YES_I_AUTHORIZE_SENTINEL_DEMO_ONLY"&&env.SENTINEL_CLOUD_UNVERIFIED_TRIAL==="YES_EXPLICIT_DEMO_TRIAL"&&typeof env.SENTINEL_CLOUD_ACCOUNT_ID==="string"&&env.SENTINEL_CLOUD_ACCOUNT_ID===account?.id&&account.isDemo===true&&account.hot===true&&account.broker==="mt5";
 }
-module.exports={parseCandles,ema,atr,decide,keyFor,selectAccount,floorVolume,preflight,demoExecutionAllowed,authorizedFusionDemo,verifyContract};
+
+// Explicit source-verified executed-trade research path. Not wired to order submission.
+function analyzeOrderflowTape(trades,feedOptions={},researchParams={},now=Date.now()){
+ if(!Array.isArray(trades)||!trades.length)return {status:"DATA_BLOCKED",reason:"NO_VERIFIED_EXECUTED_TRADE_TAPE",signals:[],executionEnabled:false};
+ try{
+  const bars=orderflow.buildBars(trades,{...feedOptions,now});
+  const result=orderflow.evaluate(bars,researchParams,now);
+  return {...result,course:deltaCurriculum.SOURCE,barCount:bars.length,executionEnabled:false};
+ }catch(e){return {status:"DATA_BLOCKED",reason:String(e.message||e).slice(0,120),signals:[],executionEnabled:false};}
+}
+module.exports={analyzeOrderflowTape,deltaCurriculum,parseCandles,ema,atr,decide,keyFor,selectAccount,floorVolume,preflight,demoExecutionAllowed,authorizedFusionDemo,verifyContract};
