@@ -8,6 +8,7 @@ const crypto=require("node:crypto");
 const {provider}=require("./provider.js");
 const c=require("./core.js");
 const weekly=require("./weekly-selector.js");
+const adaptive=require("./adaptive-risk.js");
 function decrypt(cipher,key){
  if(!/^[0-9a-f]{64}$/i.test(key||""))throw Error("CLOUD_ENCRYPTION_KEY_REQUIRED");
  const parts=String(cipher||"").split(".");
@@ -161,7 +162,9 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
    VALUES(${a.id},${utcDay},${equity}) ON CONFLICT(account_id,utc_day) DO UPDATE SET
    start_equity=sentinel_cloud_trader_daily.start_equity RETURNING start_equity`;
   const start=Number(baseline[0]?.start_equity);
-  if(!(start>0)||equity<start*.99){report.status="BLOCKED";report.reason="DAILY_LOSS_LIMIT";return report}
+  // Keep the broker's genuine start-of-day equity for gradual adaptive
+  // de-risking. Do not impose the former arbitrary daily 1% stop.
+  if(!(start>0)){report.status="BLOCKED";report.reason="DAY_START_EQUITY_UNVERIFIED";return report}
   const catalog=await read.symbols(a.id),symbols=pickSymbols(catalog);
   if(!symbols.length){report.status="BLOCKED";report.reason="BROKER_SYMBOLS_NOT_FOUND";return report}
   // Broker account identity and the database's time-limited DEMO-only
@@ -185,18 +188,6 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
   }
   const riskPct=databaseApproved?Number(permission.risk_pct):.25;
   const write=enabled?providerFactory(token,{fetcher,allowWrites:true}):null;
-  if(enabled){
-    // Cap the controlled unverified trial at four new signal entries per UTC
-    // day, independently of its 1% daily equity-loss guard.
-    const daily=await sql`SELECT COUNT(*)::int AS entries
-      FROM sentinel_cloud_trader_intents
-      WHERE account_id=${a.id} AND created_at>=DATE_TRUNC('day',NOW())
-      AND status<>'NOT_SENT'`;
-    if(!daily.length||!Number.isSafeInteger(Number(daily[0].entries))||
-       Number(daily[0].entries)>=4){
-      report.status="BLOCKED";report.reason="DAILY_DEMO_ENTRY_CAP";return report;
-    }
-  }
   // Sample only closed broker bars. Never substitute stored partial research bars
   // for an unavailable broker feed when deciding a live DEMO entry.
   for(const symbol of symbols){
@@ -262,16 +253,22 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     row.source_evidence=signal.evidence||"UNVERIFIED_SOURCE_HYPOTHESIS";
     row.edge_verified=false;
     row.weekly_priority=signal.weekly_priority;
-    // Permit other symbols while protecting existing MT5 positions.
-    // Unknown instrument tags or >1 existing account risk exposure fail closed.
+    // Existing positions on other symbols dilute the dynamic risk budget;
+    // same-symbol overlap remains blocked because MT5 may net orders.
     const occupied=(items)=>items.some(x=>!x||typeof x.symbol!=="string"||
       x.symbol.toUpperCase()===symbol.toUpperCase());
-    if(positions.length+orders.length>=2||occupied(positions)||occupied(orders)){
-      row.status="ACCOUNT_CAP_OR_SYMBOL_HAS_POSITION";continue;
+    if(occupied(positions)||occupied(orders)){
+      row.status="SYMBOL_HAS_EXISTING_EXPOSURE";continue;
     }
     if(!quote||!specResult?.spec){row.status="BROKER_CONTRACT_UNAVAILABLE";continue}
-    const ready=c.preflight({signal,quote,spec:specResult.spec,equity,
-      accountCurrency:account.account?.currency,riskPct,now});
+    const decision=adaptive.evaluate({signal,m15,h1,equity,dayStartEquity:start,
+      positions,orders,baseRiskPct:riskPct});
+    row.adaptive_score=decision.score??null;
+    row.adaptive_risk_pct=decision.riskPct;
+    row.portfolio_exposure_count=decision.openExposureCount??positions.length+orders.length;
+    if(!decision.allowed){row.status=decision.reason;continue}
+    let ready=c.preflight({signal,quote,spec:specResult.spec,equity,
+      accountCurrency:account.account?.currency,riskPct:decision.riskPct,now});
     if(!ready.ok){row.status=ready.reason;continue}
     row.risk_at_stop=Number(ready.risk.toFixed(2));
     if(!enabled){row.status="SHADOW_SIGNAL_RESEARCH_NOT_APPROVED";continue}
@@ -285,11 +282,31 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     if(!reservation.length){row.status="SIGNAL_ALREADY_RESERVED";continue}
     // Re-check immediately before broker submission; do not rely on a stale
     // position snapshot taken before candle/spec requests.
-    const [latestAccount,latestOrders]=await Promise.all([read.account(a.id),read.orders(a.id)]);
-    if(latestAccount?.id!==a.id||latestAccount?.isDemo!==true||latestAccount?.status!=="online"||
-       latestAccount.account?.accountType!=="demo"||
-       strictPositions(latestAccount.positions).length+strictOrders(latestOrders).length>=2||
-       occupied(strictPositions(latestAccount.positions))||occupied(strictOrders(latestOrders))){
+    const [latestAccount,latestOrders,latestQuote]=await Promise.all([
+      read.account(a.id),read.orders(a.id),read.quote(a.id,symbol)]);
+    let safe=false;
+    if(latestAccount?.id===a.id&&latestAccount?.isDemo===true&&
+       latestAccount?.status==="online"&&latestAccount.account?.accountType==="demo"){
+      const p=strictPositions(latestAccount.positions),o=strictOrders(latestOrders);
+      if(!occupied(p)&&!occupied(o)){
+        const currentEquity=Number(latestAccount.account?.equity);
+        const current=adaptive.evaluate({signal,m15,h1,equity:currentEquity,
+          dayStartEquity:start,positions:p,orders:o,baseRiskPct:riskPct});
+        if(current.allowed){
+          ready=c.preflight({signal,quote:latestQuote,spec:specResult.spec,
+            equity:currentEquity,accountCurrency:latestAccount.account?.currency,
+            riskPct:current.riskPct,now});
+          safe=ready.ok;
+          if(safe){
+            row.adaptive_score=current.score;
+            row.adaptive_risk_pct=current.riskPct;
+            row.portfolio_exposure_count=current.openExposureCount;
+            row.risk_at_stop=Number(ready.risk.toFixed(2));
+          }else row.pre_submit_rejection=ready.reason;
+        }else row.pre_submit_rejection=current.reason;
+      }
+    }
+    if(!safe){
       row.status="STATE_CHANGED_BEFORE_ORDER";
       await sql`UPDATE sentinel_cloud_trader_intents SET status='NOT_SENT',updated_at=NOW()
        WHERE account_id=${a.id} AND signal_hash=${digest}`;
