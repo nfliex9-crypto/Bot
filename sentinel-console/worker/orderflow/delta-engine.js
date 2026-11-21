@@ -59,6 +59,7 @@ function aggregateTrades(trades,config){
   if(!current){
    current={start,end:start+barMs,session_id:session,symbol:t.symbol,venue:t.venue,
     o:price,h:price,l:price,c:price,executed_volume:0,buy_volume:0,sell_volume:0,
+    buy_trade_count:0,sell_trade_count:0,count_delta:0,
     delta:0,max_delta:0,min_delta:0,cvd:0,cvd_over_volume:0,
     footprint:[],source_quality:claimedExchangeFlag?"DECLARED_EXCHANGE_SIDE":"ESTIMATED_SIDE",
     execution_enabled:false};
@@ -66,7 +67,9 @@ function aggregateTrades(trades,config){
   }
   current.h=Math.max(current.h,price);current.l=Math.min(current.l,price);current.c=price;
   current.executed_volume+=size;sessionVolume+=size;
-  if(side==="BUY")current.buy_volume+=size;else current.sell_volume+=size;
+  if(side==="BUY"){current.buy_volume+=size;current.buy_trade_count++}
+  else{current.sell_volume+=size;current.sell_trade_count++}
+  current.count_delta=current.buy_trade_count-current.sell_trade_count;
   const signed=side==="BUY"?size:-size;cvd+=signed;current.delta+=signed;
   current.max_delta=Math.max(current.max_delta,current.delta);
   current.min_delta=Math.min(current.min_delta,current.delta);
@@ -100,6 +103,7 @@ function aggregateTrades(trades,config){
     independently_verified:false,source_is_broker_cfd:false},
   closed_bars:completed,excluded_open_bars:incomplete.length,
   input_trades:trades.length,
+  metric_convention:"DELTA_IS_EXECUTED_SIZE; COUNT_DELTA_RECORDED_SEPARATELY_DUE_TO_COURSE_WORDING",
   execution_block_reason:claimedExchangeFlag?"NOT_BACKTESTED_OR_APPROVED":"ESTIMATED_AGGRESSOR_SIDE"};
 }
 function evt(id,side,bars,extra={}){
