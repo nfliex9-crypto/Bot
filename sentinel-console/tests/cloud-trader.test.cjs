@@ -181,3 +181,12 @@ test("account-currency tick value must be broker verified before order sizing",(
  assert.equal(c.verifyContract({...spec,tickValueAccount:undefined},"USD").ok,false);
  assert.equal(c.verifyContract({...spec,specSource:"derived"},"USD").ok,false);
 });
+
+test("Monday activation gate blocks all actual DEMO order execution until Brussels Monday midnight",()=>{
+ const {mondayDemoEntryWindow,FIRST_DEMO_ENTRY_UTC}=require("../worker/cloud-trader/runner.js");
+ assert.equal(FIRST_DEMO_ENTRY_UTC,"2026-11-22T23:00:00.000Z");
+ assert.equal(mondayDemoEntryWindow(Date.parse("2026-11-22T22:59:59.999Z")),false);
+ assert.equal(mondayDemoEntryWindow(Date.parse("2026-11-22T23:00:00.000Z")),true);
+ assert.equal(mondayDemoEntryWindow(Date.parse("2026-11-23T08:00:00.000Z")),true);
+ assert.equal(mondayDemoEntryWindow(NaN),false);
+});
