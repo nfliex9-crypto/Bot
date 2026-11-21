@@ -18,6 +18,14 @@ function decrypt(cipher,key){
  return Buffer.concat([d.update(data),d.final()]).toString("utf8");
 }
 const SERVICE="sentinel-cloud-trader";
+/** Monday 23 Nov 2026 at 00:00 Europe/Brussels (CET = UTC+1).
+ * Fail-closed gate for EVERY new broker demo order on the scheduled backend.
+ * This timestamp is independent of the user's client clock and cannot be
+ * bypassed by an earlier DB approval or the internal demo env override.
+ */
+const FIRST_DEMO_ENTRY_UTC="2026-11-22T23:00:00.000Z";
+function mondayDemoEntryWindow(now){return Number.isFinite(now)&&now>=Date.parse(FIRST_DEMO_ENTRY_UTC)}
+
 const PRIORITY=[["XAUUSD","GOLD"],["BTCUSD","BTCUSDT"],["USTECH100M","NAS100"],["EURUSD"]];
 const clean=s=>String(s||"").replace(/[\x00-\x1F]/g," ").slice(0,100);
 function pickSymbols(raw){
@@ -168,8 +176,10 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     SENTINEL_CLOUD_ENABLE_DEMO:"YES_I_AUTHORIZE_SENTINEL_DEMO_ONLY",
     SENTINEL_CLOUD_UNVERIFIED_TRIAL:"YES_EXPLICIT_DEMO_TRIAL",
     SENTINEL_CLOUD_ACCOUNT_ID:a.id}:env;
-  const enabled=c.demoExecutionAllowed(armedEnv,a);
-  report.mode=enabled?"UNVERIFIED_DEMO_TRIAL":"SHADOW_ONLY";
+  const enabled=mondayDemoEntryWindow(now)&&c.demoExecutionAllowed(armedEnv,a);
+  report.start_not_before_utc=FIRST_DEMO_ENTRY_UTC;
+  report.monday_gate_open=mondayDemoEntryWindow(now);
+  report.mode=enabled?"UNVERIFIED_DEMO_TRIAL":databaseApproved&&!mondayDemoEntryWindow(now)?"SCHEDULED_DEMO":"SHADOW_ONLY";
   if(enabled&&!(databaseApproved||explicit===a.id)){
     report.status="BLOCKED";report.reason="ACCOUNT_ID_NOT_EXPLICITLY_SELECTED";return report
   }
@@ -325,4 +335,4 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
    WHERE worker_name=${SERVICE} AND lease_owner=${owner}`}catch(_){}
  }
 }
-module.exports={runCloudCycle,pickSymbols,shadowPreferredDemo,strictPositions,strictOrders,reconcile,syncClosedFills};
+module.exports={FIRST_DEMO_ENTRY_UTC,mondayDemoEntryWindow,runCloudCycle,pickSymbols,shadowPreferredDemo,strictPositions,strictOrders,reconcile,syncClosedFills};
