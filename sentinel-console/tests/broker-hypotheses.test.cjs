@@ -19,13 +19,13 @@ test("real MT5 OHLC without broker spreads generates ONLY unverified hypotheses"
   coverage:"complete",missingSpreadRatio:1});
  assert.equal(x.status,"OHLC_HYPOTHESES_ONLY");
  assert.ok(x.hypotheses.length>16&&x.hypotheses.length<=24);
- assert.equal(x.assumptions.broker_spread_verified,false);
- assert.equal(x.assumptions.commission_verified,false);
+ assert.equal(x.assumptions.transaction_cost_model,"DISABLED");
+ assert.equal(x.assumptions.score_basis,"GROSS_PRICE_ONLY");
  assert.equal(x.reward_points,0);
  assert.deepEqual(x.hypotheses,hypotheses.proxyHypotheses(data,{symbol:"EURUSD",timeframe:"M15",coverage:"complete",missingSpreadRatio:1}).hypotheses);
  assert.equal(new Set(x.hypotheses.map(h=>h.id)).size,x.hypotheses.length);
  assert.equal(x.execution_enabled,false);
- assert.ok(x.hypotheses.every(c=>c.status==="UNVERIFIED_BROKER_COST_HYPOTHESIS"&&
+ assert.ok(x.hypotheses.every(c=>c.status==="GROSS_PRICE_HYPOTHESIS_UNVERIFIED"&&
  c.reward_points===0&&c.execution_enabled===false));
 });
 test("partial, short broker candles are not used for unverified hypotheses",()=>{
