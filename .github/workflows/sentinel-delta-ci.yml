@@ -1,0 +1,26 @@
+name: Sentinel Delta source rule engine tests
+on:
+  push:
+    branches: [sentinel-orderflows-delta-curriculum-v1]
+    paths:
+      - 'sentinel-console/worker/orderflow/**'
+      - 'sentinel-console/brain/orderflows-delta-curriculum.js'
+      - 'sentinel-console/tests/orderflows-delta.test.cjs'
+      - '.github/workflows/sentinel-delta-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-delta-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify all Delta engine source tests
+        run: |
+          node --check sentinel-console/worker/orderflow/delta-engine.js
+          node --check sentinel-console/brain/orderflows-delta-curriculum.js
+          node --test sentinel-console/tests/orderflows-delta.test.cjs
