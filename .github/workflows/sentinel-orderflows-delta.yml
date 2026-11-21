@@ -1,0 +1,26 @@
+name: Validate Sentinel Orderflows Delta course research
+on:
+  push:
+    branches: [sentinel-orderflows-delta-course-v1]
+    paths:
+      - 'sentinel-console/brain/orderflows-delta-curriculum.js'
+      - 'sentinel-console/worker/orderflow/**'
+      - 'sentinel-console/tests/orderflows-delta-course.test.cjs'
+      - '.github/workflows/sentinel-orderflows-delta.yml'
+  pull_request:
+    branches: [sentinel-source-execution-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  delta-source-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify course concepts and demo-only protections
+        run: |
+          node --test sentinel-console/tests/orderflows-delta-course.test.cjs sentinel-console/tests/source-demo-signals.test.cjs
