@@ -1,0 +1,39 @@
+name: NautilusTrader v2 crypto adapter (READ ONLY)
+
+on:
+  push:
+    branches:
+      - sentinel-crypto-orderflow-v1
+    paths:
+      - 'crypto/external-stack/nautilus_kraken_spot.py'
+      - 'crypto/external-stack/requirements-nautilus.txt'
+      - '.github/workflows/crypto-nautilus-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-venue-adapter-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install exact research upstream wheel
+        run: python -m pip install -r crypto/external-stack/requirements-nautilus.txt
+      - name: Assert installed package is v2 release candidate
+        run: python -c "import nautilus_trader; assert nautilus_trader.__version__ == '2.0.0rc9', nautilus_trader.__version__"
+      - name: Import official data-only adapter and build node
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "crypto/external-stack")
+          from nautilus_kraken_spot import build_readonly_node
+          node = build_readonly_node()
+          print("DATA_ONLY_NODE_BUILT", type(node).__name__)
+          # Do NOT call run(); this test checks the adapter's stable configuration.
+          # No execution client is registered and no exchange credentials are used.
+          PY
