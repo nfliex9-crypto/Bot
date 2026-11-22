@@ -34,9 +34,36 @@ jobs:
           python - <<'PY'
           import sys
           sys.path.insert(0, "crypto/external-stack")
-          from nautilus_kraken_spot import build_readonly_node
+          from nautilus_kraken_spot import build_readonly_node, build_tester_config
+          config = build_tester_config()
+          assert config.subscribe_book_deltas, "Managed L2 book requires delta subscription"
+          assert config.subscribe_trades, "Missing executed-trades subscription"
+          assert config.book_depth == 10, "Expected Kraken depth 10"
           node = build_readonly_node()
           print("DATA_ONLY_NODE_BUILT", type(node).__name__)
           # Do NOT call run(); this test checks the adapter's stable configuration.
           # No execution client is registered and no exchange credentials are used.
-          PY
+          PY      - name: Stream genuine Kraken market data through native NautilusTrader (30s read-only)
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=15s 30s python -u crypto/external-stack/nautilus_kraken_spot.py > nautilus-kraken-live.log 2>&1
+          exit_code=$?
+          set -e
+          echo "Expected interrupted lifecycle code: $exit_code"
+          if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 124 ]; then
+            tail -80 nautilus-kraken-live.log
+            exit "$exit_code"
+          fi
+          # Source-independent smoke: Kraken adapter must have produced actual TradeTick records.
+          # OrderBook delta subscription integrity is validated above and in upstream DataTester.
+          grep -q 'TradeTick' nautilus-kraken-live.log || { tail -100 nautilus-kraken-live.log; echo "NO_LIVE_TRADE_TICK"; exit 1; }
+          echo "NATIVE_NAUTILUS_REAL_TRADE_TICKS_OBSERVED"
+      - name: Preserve native Kraken feed diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nautilus-kraken-spot-live-diagnostics
+          path: nautilus-kraken-live.log
+          retention-days: 7
+          if-no-files-found: warn
