@@ -87,6 +87,22 @@ class CaptureMetadataContract(unittest.TestCase):
         self.write()
         with self.assertRaises(CaptureRejected): self.inspect()
 
+    def test_wrong_pcap_attestation_rejected(self):
+        with self.assertRaisesRegex(CaptureRejected, "PCAP_HASH_ATTESTATION_MISMATCH"):
+            inspect_capture(self.pcap, "KRAKEN", "BTC-USD", expected_pcap_sha256="a" * 64)
+
+    def test_wrong_metadata_attestation_rejected(self):
+        with self.assertRaisesRegex(CaptureRejected, "METADATA_HASH_ATTESTATION_MISMATCH"):
+            inspect_capture(self.pcap, "KRAKEN", "BTC-USD", expected_meta_sha256="b" * 64)
+
+    def test_truncated_replay_count_rejected_even_if_decoder_did_not_raise(self):
+        incomplete = {"trades": 1, "books": 1, "messages_processed": 9,
+                      "http_requests_served": 1, "order_regressions": 0,
+                      "last_bid": "10", "last_ask": "11"}
+        with patch("replay_verified.replay_once", return_value=incomplete):
+            with self.assertRaisesRegex(CaptureRejected, "RECORDED_MESSAGE_COUNT_MISMATCH"):
+                verify(self.pcap, "KRAKEN", "BTC-USD", repeat=2)
+
     def test_fake_non_pcap_payload_never_verifies(self):
         # Metadata that looks correct cannot turn fake bytes into verified events.
         with patch("replay_verified.replay_once", side_effect=ValueError("bad PCAP")):
