@@ -1,0 +1,89 @@
+name: WEEX perpetual futures data and DEMO route (NO REAL ORDERS)
+
+on:
+  push:
+    branches: [sentinel-crypto-orderflow-v1]
+    paths:
+      - 'crypto/futures-demo/**'
+      - '.github/workflows/crypto-weex-futures-demo.yml'
+  pull_request:
+    branches: [sentinel-adaptive-intelligence-v2]
+    paths:
+      - 'crypto/futures-demo/**'
+      - '.github/workflows/crypto-weex-futures-demo.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-ccxt-safety:
+    name: Confirm no spot, no production private routing
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install upstream pinned CCXT Pro
+        run: python -m pip install -r crypto/futures-demo/requirements.txt
+      - name: Prove actual installed upstream CCXT version
+        run: python -c "import ccxt,ccxt.pro;assert ccxt.__version__=='4.5.93';assert hasattr(ccxt.pro,'weex')"
+      - name: Run fail-closed contract tests including demo-only signed request URLs
+        run: python -m unittest discover -s crypto/futures-demo -p 'test_*.py' -v
+      - name: Ensure account without secrets cannot be authenticated
+        shell: bash
+        run: |
+          set +e
+          env -u WEEX_SIM_API_KEY -u WEEX_SIM_API_SECRET -u WEEX_SIM_API_PASSPHRASE python crypto/futures-demo/weex_demo_account.py > unconnected-account.json
+          status=$?
+          set -e
+          test "$status" -eq 1
+          python - <<'PY'
+          import json
+          x=json.load(open("unconnected-account.json"))
+          assert x["status"]=="DEMO_ACCOUNT_NOT_CONNECTED" and x["orders_placed"]==0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weex-demo-safe-configuration
+          path: unconnected-account.json
+          retention-days: 7
+
+  genuine-perpetual-orderflow:
+    name: Live WEEX USDT Perpetual Order Book & Trade Tape
+    needs: upstream-ccxt-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r crypto/futures-demo/requirements.txt
+      - name: Verify real futures WS (not spot and not synthetic)
+        shell: bash
+        run: |
+          python crypto/futures-demo/weex_futures_feed.py --symbol 'BTC/USDT:USDT' --seconds 40 | tee weex-perpetual-witness.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path("weex-perpetual-witness.json").read_text().splitlines()[-1])
+          assert x["status"] == "LIVE_WEEX_PERP_FEED_VERIFIED"
+          assert x["market"] == "USDT_LINEAR_PERPETUAL"
+          assert x["book_update_callbacks"] > 0 and x["unique_executed_trades"] > 0
+          assert x["spot_prices_used"] is False and x["orders_enabled"] is False
+          PY
+      - name: Save source-labeled public futures observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weex-real-perpetual-l2-trades
+          path: weex-perpetual-witness.json
+          retention-days: 7
+          if-no-files-found: warn
