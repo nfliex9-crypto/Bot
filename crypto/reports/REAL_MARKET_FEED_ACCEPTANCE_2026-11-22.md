@@ -61,3 +61,21 @@ KRAKEN.ws.1: received=2511 sent=2
 - Kraken Spot is not Binance Spot, Kraken Futures, MT5 BTCUSD, or a globally consolidated order book.
 - NautilusTrader 2.0.0rc9 is a *pre-release*: research and testing only, not a proven safe funded trading implementation.
 - No Vercel, Railway, or Neon instance was created or changed; MT5 production remains outside the scope.
+
+## Verified E4: Native NautilusTrader v2.0.0rc9 live Kraken Spot (same day)
+
+**GitHub Actions:** https://github.com/nfliex9-crypto/Bot/actions/runs/45030670151 — `official-venue-adapter-smoke` **SUCCESS** on Linux / Python 3.13.
+
+- Installed exactly `nautilus_trader==2.0.0rc9` upstream research pre-release.
+- Verified `KrakenDataClientConfig(product_type=KrakenProductType.SPOT)`.
+- Verified `DataTesterConfig.subscribe_book_deltas=True`, `manage_book=True`, `book_depth=10`, `subscribe_trades=True`, before launching.
+- Built data-only LiveNode without registering an execution client; `Environment.LIVE` means current public exchange market data, **not a funded trading account**.
+- Started native Kraken spot connector and upstream `DataTester` actor for a short timed observation. CI required an **actual emitted `TradeTick {`** in output, and printed the acceptance marker `NATIVE_NAUTILUS_REAL_TRADE_TICKS_OBSERVED`. No executions, demo or otherwise.
+- Recorded diagnostic artifact: https://github.com/nfliex9-crypto/Bot/actions/runs/45030670151/artifacts/14757875429 (ZIP 60,191 bytes, digest `sha256:26dfee574070c3564cc5b259491ebee1145aeb815462d4b6f2def47d743b2343`, temporary 7-day retention).
+
+**Limits of this evidence:** CI asserts native L2 subscription and the presence of a live trade tick; it does **not yet** include an independent explicit count/continuity assertion for native reconstructed depth levels over a long run. Cryptofeed's independent E1/E2 tests establish a separate real Kraken order-book source for the same market. Neither observation proves 24/7 uptime, execution, strategy edge, or Bookmap/DeepCharts integration.
+
+### Revised acceptance
+- `PASS`: Cryptofeed upstream public trade/L2 connectivity with actual source recorder; test and PCAP artifact.
+- `PASS`: NautilusTrader official Kraken Spot live read-only data client, real TradeTick emitted, required L2 subscription configuration verified.
+- `PENDING`: native L2 continuity/restart and long-run health tests; persistent storage/replay; event-driven backtest and genuine paper results; no service deployment yet.
