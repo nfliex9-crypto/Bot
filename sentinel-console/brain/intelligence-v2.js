@@ -6,6 +6,7 @@
  * is a separate evidence class. Score is a heuristic, NOT a win probability.
  * Transaction costs are NOT modeled or deducted in the requested research.
  */
+const evidence=require("./purged-forward-evidence.js");
 const VERSION="sentinel-adaptive-intelligence-v2.0";
 const PERIOD={M15:900000,H1:3600000};
 const SOURCE={
@@ -133,46 +134,9 @@ function rank({m15,h1,signals=[],now=Date.now(),venue=null,orderflow=null}={}){
 /** Forward evidence from completed PRE-TAGGED demo fills, chronological
  * untouched OOS. Evidence can NOT create an order authorization.
  */
-function forwardEvidence(rows,{minTrain=20,minOos=15,minOosDays=5,asOf=Date.now()}={}){
- if(!Array.isArray(rows))throw Error("BROKER_TRADES_EXPECTED");
- if(!Number.isSafeInteger(asOf))throw Error("INVALID_EVIDENCE_CUTOFF");
- const groups=new Map(),used=new Set();let rejected=0;
- for(const r of rows){
-  const open=parseTime(r?.openTime),close=parseTime(r?.closeTime),tag=parseTime(r?.taggedAt);
-  const identity=[r?.accountId,r?.ticket].join("|");
-  if(r?.isDemo!==true||r?.brokerVerified!==true||r?.complete!==true||
-     r?.partial===true||!r?.ticket||!r?.accountId||!r?.symbol||!SOURCE[r?.family]||
-     !num(r?.grossProfit)||!num(r?.riskAtEntry)||!(r.riskAtEntry>0)||
-     !Number.isFinite(open)||!Number.isFinite(close)||!Number.isFinite(tag)||
-     !(tag<=open&&open<close&&close<=asOf)||used.has(identity)||
-     !Number.isFinite(r.grossProfit/r.riskAtEntry)){rejected++;continue}
-  used.add(identity);
-  const key=r.symbol+"|"+r.family,arr=groups.get(key)||[];
-  arr.push({time:close,grossR:r.grossProfit/r.riskAtEntry,ticket:String(r.ticket)});
-  groups.set(key,arr);
- }
- const strategies=[];
- for(const [key,arr] of groups){
-  arr.sort((a,b)=>a.time-b.time||a.ticket.localeCompare(b.ticket));
-  const split=Math.max(1,Math.floor(arr.length*.65)),train=arr.slice(0,split),oos=arr.slice(split);
-  const measures=x=>{
-   const r=x.map(t=>t.grossR),wins=r.filter(v=>v>0),losses=r.filter(v=>v<0);
-   const sum=r.reduce((a,b)=>a+b,0),gain=wins.reduce((a,b)=>a+b,0),loss=-losses.reduce((a,b)=>a+b,0);
-   return {trades:r.length,winPct:r.length?round(wins.length/r.length*100,2):null,
-    expectancyR:r.length?round(sum/r.length):null,profitFactor:loss?round(gain/loss):null,
-    grossTotalR:round(sum),days:new Set(x.map(v=>new Date(v.time).toISOString().slice(0,10))).size};
-  };
-  const tr=measures(train),os=measures(oos);
-  const enough=tr.trades>=minTrain&&os.trades>=minOos&&os.days>=minOosDays;
-  const status=!enough?"COLLECTING_FORWARD":os.expectancyR>0&&tr.expectancyR>0?
-    "PROMISING_REQUIRES_INDEPENDENT_REVIEW":"WEAK_OR_UNSTABLE";
-  const [symbol,family]=key.split("|");
-  strategies.push({symbol,family,status,train:tr,oos:os,executionApproved:false,
-   promotedToDemo:false,explanation:enough?"Chronological gross forward review":"Insufficient labeled days or completed trades"});
- }
- strategies.sort((a,b)=>a.symbol.localeCompare(b.symbol)||a.family.localeCompare(b.family));
- return {version:VERSION,records:rows.length,accepted:used.size,rejected,strategies,
-  split:"CHRONOLOGICAL_65_35",costDeductions:0,ordersEnabled:false};
+function forwardEvidence(rows,options={}){
+ return evidence.evaluate(rows,options);
 }
+
 module.exports={VERSION,PERIOD,SOURCE,PDF_NAME,validateClosed,marketFeatures,verifiedTape,
  evaluateCandidate,rank,forwardEvidence};
