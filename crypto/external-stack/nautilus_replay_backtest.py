@@ -113,7 +113,7 @@ def main():
         code = 1
     line = json.dumps(report, sort_keys=True)
     if args.out is not None:
-        args.out.write_text(line + "\\n", encoding="utf-8")
+        args.out.write_text(line + "\n", encoding="utf-8")
     print(line)
     return code
 
