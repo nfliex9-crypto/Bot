@@ -7,6 +7,7 @@
  * Transaction costs are NOT modeled or deducted in the requested research.
  */
 const evidence=require("./purged-forward-evidence.js");
+const canonicalRegime=require("../worker/cloud-trader/regime-intelligence.js");
 const VERSION="sentinel-adaptive-intelligence-v2.0";
 const PERIOD={M15:900000,H1:3600000};
 const SOURCE={
@@ -65,7 +66,11 @@ function marketFeatures({m15,h1,now}){
  const prev=m15.slice(-17,-1),hi=Math.max(...prev.map(b=>b.high)),lo=Math.min(...prev.map(b=>b.low));
  const shortAtr=atr(m15,7),longAtr=atr(m15,42);
  const ratio=shortAtr/longAtr;
- const regime=ratio>1.65?"VOLATILE":ratio<0.65?"CONTRACTING":Math.abs(trend)>0.65?"TRENDING":"RANGING";
+ // A single regime vocabulary and algorithm across research and the future
+ // Demo risk evaluator. Prevent conflicting trend/range labels in the brain.
+ const classification=canonicalRegime.analyze(m15,h1);
+ if(!classification.ok)return {ready:false,reason:"CANONICAL_"+classification.reason};
+ const regime=classification.regime;
  const freshness=Math.max(0,now-(last.time+PERIOD.M15));
  const hFreshness=Math.max(0,now-(hour.time+PERIOD.H1));
  if(freshness>PERIOD.M15||hFreshness>4*PERIOD.H1)
