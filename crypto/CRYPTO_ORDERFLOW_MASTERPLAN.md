@@ -1,5 +1,6 @@
 # Sentinel Crypto Intelligence — External-first Master Plan v2
 
+> **2026-11-22 PRODUCT PIVOT — SUPERSEDES PRIOR SPOT TARGET.** The user's new goal is **WEEX USDT Perpetual Futures DEMO**, NOT Spot trading. The Kraken Spot historical tests below are archived R&D results and must NEVER be used as WEEX futures training labels, order-book signals, broker prices or fills. No active Spot jobs. The new active path is [crypto/futures-demo/README.md](./futures-demo/README.md) and [GitHub WEEX Futures CI](../.github/workflows/crypto-weex-futures-demo.yml). The CCXT Pro WEEX public FUTURES L2/trade WebSocket has been verified on GitHub with authentic exchange data; WEEX simulation account authentication and demo order placement require a separate demo API credential and are NOT yet active.\n\n
 **Decision:** 2026-11-22. **Mode:** independent GitHub R&D. **Owner directive:** depend on vetted upstream market-data, order-book, order-flow, backtesting and execution engines. **Do NOT build those products from scratch.**
 
 ## Independence from existing MT5
