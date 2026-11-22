@@ -42,15 +42,18 @@ function evaluate({signal,m15,h1,equity,dayStartEquity,positions=[],orders=[],ba
  const occupancyFactor=1/Math.sqrt(1+exposureCount);
  const relativeEquity=clamp(equity/dayStartEquity,0,1);
  const drawdownFactor=relativeEquity**2;
- const qualityFactor=.25+score*1.75;
- const riskPct=baseRiskPct*qualityFactor*market.riskFactor*occupancyFactor*drawdownFactor;
+ // The configured DEMO risk percentage is an authorization CEILING,
+ // never a target that a heuristic score may multiply above permission.
+ const qualityFactor=.25+score*.75;
+ const appliedRegimeFactor=Math.min(1,market.riskFactor);
+ const riskPct=baseRiskPct*qualityFactor*appliedRegimeFactor*occupancyFactor*drawdownFactor;
  if(!Number.isFinite(riskPct)||riskPct<=0||riskPct>=100)
   return {allowed:false,reason:"RISK_BUDGET_UNAVAILABLE",riskPct:0,
    score:Number(score.toFixed(4)),market,quality};
  return {allowed:true,reason:"V2_CLOSED_BAR_QUALITY",score:Number(score.toFixed(4)),
   riskPct:Number(riskPct.toFixed(6)),market,quality,
   openExposureCount:exposureCount,relativeEquityRatio:Number(relativeEquity.toFixed(5)),
-  riskFactors:{quality:Number(qualityFactor.toFixed(4)),regime:market.riskFactor,
+  riskFactors:{quality:Number(qualityFactor.toFixed(4)),regime:appliedRegimeFactor,
    exposure:Number(occupancyFactor.toFixed(4)),drawdown:Number(drawdownFactor.toFixed(4))},
   evidence:"PRICE_ONLY_HEURISTIC_NOT_CALIBRATED_WIN_PROBABILITY",
   executionEnabled:false};
