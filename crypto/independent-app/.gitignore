@@ -1,0 +1,16 @@
+# Sentinel Crypto futures: strictly separate from MT5 / never commit secrets
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/*
+!data/.gitkeep
+*.parquet
+*.pcap
+*.pcap.zst
+*.log
+*.secret
+.DS_Store
