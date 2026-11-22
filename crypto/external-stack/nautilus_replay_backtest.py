@@ -97,6 +97,7 @@ def run(catalog_dir: Path) -> dict:
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--catalog", required=True, type=Path)
+    p.add_argument("--out", type=Path, default=None, help="Machine-readable result JSON")
     args = p.parse_args()
     try:
         report = run(args.catalog)
@@ -110,7 +111,10 @@ def main():
             "profitable_strategy_proven": False,
         }
         code = 1
-    print(json.dumps(report, sort_keys=True))
+    line = json.dumps(report, sort_keys=True)
+    if args.out is not None:
+        args.out.write_text(line + "\\n", encoding="utf-8")
+    print(line)
     return code
 
 
