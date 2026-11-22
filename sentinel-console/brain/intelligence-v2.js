@@ -14,6 +14,10 @@ const SOURCE={
  sweep_divergence_bos:"COMPOSITE_RESEARCH_HYPOTHESIS",
  trend_delta_surge:"COMPOSITE_RESEARCH_HYPOTHESIS"
 };
+const PDF_NAME=Object.freeze({
+ pdf_sweep_bos:"Market_Structure_And_Powerful_Setups_By_Wade_Fx_Setups1_1.pdf",
+ pdf_fvg_retest:"9. Price_Action_Imbalance.pdf"
+});
 const num=x=>typeof x==="number"&&Number.isFinite(x);
 const clamp=(x,lo=0,hi=1)=>Math.max(lo,Math.min(hi,x));
 const round=(x,p=4)=>Number(x.toFixed(p));
@@ -92,7 +96,9 @@ function evaluateCandidate({signal,features,orderflow=null,venue=null}){
  const source=SOURCE[signal.family];
  if(source==="OWNER_PDF_PRICE_PATTERN"&&(
     signal.source_kind!=="OWNER_PDF_PRICE_PATTERN"||
-    typeof signal.source_pdf!=="string"||!Array.isArray(signal.source_pages)||!signal.source_pages.length))
+    signal.source_pdf!==PDF_NAME[signal.family]||
+    !Array.isArray(signal.source_pages)||!signal.source_pages.length||
+    !signal.source_pages.every(n=>Number.isSafeInteger(n)&&n>0)))
   return {status:"BLOCKED_SOURCE",reason:"PDF_PAGE_PROVENANCE_MISSING"};
  if(source==="COMPOSITE_RESEARCH_HYPOTHESIS"&&signal.kind!==source)
   return {status:"BLOCKED_SOURCE",reason:"RESEARCH_ORIGIN_MISMATCH"};
@@ -127,8 +133,9 @@ function rank({m15,h1,signals=[],now=Date.now(),venue=null,orderflow=null}={}){
 /** Forward evidence from completed PRE-TAGGED demo fills, chronological
  * untouched OOS. Evidence can NOT create an order authorization.
  */
-function forwardEvidence(rows,{minTrain=20,minOos=15,minOosDays=5}={}){
+function forwardEvidence(rows,{minTrain=20,minOos=15,minOosDays=5,asOf=Date.now()}={}){
  if(!Array.isArray(rows))throw Error("BROKER_TRADES_EXPECTED");
+ if(!Number.isSafeInteger(asOf))throw Error("INVALID_EVIDENCE_CUTOFF");
  const groups=new Map(),used=new Set();let rejected=0;
  for(const r of rows){
   const open=parseTime(r?.openTime),close=parseTime(r?.closeTime),tag=parseTime(r?.taggedAt);
@@ -137,7 +144,8 @@ function forwardEvidence(rows,{minTrain=20,minOos=15,minOosDays=5}={}){
      r?.partial===true||!r?.ticket||!r?.accountId||!r?.symbol||!SOURCE[r?.family]||
      !num(r?.grossProfit)||!num(r?.riskAtEntry)||!(r.riskAtEntry>0)||
      !Number.isFinite(open)||!Number.isFinite(close)||!Number.isFinite(tag)||
-     !(tag<=open&&open<close)||used.has(identity)){rejected++;continue}
+     !(tag<=open&&open<close&&close<=asOf)||used.has(identity)||
+     !Number.isFinite(r.grossProfit/r.riskAtEntry)){rejected++;continue}
   used.add(identity);
   const key=r.symbol+"|"+r.family,arr=groups.get(key)||[];
   arr.push({time:close,grossR:r.grossProfit/r.riskAtEntry,ticket:String(r.ticket)});
@@ -166,5 +174,5 @@ function forwardEvidence(rows,{minTrain=20,minOos=15,minOosDays=5}={}){
  return {version:VERSION,records:rows.length,accepted:used.size,rejected,strategies,
   split:"CHRONOLOGICAL_65_35",costDeductions:0,ordersEnabled:false};
 }
-module.exports={VERSION,PERIOD,SOURCE,validateClosed,marketFeatures,verifiedTape,
+module.exports={VERSION,PERIOD,SOURCE,PDF_NAME,validateClosed,marketFeatures,verifiedTape,
  evaluateCandidate,rank,forwardEvidence};
