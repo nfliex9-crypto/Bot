@@ -39,6 +39,33 @@ def recent_millis(value, now_ms: int, max_age_ms: int = 180000,
     return ts
 
 
+def recent_executed_trade(symbol: str, trades: list, now_ms: int) -> dict:
+    """Last = a verified actual WEEX *perpetual contract* trade, not 24h ticker."""
+    if not isinstance(trades, list) or not trades:
+        raise ReferenceRejected("NO_PUBLIC_FUTURES_EXECUTED_TRADES")
+    candidate = None
+    for trade in trades:
+        if not isinstance(trade, dict):
+            raise ReferenceRejected("INVALID_PUBLIC_TRADE_STRUCTURE")
+        if trade.get("symbol") != symbol:
+            raise ReferenceRejected("FOREIGN_MARKET_TRADE")
+        if trade.get("side") not in ("buy", "sell"):
+            raise ReferenceRejected("INVALID_TRADE_SIDE")
+        finite_value(trade.get("price"), positive=True)
+        finite_value(trade.get("amount"), positive=True)
+        recent_millis(trade.get("timestamp"), now_ms, max_age_ms=45000,
+                      source="last_executed_trade")
+        if trade.get("id") is None:
+            raise ReferenceRejected("MISSING_EXECUTED_TRADE_ID")
+        if candidate is None or int(trade["timestamp"]) > int(candidate["timestamp"]):
+            candidate = trade
+    return {
+        "symbol": symbol,
+        "last": candidate["price"], "timestamp": candidate["timestamp"],
+        "trade_id": str(candidate["id"]),
+    }
+
+
 def build_reference(symbol: str, ticker: dict, funding: dict, interest: dict,
                     now_ms: int) -> dict:
     if symbol not in PAIRS:
@@ -63,9 +90,9 @@ def build_reference(symbol: str, ticker: dict, funding: dict, interest: dict,
         next_funding_ms = int(next_funding_at)
         if next_funding_ms < funding_ts - 86400000:
             raise ReferenceRejected("INVALID_NEXT_FUNDING_TIME")
-    ticker_ts = ticker.get("timestamp")
-    if ticker_ts is not None:
-        recent_millis(ticker_ts, now_ms, source="last_ticker")
+    ticker_ts = recent_millis(
+        ticker.get("timestamp"), now_ms,
+        max_age_ms=45000, source="last_executed_trade")
 
     return {
         "status": "VERIFIED_PUBLIC_PERPETUAL_REFERENCE",
@@ -80,7 +107,9 @@ def build_reference(symbol: str, ticker: dict, funding: dict, interest: dict,
         "open_interest_contract_units": oi,
         "last_vs_mark_bps": round(10000 * (last / mark - 1), 5),
         "mark_vs_index_bps": round(10000 * (mark / index - 1), 5),
-        "ticker_exchange_time_ms": int(ticker_ts) if ticker_ts is not None else None,
+        "last_executed_trade_exchange_time_ms": ticker_ts,
+        "last_executed_trade_id": ticker.get("trade_id"),
+        "last_price_origin": "ccxt_weex_public_futures_recent_executed_trades",
         "funding_exchange_time_ms": funding_ts,
         "open_interest_exchange_time_ms": oi_ts,
         "observed_at_ms": now_ms,
@@ -96,17 +125,19 @@ async def snapshot(symbol: str) -> dict:
     try:
         await asyncio.wait_for(exchange.load_markets(), timeout=25)
         verify_swap(exchange.market(symbol), symbol)
-        ticker, rates, interest = await asyncio.wait_for(
+        rates, interest, trades = await asyncio.wait_for(
             asyncio.gather(
-                exchange.fetch_ticker(symbol),
                 exchange.fetch_funding_rates([symbol]),
                 exchange.fetch_open_interest(symbol),
+                exchange.fetch_trades(symbol, limit=10),
             ), timeout=30,
         )
         rate = rates.get(symbol) if isinstance(rates, dict) else None
         if not isinstance(rate, dict):
             raise ReferenceRejected("MISSING_MARK_INDEX_FUNDING")
-        return build_reference(symbol, ticker, rate, interest, int(time.time() * 1000))
+        now_ms = int(time.time() * 1000)
+        last_execution = recent_executed_trade(symbol, trades, now_ms)
+        return build_reference(symbol, last_execution, rate, interest, now_ms)
     finally:
         await exchange.close()
 
