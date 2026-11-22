@@ -1,64 +1,77 @@
-# Sentinel Crypto — external-first market data (2026-11-22)
+# Sentinel Crypto Intelligence — verified upstream adapters
 
-## Core policy
+**Mode:** independent research / live market DATA only. **MT5 untouched.**
+The external data and order-book engines are not rewritten or forked. The only local code is a source-integrity witness, adapter configuration and tests.
 
-This is an **external-first integration**, not another home-built crypto exchange gateway, order book, or heatmap. The existing MT5 bot is independent and must not be changed. No new live order authorization, credentials, databases or trading permissions are introduced.
+## Approved upstream versions
 
-| Responsibility | Approved upstream | Version / restrictions |
-|---|---|---|
-| Market-data callbacks & live normalized trades/depth | [bmoscon/cryptofeed](https://github.com/bmoscon/cryptofeed) | **3.0.5**, Python 3.13+; official WebSocket venue adapters |
-| Recording market data for deterministic replay | Cryptofeed's official `examples/record.py` | PCAP output with connection metadata; **no custom collector** |
-| Order-book construction, exchange adapters, event replay & future execution | [NautilusTrader](https://nautilustrader.io/docs/latest/) | Upstream 2.0 release candidate API; installation and example must be matched to the pinned version before use |
-| Bookmap liquidity visualization / review | [Bookmap](https://bookmap.com/knowledgebase/docs/API) | Official Add-ons API; requires user's app and entitled exchange data |
-| DeepCharts / DeepDOM review | [DeepCharts](https://www.deepcharts.com/helpcenter/deepdom/article/installation-and-first-configuration) | External Level 2 feed and license; an outbound machine data API for use by Sentinel is **not verified** |
-| Alternative automated market execution | [Hummingbot](https://hummingbot.org/exchanges/) | Research alternative, not concurrent with Nautilus execution. Only one executor may own an account. |
+| Component | Exact version | Role | State |
+| --- | --- | --- | --- |
+| [Cryptofeed](https://github.com/bmoscon/cryptofeed/tree/v3.0.5) | `3.0.5` | Public exchange trade/L2 streams; official PCAP recorder | Configured; remote live verification pending |
+| [NautilusTrader](https://github.com/nautechsystems/nautilus_trader/tree/v2.0.0rc9) | `2.0.0rc9` **research pre-release** | Official Kraken Spot DataTester + native managed order book | Configured read-only; hosted adapter test pending |
+| [Bookmap](https://bookmap.com/knowledgebase/docs/API) | Licensed product | External heatmap/chart reference | Not connected; requires entitled API/data |
+| [DeepCharts / DeepDOM](https://www.deepcharts.com/helpcenter/deepdom/article/installation-and-first-configuration) | Licensed product | Visual footprint/DOM review | Not connected; outbound API unverified |
 
-### First actual data source
+> The upstream Cryptofeed package is AGPL-3.0-or-later. NautilusTrader is LGPL-3.0. Validate applicable license obligations before any commercial network use or redistribution.
 
-Start with **Kraken Spot BTC-USD** as venue-scoped market-data research. Kraken Spot is not a crypto perpetual exchange and is not evidence of legal permission to short. Optional independent reference: Binance Spot BTC-USDT, **not a consolidated/global book and not a proxy for Kraken BTC-USD fills**.
+## Genuine Kraken Spot BTC-USD test
 
-### Run upstream's official PCAP capture (no accounts, no artificial prices)
-
-Linux/macOS/Windows with Python >=3.13 and a network connection to the exchange:
+Prerequisites: Python **3.13**, exchange connectivity, a clock synced to UTC. No API key, real-money permission or connected MT5 account.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
-python -m pip install 'cryptofeed==3.0.5'
+source .venv/bin/activate     # Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -r crypto/external-stack/requirements.txt
+python crypto/external-stack/verify_live.py --exchange KRAKEN --symbol BTC-USD --seconds 60
+```
+
+Other permitted research pairs: `ETH-USD`, `SOL-USD` on Kraken; `BTC-USDT`, `ETH-USDT`, `SOL-USDT` on Binance Spot.
+
+Expected output is one strict JSON line. `VERIFIED_RECENT_EXTERNAL_EVENTS` **only** means that both Cryptofeed callbacks provided fresh, properly labeled public trade and top-of-book data within that run. It does NOT prove any historical profitability, spot shorting, account connectivity, persistent uptime, or executable fills. Missing/stale/inconsistent trade or book events yield `DATA_UNVERIFIED` and a nonzero exit status.
+
+Kraken's upstream adapter manages the L2 book and validates the venue's checksum by default. The witness uses max_depth=10 and checks event timestamps, positive quantities, non-crossed BBO, exact exchange/symbol attribution and timestamps. No local home-built order book or order-placement client exists.
+
+## Capture real exchange WebSocket messages (official upstream utility)
+
+```bash
 git clone --depth 1 --branch v3.0.5 https://github.com/bmoscon/cryptofeed.git upstream-cryptofeed
 python upstream-cryptofeed/examples/record.py KRAKEN BTC-USD --duration 60 --out ./captures/
 ```
 
-On Windows PowerShell use `.venv\Scripts\Activate.ps1` instead of `source`.
+This is the upstream **PCAP recorder**, not our implementation. It subscribes to `TRADES` and `L2_BOOK` by default, captures source frames and metadata, and requires a connected network. PCAP is not an independently verified backtest or permission to auto-trade. Protect captured records and use bounded retention.
 
-Official repo's `record.py` subscribes to both TRADES and L2_BOOK by default. This data is exchange-originated; if the connection fails the recording does not fabricate candles, trades, or positions. PCAP **records upstream transport traffic**, not a ready-to-trade, validated historical L2 simulation.
+## Read-only NautilusTrader official adapter
 
-An external feed witness (read-only, no trading, no private keys):
+Pinned to v2.0.0rc9; the latest 2.x API is incompatible with stable 1.x. Install separately from the Cryptofeed environment if dependencies conflict:
 
 ```bash
-python crypto/external-stack/verify_live.py --exchange KRAKEN --symbol BTC-USD --seconds 45
-# optionally: --exchange BINANCE --symbol BTC-USDT
+python -m pip install -r crypto/external-stack/requirements-nautilus.txt
+python crypto/external-stack/nautilus_kraken_spot.py
 ```
 
-Exit 0 means current run observed valid order book and executed-trade callbacks for that exact venue and pair, not that 24/7 availability has been proven. Exit nonzero means DATA_UNVERIFIED. No callbacks -> no data.
+The script is a minimally adapted version of [upstream's data-only Kraken example](https://github.com/nautechsystems/nautilus_trader/blob/v2.0.0rc9/examples/live/kraken/data_tester.py): `KrakenProductType.SPOT`, `BTC/USD.KRAKEN`, public quotes, public trades, managed L2 book. **No execution client is registered, no strategy is deployed, no order route exists.** The node runs until stopped manually. `Environment.LIVE` refers to the **market-data environment**, not a funded account.
 
-### Implementation boundaries
+**Not for live-money production:** NautilusTrader 2.0.0rc9 is a release candidate; first validate compatibility and feed quality, then perform real historical/OOS and paper tests.
 
-- We don't implement custom depth sequencing, trading venue adapters, maker/taker side inference, or heatmap. Use upstream implementations under version-pinned contracts.
-- Cryptofeed `OrderBook` and `Trade` types are venue-normalized; public callbacks are not proof of account access or executable liquidity elsewhere.
-- `verify_live.py` is only a small operational readiness witness. It observes source events; it does not calculate trading signals, make orders, or impersonate Bookmap.
-- Order-flow lessons and strategy validation remain research-only until separately evaluated on real, authenticated source data.
-- No secrets are needed to read public Kraken book/trade streams. Never commit exchange API keys.
-- This development branch does **not** deploy a service, and Github-hosted runners cannot establish your own broker account is trading.
-- Before a persistent 24/7 service: specify storage volume/retention, upstream recording rotation, connectivity alarms, bounded resource use, and approved region-specific venue access.
-- Before any **real orders**: separate explicit authorization, authenticated account and exchange product suitability, settlement and order reconciliation, stop and sizing validation, tested emergency disablement.
+## Local deterministic tests (not live feed evidence)
 
-### References
+```bash
+python -m unittest discover -s crypto/external-stack -p 'test_*.py' -v
+python -m py_compile crypto/external-stack/verify_live.py crypto/external-stack/nautilus_kraken_spot.py
+```
 
-- Cryptofeed repository & docs: https://github.com/bmoscon/cryptofeed
-- Cryptofeed official PCAP capture script: https://github.com/bmoscon/cryptofeed/blob/v3.0.5/examples/record.py
-- Cryptofeed release: https://github.com/bmoscon/cryptofeed/releases/tag/v3.0.5
-- NautilusTrader Binance: https://nautilustrader.io/docs/latest/integrations/binance/
-- NautilusTrader book model: https://nautilustrader.io/docs/latest/concepts/order_book/
-- Bookmap API: https://bookmap.com/knowledgebase/docs/API
-- DeepDOM data requirements: https://www.deepcharts.com/helpcenter/deepdom/article/installation-and-first-configuration
+The tests exercise missing data, bad timestamps, wrong venue, incorrect book, malformed prices, allowed symbol scope, and the impossibility of enabling order execution via this component.
+
+## GitHub Actions
+
+- [Crypto public external feed](../../.github/workflows/crypto-external-feed.yml): contract tests, genuine Kraken websocket observation and official upstream PCAP capture.
+- [NautilusTrader adapter smoke](../../.github/workflows/crypto-nautilus-check.yml): exact upstream v2.0.0rc9 package installation and **build data-only node**; does not start execution.
+- Workflow files existing is NOT proof any Action completed. Check jobs/logs/artifacts before claiming a verified live feed. CI jobs use only public market data and do not receive broker keys.
+
+## Next gate
+
+1. Run/check both GitHub Actions jobs and resolve failures.
+2. Record independent valid Kraken public L2 + Trades capture, preserve source metadata.
+3. Validate NautilusTrader's managed native OrderBook on the same venue/instrument and benchmark repeatability.
+4. Implement a paper-only strategy adapter **using NautilusTrader's official simulation primitives**, after genuine event replay. Never promote the unverified Delta strategy ideas as live profitable.
+5. Before any 24/7 deployment, specify resource sizing, explicit record retention, network monitoring and a separately managed service. Never reuse MT5 credentials or service identity.
