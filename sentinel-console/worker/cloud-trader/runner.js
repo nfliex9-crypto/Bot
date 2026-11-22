@@ -9,6 +9,7 @@ const {provider}=require("./provider.js");
 const c=require("./core.js");
 const weekly=require("./weekly-selector.js");
 const adaptive=require("./adaptive-risk.js");
+const regime=require("./regime-intelligence.js");
 function decrypt(cipher,key){
  if(!/^[0-9a-f]{64}$/i.test(key||""))throw Error("CLOUD_ENCRYPTION_KEY_REQUIRED");
  const parts=String(cipher||"").split(".");
@@ -26,6 +27,11 @@ const SERVICE="sentinel-cloud-trader";
  */
 const FIRST_DEMO_ENTRY_UTC="2026-11-22T23:00:00.000Z";
 function mondayDemoEntryWindow(now){return Number.isFinite(now)&&now>=Date.parse(FIRST_DEMO_ENTRY_UTC)}
+// Explicit DB permission is mandatory: legacy environment flags cannot
+// bypass a user-initiated pause. Monitoring still runs with read-only provider.
+function demoEntryAuthorized(now,databaseApproved,env,account){
+ return mondayDemoEntryWindow(now)&&databaseApproved===true&&c.demoExecutionAllowed(env,account);
+}
 
 const PRIORITY=[["XAUUSD","GOLD"],["BTCUSD","BTCUSDT"],["USTECH100M","NAS100"],["EURUSD"]];
 const clean=s=>String(s||"").replace(/[\x00-\x1F]/g," ").slice(0,100);
@@ -179,7 +185,7 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     SENTINEL_CLOUD_ENABLE_DEMO:"YES_I_AUTHORIZE_SENTINEL_DEMO_ONLY",
     SENTINEL_CLOUD_UNVERIFIED_TRIAL:"YES_EXPLICIT_DEMO_TRIAL",
     SENTINEL_CLOUD_ACCOUNT_ID:a.id}:env;
-  const enabled=mondayDemoEntryWindow(now)&&c.demoExecutionAllowed(armedEnv,a);
+  const enabled=demoEntryAuthorized(now,databaseApproved,armedEnv,a);
   report.start_not_before_utc=FIRST_DEMO_ENTRY_UTC;
   report.monday_gate_open=mondayDemoEntryWindow(now);
   report.mode=enabled?"UNVERIFIED_DEMO_TRIAL":databaseApproved&&!mondayDemoEntryWindow(now)?"SCHEDULED_DEMO":"SHADOW_ONLY";
@@ -199,6 +205,12 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
      row.status="HISTORY_NOT_COMPLETE";continue
     }
     const m15=c.parseCandles(rawM.candles,"M15",now),h1=c.parseCandles(rawH.candles,"H1",now);
+    // Observability for EVERY symbol, including cycles without a trade signal.
+    const observedRegime=regime.analyze(m15,h1);
+    row.market_regime=observedRegime.regime;
+    row.market_regime_status=observedRegime.reason;
+    row.market_metrics=observedRegime.metrics||null;
+    row.market_evidence=observedRegime.evidence||null;
     // Every cycle inspects live quote + authoritative contract specifications
     // even without a signal; this exposes broker readiness before the first order.
     let quote=null,specResult=null;
@@ -265,6 +277,8 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
       positions,orders,baseRiskPct:riskPct});
     row.adaptive_score=decision.score??null;
     row.adaptive_risk_pct=decision.riskPct;
+    row.adaptive_quality=decision.quality||null;
+    row.adaptive_risk_factors=decision.riskFactors||null;
     row.portfolio_exposure_count=decision.openExposureCount??positions.length+orders.length;
     if(!decision.allowed){row.status=decision.reason;continue}
     let ready=c.preflight({signal,quote,spec:specResult.spec,equity,
@@ -300,6 +314,8 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
           if(safe){
             row.adaptive_score=current.score;
             row.adaptive_risk_pct=current.riskPct;
+            row.adaptive_quality=current.quality||null;
+            row.adaptive_risk_factors=current.riskFactors||null;
             row.portfolio_exposure_count=current.openExposureCount;
             row.risk_at_stop=Number(ready.risk.toFixed(2));
           }else row.pre_submit_rejection=ready.reason;
@@ -352,4 +368,4 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
    WHERE worker_name=${SERVICE} AND lease_owner=${owner}`}catch(_){}
  }
 }
-module.exports={FIRST_DEMO_ENTRY_UTC,mondayDemoEntryWindow,runCloudCycle,pickSymbols,shadowPreferredDemo,strictPositions,strictOrders,reconcile,syncClosedFills};
+module.exports={FIRST_DEMO_ENTRY_UTC,mondayDemoEntryWindow,demoEntryAuthorized,runCloudCycle,pickSymbols,shadowPreferredDemo,strictPositions,strictOrders,reconcile,syncClosedFills};
