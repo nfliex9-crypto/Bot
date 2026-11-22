@@ -1,0 +1,2 @@
+# Upstream research PRE-RELEASE. Never install this as a live-money execution engine without separate review.
+nautilus_trader==2.0.0rc9
