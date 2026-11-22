@@ -2,7 +2,7 @@
 const {test}=require("node:test");
 const assert=require("node:assert/strict");
 const ledger=require("../brain/broker-evidence-contract.js");
-const t=Date.UTC(2026,9,10);
+const t=Date.UTC(2026,8,1);
 function joined(i=0,more={}){
  const open=t+i*86400000;
  return {account_id:"demo_fusion",broker_ticket:"T"+i,
