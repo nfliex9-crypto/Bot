@@ -1,6 +1,9 @@
 name: NautilusTrader v2 crypto adapter (READ ONLY)
 
 on:
+  pull_request:
+    branches:
+      - sentinel-adaptive-intelligence-v2
   push:
     branches:
       - sentinel-crypto-orderflow-v1
