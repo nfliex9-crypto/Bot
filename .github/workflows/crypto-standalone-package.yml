@@ -7,6 +7,12 @@ on:
       - 'crypto/futures-demo/**'
       - 'crypto/independent-app/**'
       - '.github/workflows/crypto-standalone-package.yml'
+  pull_request:
+    branches: [sentinel-adaptive-intelligence-v2]
+    paths:
+      - 'crypto/futures-demo/**'
+      - 'crypto/independent-app/**'
+      - '.github/workflows/crypto-standalone-package.yml'
   workflow_dispatch:
 
 permissions:
