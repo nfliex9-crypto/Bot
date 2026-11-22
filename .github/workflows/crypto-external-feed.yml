@@ -60,6 +60,23 @@ jobs:
           files=$(find crypto-captures -type f -size +0c | wc -l)
           test "$files" -gt 0
           echo "Captured nonempty PCAP/metadata files: $files"
+      - name: Replay capture with upstream Cryptofeed decoder twice, fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          pcap=$(find crypto-captures -maxdepth 1 -type f -name '*.pcap.zst' -print -quit)
+          test -n "$pcap"
+          python crypto/external-stack/replay_verified.py "$pcap" --venue KRAKEN --symbol BTC-USD --repeat 2 --out crypto-captures/replay-verification.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("crypto-captures/replay-verification.json").read_text())
+          assert report["status"] == "VERIFIED_REAL_CAPTURE_REPLAY"
+          assert report["replay_passes"] == 2
+          assert report["trades"] > 0 and report["books"] > 0
+          assert report["order_regressions"] == 0 and not report["orders_enabled"]
+          print("ACCEPTED_AUTHENTIC_REPLAY",report["trades"],report["books"])
+          PY
       - name: Preserve exchange-origin capture
         uses: actions/upload-artifact@v4
         with:
