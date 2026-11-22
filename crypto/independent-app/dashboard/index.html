@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090f1b">
+  <title>Sentinel Crypto | Independent Futures Research</title>
+  <style>
+    :root {color-scheme:dark; --bg:#090f1b; --panel:#111c2d; --line:#243347; --txt:#edf3ff; --sub:#94a6bb; --aqua:#57d5c5;--yellow:#f2c26d;--red:#f18084}
+    * {box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 80% -20%,#1d3549 0,#090f1b 40%);font:15px/1.55 Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--txt)}
+    header {height:82px;max-width:1320px;margin:auto;padding:0 30px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line)}
+    .brand{font-weight:800;letter-spacing:.12em;font-size:15px}.brand strong{color:var(--aqua)} .pill{border:1px solid var(--line);padding:7px 13px;border-radius:99px;color:var(--sub);font-size:12px}
+    main{max-width:1320px;margin:auto;padding:40px 30px 60px} .eyebrow{color:var(--aqua);letter-spacing:.18em;font-size:11px;font-weight:700}
+    h1{font-weight:700;letter-spacing:-.045em;font-size:clamp(28px,4vw,48px);line-height:1.1;margin:15px 0 13px} p{color:var(--sub);margin:0;max-width:740px}
+    .hero{display:flex;justify-content:space-between;align-items:end;gap:22px;margin-bottom:34px} button{background:var(--aqua);color:#052021;border:0;padding:11px 20px;border-radius:9px;font-weight:750;cursor:pointer;font-size:14px}
+    button:focus-visible{outline:3px solid white;outline-offset:3px} .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .card,.panel{border:1px solid var(--line);background:rgba(17,28,45,.9);border-radius:16px}.card{padding:22px}.label{color:var(--sub);text-transform:uppercase;font-size:11px;letter-spacing:.12em;font-weight:700}
+    .metric{font-size:23px;font-weight:750;letter-spacing:-.02em;margin:18px 0 8px}.small{font-size:12px;color:var(--sub)}.warning{color:var(--yellow)}.good{color:var(--aqua)}.bad{color:var(--red)}
+    .panels{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px}.panel{padding:24px}
+    h2{font-size:17px;margin:0 0 17px;letter-spacing:-.02em}table{width:100%;border-collapse:collapse;text-align:left}th{font-size:11px;color:var(--sub);font-weight:650;text-transform:uppercase;letter-spacing:.08em;padding:13px 10px;border-bottom:1px solid var(--line)}
+    td{padding:17px 10px;border-bottom:1px solid #233144;font-variant-numeric:tabular-nums}tr:last-child td{border:0}.asset{font-weight:700}.side-note{border-left:2px solid var(--aqua);padding-left:14px;margin-top:20px}
+    ul{margin:13px 0 0;padding-left:18px;color:var(--sub)} li{margin:9px 0} code{color:#c1eae3;font-size:12px}.footer{margin:24px 0 0;font-size:12px;color:var(--sub)}
+    @media(max-width:950px){.cards{grid-template-columns:repeat(2,1fr)}.panels{grid-template-columns:1fr}}@media(max-width:620px){header{padding:0 18px}.pill{display:none}main{padding:30px 16px}.hero{display:block}.hero button{margin-top:22px}.cards{gap:10px}.card{padding:16px}.metric{font-size:19px}.panel{padding:16px;overflow-x:auto}td,th{white-space:nowrap;padding:13px 9px}}
+  </style>
+</head>
+<body>
+<header><div class="brand"><strong>◈</strong> SENTINEL <strong>CRYPTO</strong></div><span class="pill">INDEPENDENT WORKSPACE · WEEX PERPETUAL FUTURES</span></header>
+<main>
+  <div class="hero"><div><div class="eyebrow">FUTURES RESEARCH / DEMO ONLY</div>
+    <h1>Crypto Trading Intelligence</h1><p>Independent order-flow research, market monitoring and demo execution readiness. No MT5 accounts, services, positions, or keys are connected to this workspace.</p></div>
+    <button id="refresh" type="button">Refresh status</button></div>
+  <section class="cards" aria-label="System status">
+    <article class="card"><div class="label">WEEX public feed</div><div class="metric" id="feed">Not connected</div><div class="small">Real Futures order book and trades</div></article>
+    <article class="card"><div class="label">WEEX demo account</div><div class="metric warning">Not connected</div><div class="small">Credentials only in isolated secrets</div></article>
+    <article class="card"><div class="label">Strategy status</div><div class="metric">Research only</div><div class="small">No validated autonomous demo strategy</div></article>
+    <article class="card"><div class="label">Order execution</div><div class="metric warning">Disabled</div><div class="small">No demo or live-money orders submitted</div></article>
+  </section>
+  <div class="panels">
+    <section class="panel" aria-label="Perpetual futures markets"><h2>WEEX USDT Perpetual Markets</h2>
+      <table><thead><tr><th>Contract</th><th>Last trade</th><th>Best bid</th><th>Best ask</th><th>Trades seen</th><th>State</th></tr></thead>
+      <tbody id="marketRows"><tr><td colspan="6">No independently verified market observations loaded.</td></tr></tbody></table>
+      <p class="footer" id="lastUpdate">No current observations. Quotes are shown only if their reception time is fresh (under 15 seconds).</p>
+    </section>
+    <section class="panel"><h2>Isolation & readiness</h2><div class="label">Trading safeguards</div>
+      <ul>
+        <li>WEEX Futures only. Spot feed never treated as Perpetual.</li>
+        <li>No production exchange API endpoint is available for private requests.</li>
+        <li>Private keys are not sent to the browser.</li>
+        <li>Independent services and storage; no MT5 runtime imports.</li>
+        <li>Strategy and order execution are OFF until separately validated.</li>
+      </ul><div class="side-note"><div class="label">Data provenance</div><div class="small">CCXT Pro public WEEX contract WebSocket. A missing or old feed is shown as unavailable; the UI never invents market prices.</div></div>
+    </section>
+  </div>
+  <p class="footer">Sentinel Crypto Futures · Local standalone dashboard · Status refreshes every 5 seconds · Last exchange trade is not Mark or Index Price.</p>
+</main>
+<script>
+  const contracts=["BTC/USDT:USDT","ETH/USDT:USDT","SOL/USDT:USDT"];
+  const dash="—";
+  const fmt=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-US",{maximumFractionDigits:6}):dash;
+  const cell=(v)=>{const td=document.createElement("td");td.textContent=String(v);return td;};
+  function render(data){
+    const entries=data&&data.markets&&typeof data.markets==="object"?data.markets:{};
+    const tbody=document.querySelector("#marketRows");tbody.replaceChildren();
+    let live=0;
+    for(const symbol of contracts){
+      const item=entries[symbol]||{};
+      const valid=item.status==="LIVE"&&item.fresh===true;
+      if(valid)live++;
+      const tr=document.createElement("tr");
+      for(const val of [symbol,valid?fmt(item.last):dash,valid?fmt(item.bid):dash,valid?fmt(item.ask):dash,
+                        valid?String(item.trades_seen??0):dash,valid?"Live":"Unavailable"]){
+        const td=cell(val);if(val===symbol)td.className="asset";if(val==="Live")td.className="good";tr.append(td);
+      }
+      tbody.append(tr);
+    }
+    const feed=document.querySelector("#feed");feed.textContent=live?live+" / 3 live":"Not connected";feed.className="metric "+(live?"good":"warning");
+    document.querySelector("#lastUpdate").textContent="Feed status checked: "+new Date().toLocaleTimeString()+" · Missing or stale markets stay unavailable.";
+  }
+  async function refresh(){
+    try{
+      const resp=await fetch("/api/status",{cache:"no-store"});
+      if(!resp.ok)throw new Error("status not available");
+      render(await resp.json());
+    }catch(e){render({markets:{}});document.querySelector("#lastUpdate").textContent="Status endpoint unavailable — no verified prices.";}
+  }
+  document.querySelector("#refresh").addEventListener("click",refresh);
+  refresh();setInterval(refresh,5000);
+</script>
+</body>
+</html>
