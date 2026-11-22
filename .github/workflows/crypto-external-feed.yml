@@ -1,26 +1,6 @@
 name: Crypto external exchange data witness (READ ONLY)
 
 on:
-  pull_request:
-    branches:
-      - sentinel-adaptive-intelligence-v2
-    paths:
-      - 'crypto/external-stack/verify_live.py'
-      - 'crypto/external-stack/test_verify_live.py'
-      - 'crypto/external-stack/replay_verified.py'
-      - 'crypto/external-stack/test_replay_verified.py'
-      - 'crypto/external-stack/requirements.txt'
-      - '.github/workflows/crypto-external-feed.yml'
-  push:
-    branches:
-      - sentinel-crypto-orderflow-v1
-    paths:
-      - 'crypto/external-stack/verify_live.py'
-      - 'crypto/external-stack/test_verify_live.py'
-      - 'crypto/external-stack/replay_verified.py'
-      - 'crypto/external-stack/test_replay_verified.py'
-      - 'crypto/external-stack/requirements.txt'
-      - '.github/workflows/crypto-external-feed.yml'
   workflow_dispatch:
 
 concurrency:
