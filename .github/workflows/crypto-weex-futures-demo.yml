@@ -207,3 +207,51 @@ jobs:
             sell-preview.json
           retention-days: 7
           if-no-files-found: warn
+
+  sim-account-readonly:
+    name: Isolated WEEX SIM read-only account authentication (NO ORDERS)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/sentinel-crypto-orderflow-v1'
+    needs: upstream-ccxt-safety
+    environment: sentinel-crypto-demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r crypto/futures-demo/requirements.txt
+      - name: Prove ONLY simulated Futures account read; never issue an order
+        shell: bash
+        env:
+          WEEX_SIM_API_KEY: ${{ secrets.WEEX_SIM_API_KEY }}
+          WEEX_SIM_API_SECRET: ${{ secrets.WEEX_SIM_API_SECRET }}
+          WEEX_SIM_API_PASSPHRASE: ${{ secrets.WEEX_SIM_API_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WEEX_SIM_API_KEY" ] || [ -z "$WEEX_SIM_API_SECRET" ] || [ -z "$WEEX_SIM_API_PASSPHRASE" ]; then
+            echo "::notice::SIM ACCOUNT NOT CONNECTED: add the 3 secrets to environment sentinel-crypto-demo"
+            printf '%s\n' '{"status":"DEMO_ACCOUNT_NOT_CONNECTED","orders_placed":0}' > sim-auth-result.json
+            exit 0
+          fi
+          python crypto/futures-demo/weex_demo_account.py > sim-auth-result.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("sim-auth-result.json").read_text())
+          assert d["status"]=="SIMULATED_FUTURES_ACCOUNT_REACHABLE", d
+          assert d["orders_placed"]==0
+          assert d["real_money_orders_enabled"] is False
+          assert d["account_balance_values_redacted"] is True
+          print("WEEX_SIM_ONLY_ACCOUNT_READ_VERIFIED_NO_ORDERS")
+          PY
+      - name: Save redacted connection status only (NEVER key, secret or balance)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weex-sim-readonly-account-status
+          path: sim-auth-result.json
+          retention-days: 2
+          if-no-files-found: warn
