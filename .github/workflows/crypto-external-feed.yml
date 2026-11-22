@@ -1,6 +1,9 @@
 name: Crypto external exchange data witness (READ ONLY)
 
 on:
+  pull_request:
+    branches:
+      - sentinel-adaptive-intelligence-v2
   push:
     branches:
       - sentinel-crypto-orderflow-v1
