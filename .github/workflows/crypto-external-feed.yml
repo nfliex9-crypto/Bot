@@ -1,0 +1,57 @@
+name: Crypto external exchange data witness (READ ONLY)
+
+on:
+  push:
+    branches:
+      - sentinel-crypto-orderflow-v1
+    paths:
+      - 'crypto/external-stack/**'
+      - '.github/workflows/crypto-external-feed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-unit-tests:
+    name: Source freshness and fail-closed contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s crypto/external-stack -p 'test_*.py' -v
+
+  verify-real-market-feed:
+    name: Real Kraken Spot L2 + trades (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: crypto/external-stack/requirements.txt
+      - name: Install pinned upstream library
+        run: python -m pip install -r crypto/external-stack/requirements.txt
+      - name: Witness real public WebSocket events from Kraken
+        run: python crypto/external-stack/verify_live.py --exchange KRAKEN --symbol BTC-USD --seconds 45
+      - name: Fetch upstream release (official recorder; no custom exchange gateway)
+        run: git clone --depth 1 --branch v3.0.5 https://github.com/bmoscon/cryptofeed.git /tmp/cryptofeed-v3.0.5
+      - name: Capture external WebSocket frames with upstream tool
+        run: python /tmp/cryptofeed-v3.0.5/examples/record.py KRAKEN BTC-USD --duration 20 --out ./crypto-captures/
+      - name: Verify capture exists (NOT a trading signal)
+        shell: bash
+        run: |
+          files=$(find crypto-captures -type f -size +0c | wc -l)
+          test "$files" -gt 0
+          echo "Captured nonempty PCAP/metadata files: $files"
+      - name: Preserve exchange-origin capture
+        uses: actions/upload-artifact@v4
+        with:
+          name: crypto-public-kraken-pcap
+          path: crypto-captures/
+          retention-days: 7
+          if-no-files-found: error
