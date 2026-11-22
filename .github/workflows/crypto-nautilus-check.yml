@@ -1,22 +1,7 @@
 name: NautilusTrader v2 crypto adapter (READ ONLY)
 
 on:
-  push:
-    branches: [sentinel-crypto-orderflow-v1]
-    paths:
-      - 'crypto/external-stack/nautilus_kraken_spot.py'
-      - 'crypto/external-stack/requirements-nautilus.txt'
-      - '.github/workflows/crypto-nautilus-check.yml'
-  pull_request:
-    branches: [sentinel-adaptive-intelligence-v2]
-    paths:
-      - 'crypto/external-stack/nautilus_kraken_spot.py'
-      - 'crypto/external-stack/requirements-nautilus.txt'
-      - '.github/workflows/crypto-nautilus-check.yml'
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
