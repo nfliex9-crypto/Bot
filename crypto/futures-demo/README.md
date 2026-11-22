@@ -61,3 +61,36 @@ WEEX_SIM_API_PASSPHRASE
 - Not proven: 24/7 persistence, perfect WebSocket gap recovery, actual authenticated WEEX Demo orders/fills, profitable strategy, WEEX futures-specific out-of-sample backtest, execution slippage/funding reconciliation, continuous monitor and live dashboard.
 - The prior NautilusTrader Kraken Spot technical backtest **does not test WEEX Futures**; never extrapolate it.
 - Draft branch only; no merge/deploy and no changes to MT5.
+
+
+## Secure WEEX SIM account connection (read-only gate)
+
+A signed Futures Account Balance probe is available but **cannot run with the user's
+private credentials until the user enters them into an isolated GitHub environment**.
+
+1. Open the repository's **Settings → Environments** (not a GitHub repository file).
+2. Create/edit an environment called `sentinel-crypto-demo` and limit its branch
+   to `sentinel-crypto-orderflow-v1` if deployment protection is available.
+3. Under that **environment's secrets**, create exactly:
+   `WEEX_SIM_API_KEY`, `WEEX_SIM_API_SECRET`,
+   `WEEX_SIM_API_PASSPHRASE`.
+4. Never add these to `.env`, an issue, screenshot, chat message, or GitHub
+   Actions repository *variables*. Secrets must be **Environment secrets**.
+5. The `sim-account-readonly` job on branch pushes uses CCXT only to call the
+   **simulation** Futures balance endpoint. If secrets are missing it explicitly
+   writes `DEMO_ACCOUNT_NOT_CONNECTED`, without claiming access. If the
+   simulation rejects the user's standard WEEX credentials it fails and prints
+   only a safe exception class, not the body, account or secrets.
+6. Upon successful authenticated simulation balance response the script publishes
+   only an account-reachable status; **the account balance amount is suppressed**.
+   Nothing places, cancels, or changes real/demo orders.
+
+**Before adding any key:** verify it has **Read** permission only and **NO
+Trade futures, Spot trade, Transfer or Withdraw** permissions. A production-site
+key is not automatically proven valid for the simulation host. We never try it
+against the production host as a fallback. Regional product access and the
+exchange's current API rules still apply.
+
+**GitHub Actions note:** Adding environment secrets alone does NOT necessarily
+re-run a previously completed pipeline. A new crypto-branch commit triggers the
+read-only authentication job. This is not a 24/7 host and is not trading activation.
