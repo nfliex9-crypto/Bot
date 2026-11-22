@@ -1,25 +1,7 @@
 name: Native Nautilus Kraken Spot Parquet collector (READ ONLY)
 
 on:
-  push:
-    branches: [sentinel-crypto-orderflow-v1]
-    paths:
-      - 'crypto/external-stack/nautilus_kraken_catalog.py'
-      - 'crypto/external-stack/nautilus_kraken_spot.py'
-      - 'crypto/external-stack/nautilus_replay_backtest.py'
-      - 'crypto/external-stack/requirements-nautilus.txt'
-      - '.github/workflows/crypto-native-catalog.yml'
-  pull_request:
-    branches: [sentinel-adaptive-intelligence-v2]
-    paths:
-      - 'crypto/external-stack/nautilus_kraken_catalog.py'
-      - 'crypto/external-stack/nautilus_kraken_spot.py'
-      - 'crypto/external-stack/requirements-nautilus.txt'
-      - '.github/workflows/crypto-native-catalog.yml'
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
