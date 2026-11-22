@@ -11,6 +11,7 @@ const weekly=require("./weekly-selector.js");
 const adaptive=require("./adaptive-risk.js");
 const intelligenceV2=require("../../brain/intelligence-v2.js");
 const regime=require("./regime-intelligence.js");
+const marketIntegrity=require("./market-integrity.js");
 function decrypt(cipher,key){
  if(!/^[0-9a-f]{64}$/i.test(key||""))throw Error("CLOUD_ENCRYPTION_KEY_REQUIRED");
  const parts=String(cipher||"").split(".");
@@ -251,6 +252,10 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
         }catch(e){row.spread_record_error=clean(e.message)}
       }
     }catch(e){row.contract_status="BROKER_CONTRACT_READ_FAILED";row.contract_error=clean(e.message)}
+    // V2 research-only cross-timeframe integrity; does not modify order routing.
+    const integrity=marketIntegrity.audit({m15,h1,now,symbol,venue:"FUSION_MT5",
+      brokerTickSize:specResult?.spec?.specSource==="broker"?Number(specResult.spec.tickSize):null});
+    row.market_data_integrity=integrity;
     // This isolated branch evaluates ONLY owner-PDF-derived setup families.
     // Brokerage writes still require independent DEMO account authorizations.
     // Run idempotent last-completed-week review from verified broker fills.
@@ -268,6 +273,10 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     // V2 read-only sidecar. Gives observable market context and a documented
     // research score; this score NEVER selects, sizes, blocks or sends orders.
     try{
+      if(!integrity.ok){
+        row.intelligence_v2={status:"DATA_UNAVAILABLE",reason:integrity.reason,
+          score_basis:"GROSS_PRICE_ONLY_NO_TRANSACTION_COSTS",execution_enabled:false};
+      }else{
       const review=intelligenceV2.rank({m15,h1,signals:signal?[signal]:[],now,venue:"FUSION_MT5"});
       row.intelligence_v2={
         status:review.ready?"RESEARCH_OBSERVATION":"DATA_UNAVAILABLE",
@@ -279,6 +288,7 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
         orderflow_status:review.ranked[0]?.orderflow.status??"NOT_PROVIDED",
         execution_enabled:false
       };
+      }
     }catch(e){row.intelligence_v2={status:"REVIEW_UNAVAILABLE",
       reason:clean(e.message),execution_enabled:false}}
     if(!signal){row.status="NO_VALID_CLOSED_BAR_SIGNAL";continue}
