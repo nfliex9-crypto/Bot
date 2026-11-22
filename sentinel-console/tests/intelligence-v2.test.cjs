@@ -109,3 +109,25 @@ test("identical fixed input gives deterministic ranking independent of later tap
  assert.deepEqual(baseline,next);
  assert.equal(v.rank({...d,signals:[{...sig,bar_time:sig.bar_time-900000}],now}).ranked.length,0);
 });
+
+test("source name must match the verified original PDF",()=>{
+ const d=data(),signal=sourceSignal(d.m15);
+ const other={...signal,source_pdf:"invented_course_lesson.pdf"};
+ assert.equal(v.rank({...d,signals:[other],now}).ranked.length,0);
+ assert.equal(v.rank({...d,signals:[signal],now}).ranked.length,1);
+});
+test("forward learner refuses future trades and unbounded invalid gross-R outcomes",()=>{
+ const future=fill(130);
+ const infinite={...fill(9),ticket:"INF",grossProfit:Number.MAX_VALUE,riskAtEntry:Number.MIN_VALUE};
+ const good=fill(8);
+ const r=v.forwardEvidence([future,infinite,good],{asOf:Date.UTC(2026,10,22)});
+ assert.equal(r.accepted,1);
+ assert.equal(r.rejected,2);
+ assert.equal(r.ordersEnabled,false);
+});
+test("V2 module cannot submit orders or import broker credentials",()=>{
+ const fs=require("node:fs"),path=require("node:path");
+ const source=fs.readFileSync(path.join(__dirname,"../brain/intelligence-v2.js"),"utf8");
+ assert.doesNotMatch(source,/\.submit\s*\(|\/orders\b|process\.env|fetch\s*\(/);
+ assert.match(source,/executionEnabled:false/);
+});
