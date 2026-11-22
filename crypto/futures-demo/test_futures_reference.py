@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from weex_futures_reference import (
-    ReferenceRejected, build_reference, finite_value, recent_millis
+    ReferenceRejected, build_reference, finite_value, recent_millis, recent_executed_trade
 )
 
 class ReferenceTests(unittest.TestCase):
@@ -94,6 +94,34 @@ class ReferenceTests(unittest.TestCase):
         rows[2]["openInterestAmount"]=0
         with self.assertRaises(ReferenceRejected):
             build_reference(self.symbol,*rows,now_ms=self.now)
+
+
+    def test_selects_latest_actual_futures_execution(self):
+        trades=[
+            dict(symbol=self.symbol, side="buy", price=99, amount=1,
+                 id="old", timestamp=self.now-80_000),
+            dict(symbol=self.symbol, side="sell", price=101, amount=2,
+                 id="new", timestamp=self.now-800),
+        ]
+        chosen=recent_executed_trade(self.symbol,trades,self.now)
+        self.assertEqual(chosen["last"],101)
+        self.assertEqual(chosen["trade_id"],"new")
+
+    def test_rejects_foreign_spot_symbol_in_execution_batch(self):
+        trades=[dict(symbol="BTC/USDT", side="buy", price=99,amount=1,
+                     id="foreign",timestamp=self.now-500)]
+        with self.assertRaises(ReferenceRejected):
+            recent_executed_trade(self.symbol,trades,self.now)
+
+    def test_rejects_old_last_execution_no_mark_substitution(self):
+        trades=[dict(symbol=self.symbol,side="buy",price=99,amount=1,
+                     id="old",timestamp=self.now-60_000)]
+        with self.assertRaises(ReferenceRejected):
+            recent_executed_trade(self.symbol,trades,self.now)
+
+    def test_rejects_empty_recent_futures_tape(self):
+        with self.assertRaises(ReferenceRejected):
+            recent_executed_trade(self.symbol,[],self.now)
 
 if __name__ == "__main__":
     unittest.main()
