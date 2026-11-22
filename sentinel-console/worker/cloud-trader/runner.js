@@ -12,6 +12,7 @@ const adaptive=require("./adaptive-risk.js");
 const intelligenceV2=require("../../brain/intelligence-v2.js");
 const regime=require("./regime-intelligence.js");
 const marketIntegrity=require("./market-integrity.js");
+const gates=require("./execution-gates.js");
 function decrypt(cipher,key){
  if(!/^[0-9a-f]{64}$/i.test(key||""))throw Error("CLOUD_ENCRYPTION_KEY_REQUIRED");
  const parts=String(cipher||"").split(".");
@@ -200,7 +201,17 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     SENTINEL_CLOUD_ENABLE_DEMO:"YES_I_AUTHORIZE_SENTINEL_DEMO_ONLY",
     SENTINEL_CLOUD_UNVERIFIED_TRIAL:"YES_EXPLICIT_DEMO_TRIAL",
     SENTINEL_CLOUD_ACCOUNT_ID:a.id}:env;
-  const enabled=demoEntryAuthorized(now,databaseApproved,armedEnv,a);
+  let enabled=demoEntryAuthorized(now,databaseApproved,armedEnv,a);
+  // Require a complete immutable pre-entry ledger before any future order.
+  // Schema absence affects order permission, not shadow monitoring.
+  if(enabled){
+   let schema;
+   try{schema=await gates.schemaReady(sql)}
+   catch(e){schema={ok:false,reason:"PREENTRY_SCHEMA_CHECK_FAILED",missing:[]};
+    report.schema_check_error=clean(e.message)}
+   report.preentry_schema_status=schema.reason;
+   if(!schema.ok){enabled=false;report.preentry_schema_missing=schema.missing}
+  }
   report.start_not_before_utc=FIRST_DEMO_ENTRY_UTC;
   report.monday_gate_open=mondayDemoEntryWindow(now);
   report.mode=enabled?"UNVERIFIED_DEMO_TRIAL":databaseApproved&&!mondayDemoEntryWindow(now)?"SCHEDULED_DEMO":"SHADOW_ONLY";
@@ -392,6 +403,17 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
     if(committed.length!==1){
       row.status="PREENTRY_EVIDENCE_NOT_COMMITTED";
       break; // Without immutable entry risk the broker receives NO ORDER.
+    }
+    // A user may disable trading after this cycle began. Never use a cached
+    // authorization for the final broker POST.
+    let stillApproved=false;
+    try{stillApproved=await gates.freshDemoAuthorization(sql,a,Date.now())}
+    catch(e){row.authorization_check_error=clean(e.message)}
+    if(!stillApproved){
+     row.status="DEMO_ENTRY_AUTHORIZATION_REVOKED";
+     await sql`UPDATE sentinel_cloud_trader_intents SET status='NOT_SENT',updated_at=NOW()
+       WHERE account_id=${a.id} AND signal_hash=${digest} AND status='SUBMITTING'`;
+     break;
     }
     try{
      const placed=await write.submit(a.id,{...ready.request,comment},digest);
