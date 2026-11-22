@@ -59,6 +59,16 @@ jobs:
     name: Live WEEX USDT Perpetual Order Book & Trade Tape
     needs: upstream-ccxt-safety
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: btc
+            symbol: BTC/USDT:USDT
+          - id: eth
+            symbol: ETH/USDT:USDT
+          - id: sol
+            symbol: SOL/USDT:USDT
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +79,7 @@ jobs:
       - name: Verify real futures WS (not spot and not synthetic)
         shell: bash
         run: |
-          python crypto/futures-demo/weex_futures_feed.py --symbol 'BTC/USDT:USDT' --seconds 40 | tee weex-perpetual-witness.json
+          python crypto/futures-demo/weex_futures_feed.py --symbol '${{ matrix.symbol }}' --seconds 40 | tee weex-perpetual-witness.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -83,7 +93,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: weex-real-perpetual-l2-trades
+          name: weex-real-perpetual-l2-trades-${{ matrix.id }}
           path: weex-perpetual-witness.json
           retention-days: 7
           if-no-files-found: warn
