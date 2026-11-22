@@ -18,7 +18,7 @@ from nautilus_trader.model import TraderId
 from nautilus_trader.testkit import DataTesterConfig
 
 
-def build_tester_config():
+def build_tester_config(*, log_data: bool = True):
     # Upstream DataTesterConfig defaults subscribe_book_deltas=False.
     # Explicitly subscribe, otherwise manage_book alone DOES NOT produce L2.
     return DataTesterConfig(
@@ -29,7 +29,7 @@ def build_tester_config():
         subscribe_quotes=True,
         subscribe_trades=True,
         manage_book=True,
-        log_data=True,
+        log_data=log_data,
         stats_interval_secs=5,
     )
 
