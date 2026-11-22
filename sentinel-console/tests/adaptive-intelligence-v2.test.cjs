@@ -53,10 +53,10 @@ test("V2 uses signal candle only and rejects future H1 leakage",()=>{
  const h1=f.h1.map((b,i)=>i===99?{...b,time:f.m15.at(-1).time+3600000}:b);
  assert.equal(risk.evaluate({...f,h1}).reason,"ADAPTIVE_SIGNAL_BAR_MISMATCH");
 });
-test("V2 adapts to strong signal without a fixed per-trade 0.25% size",()=>{
+test("V2 adapts to strong signal within the authorized risk ceiling",()=>{
  const x=risk.evaluate(fixture());
  assert.equal(x.allowed,true,JSON.stringify(x));
- assert.ok(x.riskPct>.25);assert.ok(x.score>.5);
+ assert.ok(x.riskPct>0&&x.riskPct<=.25);assert.ok(x.score>.5);
  assert.equal(x.market.regime,"TRENDING");
  assert.equal(x.executionEnabled,false);
 });
