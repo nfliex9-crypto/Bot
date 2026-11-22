@@ -1,0 +1,35 @@
+name: Sentinel Adaptive Intelligence V2 — GitHub tests only
+on:
+  push:
+    branches: [sentinel-adaptive-intelligence-v2]
+    paths:
+      - '.github/workflows/sentinel-adaptive-v2-ci.yml'
+      - 'sentinel-console/worker/cloud-trader/**'
+      - 'sentinel-console/worker/orderflow/**'
+      - 'sentinel-console/brain/**'
+      - 'sentinel-console/tests/**'
+      - 'sentinel-console/package.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install test dependencies
+        working-directory: sentinel-console
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: All Sentinel Node regression tests (no broker orders)
+        working-directory: sentinel-console
+        run: node --test --test-reporter=tap tests/*.test.cjs
+      - name: Validate V2 source syntax
+        working-directory: sentinel-console
+        run: |
+          node --check worker/cloud-trader/runner.js
+          node --check worker/cloud-trader/adaptive-risk.js
+          node --check worker/cloud-trader/regime-intelligence.js
