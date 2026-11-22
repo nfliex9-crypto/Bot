@@ -1,0 +1,131 @@
+name: Build isolated Sentinel Crypto Futures project (NO MT5)
+
+on:
+  push:
+    branches: [sentinel-crypto-orderflow-v1]
+    paths:
+      - 'crypto/futures-demo/**'
+      - 'crypto/independent-app/**'
+      - '.github/workflows/crypto-standalone-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standalone-crypto-package-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-independent-repository:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build a CLEAN project containing ONLY crypto futures code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import shutil, re
+
+          source=Path('crypto/independent-app')
+          base=Path('dist/Sentinel-Crypto-Futures')
+          for folder in ('src', 'app', 'dashboard', 'data', 'docs', '.github/workflows'):
+              (base/folder).mkdir(parents=True,exist_ok=True)
+          for path in Path('crypto/futures-demo').iterdir():
+              if path.suffix=='.py' or path.name=='requirements.txt':
+                  shutil.copy2(path,base/'src'/path.name)
+          for sub in ('app','dashboard','data'):
+              for path in (source/sub).iterdir():
+                  if path.is_file():
+                      shutil.copy2(path,base/sub/path.name)
+          for filename in ('README.md','.gitignore','.env.example'):
+              shutil.copy2(source/filename,base/filename)
+          shutil.copy2(
+              'crypto/reports/WEEX_FUTURES_DEVELOPMENT_AUDIT_2026-11-22.md',
+              base/'docs/WEEX_FUTURES_DEVELOPMENT_AUDIT_2026-11-22.md')
+
+          # Copy the *independent* Futures CI, never a MT5 workflow.
+          workflow=Path('.github/workflows/crypto-weex-futures-demo.yml').read_text()
+          workflow=workflow.replace('crypto/futures-demo/', 'src/')
+          workflow=workflow.replace('.github/workflows/crypto-weex-futures-demo.yml', '.github/workflows/futures-ci.yml')
+          workflow=workflow.replace('sentinel-crypto-orderflow-v1','main')
+          workflow=workflow.replace('sentinel-adaptive-intelligence-v2','main')
+          # The linked GitHub Environments page was inaccessible on mobile:
+          # new repository uses ordinary Actions Repository Secrets instead.
+          workflow=workflow.replace('    environment: sentinel-crypto-demo\n','')
+          (base/'.github/workflows/futures-ci.yml').write_text(workflow)
+
+          prohibited=('mt5', 'MetaTrader5', 'oanda', 'alpaca', 'railway', 'neon')
+          codefiles=list((base/'app').glob('*.py'))+list((base/'src').glob('*.py'))
+          assert codefiles and len(list((base/'src').glob('*.py'))) >= 10
+          for path in codefiles:
+              contents=path.read_text()
+              if re.search(r'^\s*(?:import|from)\s+(?:MetaTrader5|mt5|oanda|alpaca|neon|railway)(?:\b|\.)',contents,re.MULTILINE|re.IGNORECASE):
+                  raise RuntimeError(f"FORBIDDEN_CROSS_PROJECT_IMPORT in {path}")
+          assert not list(base.rglob('*.env')) and not list(base.rglob('*.secret'))
+          assert not (base/'mt5').exists()
+          print('CRYPTO_STANDALONE_SOURCE_READY',len(codefiles),'python_files')
+          PY
+      - name: Install independent futures upstream deps (no MT5)
+        run: python -m pip install -r dist/Sentinel-Crypto-Futures/src/requirements.txt
+      - name: Run independent futures safety unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist/Sentinel-Crypto-Futures
+          python -m unittest discover -s src -p 'test_*.py' -v
+          PYTHONPATH="app:src" python -m unittest discover -s app -p 'test_*.py' -v
+          python -m py_compile app/*.py src/*.py
+      - name: Prove separate dashboard runs and all trading routes are absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist/Sentinel-Crypto-Futures
+          python app/server.py --host 127.0.0.1 --port 18765 > /tmp/sentinel-crypto-dashboard.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://127.0.0.1:18765/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18765/ > /tmp/sentinel-crypto-ui.html
+          curl -fsS http://127.0.0.1:18765/api/status > /tmp/sentinel-crypto-status.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/sentinel-crypto-status.json'))
+          assert d['product']=='SENTINEL_CRYPTO_FUTURES'
+          assert d['execution']=='DISABLED'
+          assert d['demo_account']=='NOT_CONNECTED'
+          assert d['markets']=={}, 'Cannot invent prices without external data'
+          page=open('/tmp/sentinel-crypto-ui.html').read()
+          assert 'SENTINEL' in page and 'WEEX' in page and 'MT5' in page
+          print('STANDALONE_DASHBOARD_HEALTH_AND_FAIL_CLOSED_OK')
+          PY
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18765/api/status)
+          test "$status" = 405
+      - name: Zip clean standalone project and verify it contains no MT5 code
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          zip -q -r ../Sentinel-Crypto-Futures-INDEPENDENT.zip Sentinel-Crypto-Futures -x '*/__pycache__/*' '*.pyc'
+          cd ..
+          unzip -l Sentinel-Crypto-Futures-INDEPENDENT.zip > package-manifest.txt
+          ! grep -E '/(mt5|MetaTrader5)/' package-manifest.txt
+          sha256sum Sentinel-Crypto-Futures-INDEPENDENT.zip > Sentinel-Crypto-Futures-INDEPENDENT.zip.sha256
+          cat Sentinel-Crypto-Futures-INDEPENDENT.zip.sha256
+      - name: Upload independently importable crypto-only project
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-crypto-futures-independent-repository
+          path: |
+            Sentinel-Crypto-Futures-INDEPENDENT.zip
+            Sentinel-Crypto-Futures-INDEPENDENT.zip.sha256
+            package-manifest.txt
+          retention-days: 7
