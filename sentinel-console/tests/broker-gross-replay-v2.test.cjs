@@ -43,6 +43,13 @@ test("missing broker candles cannot be silently backfilled",()=>{
  const r=replay(f);
  assert.ok(r.train.skipped.gaps>0);
 });
+test("adverse opening gaps fill at the observed open, not an optimistic stop price",()=>{
+ const f=fixture();
+ f.m15[162]={...f.m15[162],open:97,close:97,high:97.1,low:96.9};
+ const r=replay(f);
+ assert.equal(r.train.trades[0].exitReason,"STOP_FIRST");
+ assert.equal(r.train.trades[0].grossR,-3);
+});
 test("future or malformed candles are rejected before research",()=>{
  const f=fixture();
  assert.throws(()=>replay({...f,asOf:now-1}),/FUTURE_BARS/);
