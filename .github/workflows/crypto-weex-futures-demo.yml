@@ -170,3 +170,40 @@ jobs:
             parquet-verification.json
           retention-days: 7
           if-no-files-found: warn
+
+  futures-demo-order-preview:
+    name: Real-market CCXT Futures DEMO order preview (zero order requests)
+    needs: upstream-ccxt-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r crypto/futures-demo/requirements.txt
+      - name: Validate real market precision for a BUY and SELL simulator preview
+        shell: bash
+        run: |
+          python crypto/futures-demo/weex_demo_order_preview.py --symbol 'BTC/USDT:USDT' --side buy | tee buy-preview.json
+          python crypto/futures-demo/weex_demo_order_preview.py --symbol 'BTC/USDT:USDT' --side sell | tee sell-preview.json
+          python - <<'PY'
+          import json
+          for side in ("buy","sell"):
+              d=json.load(open(side+"-preview.json"))
+              assert d["status"]=="WEEX_FUTURES_DEMO_ORDER_PREVIEW_ONLY"
+              assert d["order_side"]==side and d["destination_host"]=="api-sim.weex.com"
+              assert d["market"]=="USDT_LINEAR_PERPETUAL"
+              assert d["actual_http_requests_sent_for_order"]==0
+              assert d["simulated_exchange_orders_placed"]==0 and d["live_orders_placed"]==0
+          PY
+      - name: Preserve proof of zero-order simulator routing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weex-futures-demo-buy-sell-previews
+          path: |
+            buy-preview.json
+            sell-preview.json
+          retention-days: 7
+          if-no-files-found: warn
