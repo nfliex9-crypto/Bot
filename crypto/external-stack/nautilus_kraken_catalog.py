@@ -50,7 +50,7 @@ def build_catalog_node(root: Path):
         KrakenDataClientConfig(product_type=KrakenProductType.SPOT),
     )
     node = builder.build()
-    node.add_builtin_actor("DataTester", build_tester_config())
+    node.add_builtin_actor("DataTester", build_tester_config(log_data=False))
     return node
 
 
