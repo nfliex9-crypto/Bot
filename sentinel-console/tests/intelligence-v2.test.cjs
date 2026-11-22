@@ -131,3 +131,12 @@ test("V2 module cannot submit orders or import broker credentials",()=>{
  assert.doesNotMatch(source,/\.submit\s*\(|\/orders\b|process\.env|fetch\s*\(/);
  assert.match(source,/executionEnabled:false/);
 });
+
+test("research and future demo use identical canonical market-regime labels",()=>{
+ const d=data(),canonical=require("../worker/cloud-trader/regime-intelligence.js").analyze(d.m15,d.h1);
+ const research=v.marketFeatures({...d,now});
+ assert.equal(canonical.ok,true);
+ assert.equal(research.ready,true);
+ assert.equal(research.regime,canonical.regime);
+ assert.ok(["TRENDING","RANGING","TRANSITION","VOLATILE"].includes(research.regime));
+});
