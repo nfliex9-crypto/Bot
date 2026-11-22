@@ -27,6 +27,14 @@ class CaptureRejected(ValueError):
     pass
 
 
+def hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def arrow_schema():
     import pyarrow as pa
     level = pa.struct([pa.field("price", pa.float64()),
@@ -196,39 +204,43 @@ def verify_capture(data: Path, symbol: str) -> dict:
     if not data.is_file() or not manifest_path.is_file():
         raise CaptureRejected("CAPTURE_OR_MANIFEST_MISSING")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    sha = hashlib.sha256(data.read_bytes()).hexdigest()
+    sha = hash_file(data)
     if (manifest.get("sha256") != sha or manifest.get("symbol") != symbol
         or manifest.get("venue") != "WEEX" or manifest.get("market") != "USDT_LINEAR_PERPETUAL"):
         raise CaptureRejected("CAPTURE_HASH_OR_MARKET_MISMATCH")
-    table = pq.read_table(data)
-    rows = table.to_pylist()
-    if len(rows) != manifest.get("rows") or len(rows) < 2:
-        raise CaptureRejected("ROW_COUNT_MISMATCH")
+    reader = pq.ParquetFile(data)
+    if not reader.schema_arrow.equals(arrow_schema()):
+        raise CaptureRejected("PARQUET_SCHEMA_MISMATCH")
     counts = {"ORDER_BOOK": 0, "TRADE": 0}
     trade_ids = set()
-    for row in rows:
-        if (row["venue"] != "WEEX" or row["market"] != "USDT_LINEAR_PERPETUAL"
-            or row["symbol"] != symbol or row["origin"] != SOURCE):
-            raise CaptureRejected("FOREIGN_OR_FABRICATED_SOURCE")
-        validate_timestamp(row["exchange_timestamp_ms"], row["received_timestamp_ms"])
-        kind = row["kind"]
-        if kind not in counts:
-            raise CaptureRejected("UNEXPECTED_EVENT_TYPE")
-        counts[kind] += 1
-        if kind == "ORDER_BOOK":
-            validate_levels(row, 15)
-        else:
-            if (row["trade_id"] in trade_ids or
-                not positive(row["price"]) or not positive(row["amount"])):
-                raise CaptureRejected("DUPLICATE_OR_BAD_TRADE")
-            trade_ids.add(row["trade_id"])
-    if (counts["ORDER_BOOK"] != manifest.get("book_rows")
+    for batch in reader.iter_batches(batch_size=2048):
+        for row in batch.to_pylist():
+            if (row["venue"] != "WEEX" or row["market"] != "USDT_LINEAR_PERPETUAL"
+                or row["symbol"] != symbol or row["origin"] != SOURCE):
+                raise CaptureRejected("FOREIGN_OR_FABRICATED_SOURCE")
+            validate_timestamp(row["exchange_timestamp_ms"], row["received_timestamp_ms"])
+            kind = row["kind"]
+            if kind not in counts:
+                raise CaptureRejected("UNEXPECTED_EVENT_TYPE")
+            counts[kind] += 1
+            if kind == "ORDER_BOOK":
+                validate_levels({
+                    "bids": [(v["price"], v["amount"]) for v in row["bids"]],
+                    "asks": [(v["price"], v["amount"]) for v in row["asks"]],
+                }, 15)
+            else:
+                if (row["trade_id"] in trade_ids or
+                    not positive(row["price"]) or not positive(row["amount"])):
+                    raise CaptureRejected("DUPLICATE_OR_BAD_TRADE")
+                trade_ids.add(row["trade_id"])
+    if (sum(counts.values()) != manifest.get("rows") or
+        counts["ORDER_BOOK"] != manifest.get("book_rows")
         or counts["TRADE"] != manifest.get("trade_rows")
         or not all(counts.values())):
         raise CaptureRejected("INCOMPLETE_FUTURES_TAPE_OR_BOOK")
     return {"status": "VERIFIED_WEEX_REAL_FUTURES_PARQUET",
             "venue": "WEEX", "symbol": symbol, "source": SOURCE,
-            "rows": len(rows), "book_rows": counts["ORDER_BOOK"],
+            "rows": sum(counts.values()), "book_rows": counts["ORDER_BOOK"],
             "trade_rows": counts["TRADE"], "sha256": sha,
             "orders_enabled": False, "synthetic_market_data": False}
 
@@ -270,11 +282,14 @@ async def capture(symbol: str, seconds: int, out_dir: Path, depth=15):
             "source": SOURCE, "source_library": "ccxt==4.5.93",
             "data_file": file.name, "rows": writer.books+writer.trades,
             "book_rows": writer.books, "trade_rows": writer.trades,
-            "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
+            "sha256": hash_file(file),
             "orders_enabled": False, "spot_data_used": False,
         }
-        file.with_suffix(".manifest.json").write_text(
-            json.dumps(manifest,sort_keys=True)+"\n",encoding="utf-8")
+        manifest_path = file.with_suffix(".manifest.json")
+        partial_manifest = file.with_suffix(".manifest.partial")
+        partial_manifest.write_text(
+            json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(partial_manifest, manifest_path)
         return verify_capture(file, symbol)
     finally:
         if writer is not None and not writer.finalized:
