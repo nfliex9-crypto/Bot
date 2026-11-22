@@ -20,7 +20,9 @@ class CaptureRejected(ValueError):
     """Capture cannot be accepted as real, single-venue replay evidence."""
 
 
-def inspect_capture(pcap: Path, venue: str, symbol: str) -> dict:
+def inspect_capture(pcap: Path, venue: str, symbol: str,
+                    expected_pcap_sha256: str | None = None,
+                    expected_meta_sha256: str | None = None) -> dict:
     """Validate upstream metadata and a single unmodified capture's identity.
 
     Does NOT validate price sequence. The actual upstream Replayer does that.
@@ -34,6 +36,13 @@ def inspect_capture(pcap: Path, venue: str, symbol: str) -> dict:
     meta = Path(str(pcap)[:-len(".pcap.zst")] + ".meta.json")
     if not meta.is_file() or meta.stat().st_size < 20:
         raise CaptureRejected("MISSING_OR_EMPTY_SOURCE_METADATA")
+
+    pcap_digest = hashlib.sha256(pcap.read_bytes()).hexdigest()
+    meta_digest = hashlib.sha256(meta.read_bytes()).hexdigest()
+    if expected_pcap_sha256 is not None and expected_pcap_sha256 != pcap_digest:
+        raise CaptureRejected("PCAP_HASH_ATTESTATION_MISMATCH")
+    if expected_meta_sha256 is not None and expected_meta_sha256 != meta_digest:
+        raise CaptureRejected("METADATA_HASH_ATTESTATION_MISMATCH")
 
     try:
         metadata = json.loads(meta.read_text(encoding="utf-8"))
@@ -66,7 +75,8 @@ def inspect_capture(pcap: Path, venue: str, symbol: str) -> dict:
 
     return {
         "venue": venue, "symbol": symbol,
-        "pcap_sha256": hashlib.sha256(pcap.read_bytes()).hexdigest(),
+        "pcap_sha256": pcap_digest,
+        "metadata_sha256": meta_digest,
         "pcap_bytes": pcap.stat().st_size,
         "recorded_ws_messages": sum(s.get("messages", 0) for s in streams if s.get("kind") == "ws"),
         "recorded_ws_streams": sum(s.get("kind") == "ws" for s in streams),
@@ -161,13 +171,17 @@ def replay_once(pcap: Path, venue: str, symbol: str) -> dict:
     return witness.checks(result)
 
 
-def verify(pcap: Path, venue: str, symbol: str, repeat: int = 2) -> dict:
-    manifest = inspect_capture(pcap, venue, symbol)
+def verify(pcap: Path, venue: str, symbol: str, repeat: int = 2,
+           expected_pcap_sha256: str | None = None,
+           expected_meta_sha256: str | None = None) -> dict:
+    manifest = inspect_capture(pcap, venue, symbol, expected_pcap_sha256, expected_meta_sha256)
     if repeat not in (1, 2):
         raise CaptureRejected("ONLY_ONE_OR_TWO_REPLAY_PASSES")
     trials = [replay_once(pcap, venue, symbol) for _ in range(repeat)]
     if any(t != trials[0] for t in trials[1:]):
         raise CaptureRejected("NON_DETERMINISTIC_UPSTREAM_REPLAY")
+    if trials[0]["messages_processed"] != manifest["recorded_ws_messages"]:
+        raise CaptureRejected("RECORDED_MESSAGE_COUNT_MISMATCH")
     return {
         "status": "VERIFIED_REAL_CAPTURE_REPLAY",
         "source": "cryptofeed_3.0.5_official_replayer",
@@ -185,10 +199,13 @@ def main() -> int:
     parser.add_argument("--venue", default="KRAKEN", choices=("KRAKEN",))
     parser.add_argument("--symbol", default="BTC-USD", choices=("BTC-USD",))
     parser.add_argument("--repeat", type=int, default=2)
+    parser.add_argument("--expected-pcap-sha256", default=None)
+    parser.add_argument("--expected-meta-sha256", default=None)
     parser.add_argument("--out", type=Path, default=None, help="Optional JSON verification output")
     args = parser.parse_args()
     try:
-        report = verify(args.capture, args.venue, args.symbol, args.repeat)
+        report = verify(args.capture, args.venue, args.symbol, args.repeat,
+                        args.expected_pcap_sha256, args.expected_meta_sha256)
         code = 0
     except Exception as exc:
         report = {"status": "REPLAY_NOT_VERIFIED",
