@@ -18,11 +18,11 @@ function fixture(){
    atr:adaptive.atr(m15),stop_atr:1.7,reward_r:2,weekly_priority:1};
  return {m15,h1,signal:s,equity:5000,dayStartEquity:5000,baseRiskPct:.25};
 }
-test("strong trend, source setup and confirmation determine dynamic risk, not a fixed 0.25%",()=>{
+test("strong trend, source setup and confirmation determine dynamic risk, without exceeding the authorized 0.25% ceiling",()=>{
  const a=adaptive.evaluate(fixture());
  assert.equal(a.allowed,true,JSON.stringify(a));
  assert.ok(a.score>.44);
- assert.ok(a.riskPct>.25);
+ assert.ok(a.riskPct>0&&a.riskPct<=.25);
  assert.equal(a.openExposureCount,0);
 });
 test("existing unrelated positions reduce rather than cap trade count",()=>{
