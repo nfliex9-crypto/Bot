@@ -6,6 +6,7 @@ on:
     paths:
       - 'crypto/external-stack/nautilus_kraken_catalog.py'
       - 'crypto/external-stack/nautilus_kraken_spot.py'
+      - 'crypto/external-stack/nautilus_replay_backtest.py'
       - 'crypto/external-stack/requirements-nautilus.txt'
       - '.github/workflows/crypto-native-catalog.yml'
   pull_request:
@@ -68,6 +69,19 @@ jobs:
           assert all(str(d.instrument_id)=="BTC/USD.KRAKEN" for d in book_deltas)
           assert all(str(t.instrument_id)=="BTC/USD.KRAKEN" for t in trade_ticks)
           PY
+      - name: Offline upstream BacktestEngine replay on the same actual Kraken Parquet
+        shell: bash
+        run: |
+          python crypto/external-stack/nautilus_replay_backtest.py --catalog "${{ runner.temp }}/sentinel-crypto-catalog/catalog" | tee backtest-plumbing.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("backtest-plumbing.json").read_text().strip().splitlines()[-1])
+          assert data["status"] == "NATIVE_REAL_DATA_BACKTEST_PLUMBING_PASSED", data
+          assert data["real_recorded_trade_events"] > 0
+          assert data["real_recorded_orderbook_deltas"] > 0
+          assert data["execution_real"] is False and data["profitable_strategy_proven"] is False
+          PY
       - name: Upload diagnostic logs and evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,6 +89,7 @@ jobs:
           name: native-kraken-parquet-evidence
           path: |
             nautilus-catalog.log
+            backtest-plumbing.json
             ${{ runner.temp }}/sentinel-crypto-catalog/catalog/
           retention-days: 7
           if-no-files-found: warn
