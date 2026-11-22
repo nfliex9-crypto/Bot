@@ -1,0 +1,80 @@
+name: Native Nautilus Kraken Spot Parquet collector (READ ONLY)
+
+on:
+  push:
+    branches: [sentinel-crypto-orderflow-v1]
+    paths:
+      - 'crypto/external-stack/nautilus_kraken_catalog.py'
+      - 'crypto/external-stack/nautilus_kraken_spot.py'
+      - 'crypto/external-stack/requirements-nautilus.txt'
+      - '.github/workflows/crypto-native-catalog.yml'
+  pull_request:
+    branches: [sentinel-adaptive-intelligence-v2]
+    paths:
+      - 'crypto/external-stack/nautilus_kraken_catalog.py'
+      - 'crypto/external-stack/nautilus_kraken_spot.py'
+      - 'crypto/external-stack/requirements-nautilus.txt'
+      - '.github/workflows/crypto-native-catalog.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-parquet-research:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install official pinned research engine
+        run: python -m pip install -r crypto/external-stack/requirements-nautilus.txt
+      - name: Build upstream-only streaming data node
+        run: python crypto/external-stack/nautilus_kraken_catalog.py --data-root "${{ runner.temp }}/sentinel-crypto-catalog" --check-config-only
+      - name: Record real public Kraken Spot L2/trades to native Parquet
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=20s 50s python -u crypto/external-stack/nautilus_kraken_catalog.py --data-root "${{ runner.temp }}/sentinel-crypto-catalog" > nautilus-catalog.log 2>&1
+          exit_code=$?
+          set -e
+          echo "Capture process exit: $exit_code"
+          if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 124 ]; then
+            tail -100 nautilus-catalog.log; exit "$exit_code"
+          fi
+      - name: Prove native Parquet contains genuine market events (not just filenames)
+        shell: bash
+        env:
+          CATALOG_DIR: ${{ runner.temp }}/sentinel-crypto-catalog/catalog
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from nautilus_trader.persistence import ParquetDataCatalog
+          catalog_dir = Path(os.environ["CATALOG_DIR"])
+          files = sorted(catalog_dir.rglob("*.parquet"))
+          assert files, "NO_NATIVE_PARQUET_FILES"
+          cat = ParquetDataCatalog(str(catalog_dir))
+          trade_ticks = cat.query_trade_ticks(identifiers=["BTC/USD.KRAKEN"])
+          book_deltas = cat.query_order_book_deltas(identifiers=["BTC/USD.KRAKEN"])
+          print("NATIVE_KRAKEN_PARQUET", "files",len(files),"trades",len(trade_ticks),"book_deltas",len(book_deltas))
+          assert trade_ticks and book_deltas, "NO_GENUINE_NATIVE_L2_AND_TRADES"
+          assert all(str(d.instrument_id)=="BTC/USD.KRAKEN" for d in book_deltas)
+          assert all(str(t.instrument_id)=="BTC/USD.KRAKEN" for t in trade_ticks)
+          PY
+      - name: Upload diagnostic logs and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-kraken-parquet-evidence
+          path: |
+            nautilus-catalog.log
+            ${{ runner.temp }}/sentinel-crypto-catalog/catalog/
+          retention-days: 7
+          if-no-files-found: warn
