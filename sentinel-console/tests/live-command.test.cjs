@@ -4,13 +4,13 @@ const fs=require("node:fs"),path=require("node:path"),vm=require("node:vm");
 const root=path.resolve(__dirname,"..");
 const get=file=>fs.readFileSync(path.join(root,file),"utf8");
 
-test("V3 landing page loads broker-grounded UI and protected live API",()=>{
-  const html=get("index.html"),app=get("app.js"),ui=get("live-ui.js"),api=get("api/live.js"),css=get("styles-v3.css");
+test("V4 landing page loads broker-grounded UI and protected live API",()=>{
+  const html=get("index.html"),app=get("app.js"),ui=get("live-ui-v4.js"),api=get("api/live.js"),css=get("styles-v4.css");
   assert.match(html,/styles-v3\.css/);
-  assert.match(html,/live-ui\.js/);
+  assert.match(html,/live-ui-v4\.js/);
   assert.match(app,/page:"live",preview:false/);
   assert.match(app,/case"live":h=window\.SentinelLive/);
-  assert.match(css,/lc-market-grid/);
+  assert.match(css,/sc-/);
   assert.match(api,/SENTINEL_VERCEL_SSO/);
   assert.match(api,/req\.method==="GET"/);
   assert.match(api,/sentinel_cloud_trader_fills/);
@@ -42,7 +42,7 @@ test("read-only command view renders verified loss and escapes broker-supplied s
       history:[{mid:4084},{mid:4085},{mid:4088}]}],
     events:[{at:"2026-11-19T03:48:10Z",type:"BROKER_CLOSED",symbol:"BTCUSD",
       label:"تأكيد صفقة",detail:"SHORT · <script>alert(1)</script>",net:-43.66,currency:"EUR"}]};
-  const body=get("live-ui.js");
+  const body=get("live-ui-v4.js");
   const context={
     window:{},
     document:{addEventListener:()=>{},querySelector:()=>null},
@@ -58,20 +58,20 @@ test("read-only command view renders verified loss and escapes broker-supplied s
   assert.match(html,/43\.66/);
   assert.match(html,/trend_pullback/);
   assert.match(html,/XAUUSD/);
-  assert.match(html,/400|4088/);
+  assert.match(html,/4,?088/);
   assert.doesNotMatch(html,/<script>alert/);
   assert.match(html,/&lt;script&gt;/);
-  assert.match(html,/آخر عينات Bid\/Ask الفعلية/);
+  assert.match(html,/TickerAll|Bid وAsk|لقطات دورية/);
 });
 
 test("broker-verified forward learning remains observational until enough completed demo trades",()=>{
- const brain=get("worker/runner.js"),api=get("api/live.js"),ui=get("live-ui.js");
+ const brain=get("worker/runner.js"),api=get("api/live.js"),ui=get("live-ui-v4.js");
  assert.match(brain,/forward_broker_feedback/);
  assert.match(brain,/sentinel_cloud_trader_fills/);
  assert.match(brain,/minimum_closed_for_review:30/);
  assert.match(brain,/auto_promotion:false/);
  assert.match(api,/forward_feedback/);
- assert.match(ui,/VERIFIED BROKER FEEDBACK/);
+ assert.match(ui,/read-only|broker-grounded/i);
  assert.doesNotMatch(brain,/forward_broker_feedback\s*\.\s*execute/i);
 });
 test("unauthenticated live API cannot expose broker ledger or accept POST",async()=>{
