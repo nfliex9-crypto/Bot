@@ -28,13 +28,14 @@ def finite_value(value, *, positive: bool = False) -> float:
     return number
 
 
-def recent_millis(value, now_ms: int, max_age_ms: int = 180000) -> int:
+def recent_millis(value, now_ms: int, max_age_ms: int = 180000,
+                  source: str = "unknown") -> int:
     try:
         ts = int(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ReferenceRejected("REFERENCE_TIMESTAMP_MISSING") from exc
+        raise ReferenceRejected(f"{source}_TIMESTAMP_MISSING") from exc
     if ts < 1_600_000_000_000 or ts > now_ms + 15000 or now_ms - ts > max_age_ms:
-        raise ReferenceRejected("STALE_OR_FUTURE_REFERENCE_TIMESTAMP")
+        raise ReferenceRejected(f"{source}_STALE_OR_FUTURE_REFERENCE_TIMESTAMP_age_ms_{now_ms-ts}")
     return ts
 
 
@@ -53,8 +54,8 @@ def build_reference(symbol: str, ticker: dict, funding: dict, interest: dict,
     oi = finite_value(interest.get("openInterestAmount"), positive=True)
     predicted = funding.get("nextFundingRate")
     next_rate = finite_value(predicted) if predicted is not None else None
-    funding_ts = recent_millis(funding.get("timestamp"), now_ms)
-    oi_ts = recent_millis(interest.get("timestamp"), now_ms)
+    funding_ts = recent_millis(funding.get("timestamp"), now_ms, source="funding")
+    oi_ts = recent_millis(interest.get("timestamp"), now_ms, source="open_interest")
     # Current funding rate is not identical to NEXT settlement's forecast.
     next_funding_at = funding.get("nextFundingTimestamp")
     next_funding_ms = None
@@ -64,7 +65,7 @@ def build_reference(symbol: str, ticker: dict, funding: dict, interest: dict,
             raise ReferenceRejected("INVALID_NEXT_FUNDING_TIME")
     ticker_ts = ticker.get("timestamp")
     if ticker_ts is not None:
-        recent_millis(ticker_ts, now_ms)
+        recent_millis(ticker_ts, now_ms, source="last_ticker")
 
     return {
         "status": "VERIFIED_PUBLIC_PERPETUAL_REFERENCE",
