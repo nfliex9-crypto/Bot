@@ -18,6 +18,22 @@ from nautilus_trader.model import TraderId
 from nautilus_trader.testkit import DataTesterConfig
 
 
+def build_tester_config():
+    # Upstream DataTesterConfig defaults subscribe_book_deltas=False.
+    # Explicitly subscribe, otherwise manage_book alone DOES NOT produce L2.
+    return DataTesterConfig(
+        client_id=ClientId.from_str("KRAKEN"),
+        instrument_ids=[InstrumentId.from_str("BTC/USD.KRAKEN")],
+        subscribe_book_deltas=True,
+        book_depth=10,
+        subscribe_quotes=True,
+        subscribe_trades=True,
+        manage_book=True,
+        log_data=True,
+        stats_interval_secs=5,
+    )
+
+
 def build_readonly_node():
     """Public SPOT book + trades. No execution client means no order route."""
     node = (
@@ -35,14 +51,7 @@ def build_readonly_node():
     )
     node.add_builtin_actor(
         "DataTester",
-        DataTesterConfig(
-            client_id=ClientId.from_str("KRAKEN"),
-            instrument_ids=[InstrumentId.from_str("BTC/USD.KRAKEN")],
-            subscribe_quotes=True,
-            subscribe_trades=True,
-            manage_book=True,
-            log_data=True,
-        ),
+        build_tester_config(),
     )
     return node
 
