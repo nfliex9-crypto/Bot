@@ -101,13 +101,26 @@ async function syncClosedFills(sql,accountId,accountCurrency,history){
   const date=Date.parse(String(row.closeTime||""));
   if([row.profit,row.swap,row.commission].some(x=>x===null||x===undefined)||
      ![value,swap,commission].every(Number.isFinite)||!Number.isFinite(date))continue;
+  // Never manufacture the broker opening time using the signal bar timestamp.
+  const opened=Date.parse(String(row.openTime||""));
+  const actualOpen=Number.isFinite(opened)&&opened<date?new Date(opened).toISOString():null;
+  const openPrice=Number(row.openPrice),closePrice=Number(row.closePrice);
+  const actualOpenPrice=row.openPrice!==null&&row.openPrice!==undefined&&
+   Number.isFinite(openPrice)&&openPrice>0?openPrice:null;
+  const actualClosePrice=row.closePrice!==null&&row.closePrice!==undefined&&
+   Number.isFinite(closePrice)&&closePrice>0?closePrice:null;
   await sql`INSERT INTO sentinel_cloud_trader_fills
-    (account_id,signal_hash,broker_ticket,symbol,family,close_time,currency,profit,swap,commission,verified_at)
+    (account_id,signal_hash,broker_ticket,symbol,family,close_time,currency,
+     profit,swap,commission,verified_at,open_time,open_price,close_price,broker_history_complete)
     VALUES(${accountId},${mine.signal_hash},${String(row.ticket)},${mine.symbol},${mine.family},
-    ${new Date(date).toISOString()},${accountCurrency},${value},${swap},${commission},NOW())
+    ${new Date(date).toISOString()},${accountCurrency},${value},${swap},${commission},NOW(),
+    ${actualOpen},${actualOpenPrice},${actualClosePrice},TRUE)
     ON CONFLICT(account_id,broker_ticket) DO UPDATE SET
      profit=EXCLUDED.profit,swap=EXCLUDED.swap,commission=EXCLUDED.commission,
-     verified_at=NOW()`;
+     open_time=COALESCE(EXCLUDED.open_time,sentinel_cloud_trader_fills.open_time),
+     open_price=COALESCE(EXCLUDED.open_price,sentinel_cloud_trader_fills.open_price),
+     close_price=COALESCE(EXCLUDED.close_price,sentinel_cloud_trader_fills.close_price),
+     broker_history_complete=EXCLUDED.broker_history_complete,verified_at=NOW()`;
   recorded++;
  }
  return recorded;
@@ -345,8 +358,31 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
        WHERE account_id=${a.id} AND signal_hash=${digest}`;
       break;
     }
-    await sql`UPDATE sentinel_cloud_trader_intents SET status='SUBMITTING',updated_at=NOW()
-     WHERE signal_hash=${digest} AND account_id=${a.id}`;
+    // Atomic, pre-order provenance: actual final re-quoted stop, size, risk
+    // and signal lineage are permanently written BEFORE the remote POST.
+    const decisionSnapshot={
+      type:"SENTINEL_PRE_ENTRY_EVIDENCE_V2",symbol,family:signal.family,
+      sourceKind:signal.source_kind||null,sourcePdf:signal.source_pdf||null,
+      sourcePages:signal.source_pages||[],signalBarTime:new Date(signal.bar_time).toISOString(),
+      quality:row.adaptive_score,qualityDetails:row.adaptive_quality,
+      riskFactors:row.adaptive_risk_factors,
+      marketRegime:row.market_regime,
+      accountType:"MT5_DEMO",grossCostDeductions:0
+    };
+    const committed=await sql`UPDATE sentinel_cloud_trader_intents
+     SET status='SUBMITTING',updated_at=NOW(),decision_tagged_at=NOW(),
+      risk_at_entry=${ready.risk},risk_pct_at_entry=${row.adaptive_risk_pct},
+      volume_at_entry=${ready.request.volume},stop_loss_at_entry=${ready.request.stopLoss},
+      take_profit_at_entry=${ready.request.takeProfit},
+      decision_version='sentinel-adaptive-intelligence-v2',
+      decision_snapshot=${JSON.stringify(decisionSnapshot)}::jsonb
+     WHERE signal_hash=${digest} AND account_id=${a.id}
+       AND status='RESERVED' AND risk_at_entry IS NULL
+     RETURNING signal_hash`;
+    if(committed.length!==1){
+      row.status="PREENTRY_EVIDENCE_NOT_COMMITTED";
+      break; // Without immutable entry risk the broker receives NO ORDER.
+    }
     try{
      const placed=await write.submit(a.id,{...ready.request,comment},digest);
      // Even a provider 201 only proves its response, not a confirmed booked
