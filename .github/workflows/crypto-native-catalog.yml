@@ -72,7 +72,10 @@ jobs:
       - name: Offline upstream BacktestEngine replay on the same actual Kraken Parquet
         shell: bash
         run: |
-          python crypto/external-stack/nautilus_replay_backtest.py --catalog "${{ runner.temp }}/sentinel-crypto-catalog/catalog" | tee backtest-plumbing.json
+          if ! python crypto/external-stack/nautilus_replay_backtest.py --catalog "${{ runner.temp }}/sentinel-crypto-catalog/catalog" --out backtest-plumbing.json > backtest-plumbing.log 2>&1; then
+            tail -100 backtest-plumbing.log; exit 1
+          fi
+          cat backtest-plumbing.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -90,6 +93,7 @@ jobs:
           path: |
             nautilus-catalog.log
             backtest-plumbing.json
+            backtest-plumbing.log
             ${{ runner.temp }}/sentinel-crypto-catalog/catalog/
           retention-days: 7
           if-no-files-found: warn
