@@ -61,7 +61,7 @@ jobs:
             tail -80 nautilus-kraken-live.log
             exit "$exit_code"
           fi
-          grep -E -q 'TradeTick[[:space:]]*\\{' nautilus-kraken-live.log || { tail -100 nautilus-kraken-live.log; echo "NO_VERIFIED_NAUTILUS_TRADE_TICK"; exit 1; }
+          grep -F -q 'TradeTick {' nautilus-kraken-live.log || { tail -100 nautilus-kraken-live.log; echo "NO_VERIFIED_NAUTILUS_TRADE_TICK"; exit 1; }
           echo "NATIVE_NAUTILUS_REAL_TRADE_TICKS_OBSERVED"
       - name: Preserve Kraken public market-data log
         if: always()
