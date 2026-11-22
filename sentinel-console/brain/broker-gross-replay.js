@@ -17,7 +17,8 @@ const core=require("../worker/cloud-trader/core.js");
 const TF15=900000,TF60=3600000;
 function number(x){return typeof x==="number"&&Number.isFinite(x)}
 function parseTime(x){const v=typeof x==="number"?x:Date.parse(String(x||""));return Number.isSafeInteger(v)?v:NaN}
-function normalize(raw,tf){
+function normalize(raw,tf,asOf=Date.now()){
+ if(!Number.isSafeInteger(asOf))throw Error("INVALID_REPLAY_ASOF");
  if(!Array.isArray(raw))throw Error("REPLAY_BARS_REQUIRED");
  const out=[];let last=-Infinity;
  for(const b of raw){
@@ -26,6 +27,7 @@ function normalize(raw,tf){
   if(!Number.isSafeInteger(time)||time<=last||![open,high,low,close].every(number)||
     !(low>0)||high<Math.max(open,close)||low>Math.min(open,close)||
     time%tf!==0)throw Error("REPLAY_INVALID_OR_UNSORTED_BROKER_BAR");
+  if(time+tf>asOf)throw Error("REPLAY_UNCLOSED_OR_FUTURE_BAR");
   last=time;out.push({time,open,high,low,close});
  }
  return out;
@@ -50,7 +52,8 @@ function metrics(trades){
   activeDays:new Set(trades.map(x=>new Date(x.entryTime).toISOString().slice(0,10))).size};
 }
 function run({symbol,m15,h1,accountSource="FUSION_MT5_DEMO",
-              holdBars=12,stopATR=null,targetR=null,splitFraction=.65}={}){
+              holdBars=12,stopATR=null,targetR=null,splitFraction=.65,
+              asOf=Date.now()}={}){
  if(!["XAUUSD","BTCUSD","NAS100","EURUSD"].includes(symbol))
   throw Error("REPLAY_SYMBOL_NOT_ALLOWED");
  if(!Number.isSafeInteger(holdBars)||holdBars<1||holdBars>48||
@@ -58,7 +61,7 @@ function run({symbol,m15,h1,accountSource="FUSION_MT5_DEMO",
     (stopATR!==null&&!(number(stopATR)&&stopATR>0))||
     (targetR!==null&&!(number(targetR)&&targetR>0)))
   throw Error("REPLAY_INVALID_OPTIONS");
- const m=normalize(m15,TF15),h=normalize(h1,TF60);
+ const m=normalize(m15,TF15,asOf),h=normalize(h1,TF60,asOf);
  if(m.length<200||h.length<100)throw Error("INSUFFICIENT_MATCHED_BROKER_HISTORY");
  const boundaryIndex=Math.floor(m.length*splitFraction);
  const boundary=m[boundaryIndex].time;
