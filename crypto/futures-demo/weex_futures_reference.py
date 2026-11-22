@@ -53,12 +53,16 @@ def recent_executed_trade(symbol: str, trades: list, now_ms: int) -> dict:
             raise ReferenceRejected("INVALID_TRADE_SIDE")
         finite_value(trade.get("price"), positive=True)
         finite_value(trade.get("amount"), positive=True)
-        recent_millis(trade.get("timestamp"), now_ms, max_age_ms=45000,
-                      source="last_executed_trade")
+        try:
+            ts = int(trade.get("timestamp"))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ReferenceRejected("MISSING_TRADE_TIMESTAMP") from exc
         if trade.get("id") is None:
             raise ReferenceRejected("MISSING_EXECUTED_TRADE_ID")
-        if candidate is None or int(trade["timestamp"]) > int(candidate["timestamp"]):
+        if candidate is None or ts > int(candidate["timestamp"]):
             candidate = trade
+    recent_millis(candidate["timestamp"], now_ms, max_age_ms=45000,
+                  source="last_executed_trade")
     return {
         "symbol": symbol,
         "last": candidate["price"], "timestamp": candidate["timestamp"],
