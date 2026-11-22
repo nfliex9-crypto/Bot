@@ -96,7 +96,7 @@ function replay({symbol,m15,h1,asOf=Date.now(),splitFraction=.7,
     if(j>i+1&&b.time-m15[j-1].time!==M){invalid=true;break}
     const hitStop=signal.side===1?b.low<=sl:b.high>=sl;
     const hitTarget=signal.side===1?b.high>=tp:b.low<=tp;
-    if(hitStop){exitIndex=j;exitPrice=sl;reason="STOP_FIRST";break}
+    if(hitStop){exitIndex=j;exitPrice=signal.side===1?Math.min(sl,b.open):Math.max(sl,b.open);reason="STOP_FIRST";break}
     if(hitTarget){exitIndex=j;exitPrice=tp;reason="TARGET";break}
     if(j===i+holdBars){exitIndex=j;exitPrice=b.close;reason="TIME_EXIT"}
    }
