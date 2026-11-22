@@ -73,12 +73,14 @@ jobs:
           printf '%s  %s\n%s  %s\n' "$pcap_sha" "$(basename "$pcap")" "$meta_sha" "$(basename "$meta")" > crypto-captures/SHA256SUMS
           python crypto/external-stack/replay_verified.py "$pcap" --venue KRAKEN --symbol BTC-USD --repeat 2 --expected-pcap-sha256 "$pcap_sha" --expected-meta-sha256 "$meta_sha" --out crypto-captures/replay-verification.json
           (cd crypto-captures && sha256sum --check --status SHA256SUMS)
-          cp "$pcap" "${pcap}.tampered"
-          printf 'corrupt' >> "${pcap}.tampered"
-          if python crypto/external-stack/replay_verified.py "${pcap}.tampered" --venue KRAKEN --symbol BTC-USD --expected-pcap-sha256 "$pcap_sha"; then
-            echo "ERROR: tampered extension did not fail"; exit 1
+          tamper_dir=$(mktemp -d)
+          cp "$pcap" "$tamper_dir/$(basename "$pcap")"
+          cp "$meta" "$tamper_dir/$(basename "$meta")"
+          printf 'CORRUPTION' >> "$tamper_dir/$(basename "$pcap")"
+          if python crypto/external-stack/replay_verified.py "$tamper_dir/$(basename "$pcap")" --venue KRAKEN --symbol BTC-USD --expected-pcap-sha256 "$pcap_sha" --expected-meta-sha256 "$meta_sha"; then
+            echo "ERROR: tampered PCAP passed checksum verification"; exit 1
           fi
-          rm -f "${pcap}.tampered"
+          rm -rf "$tamper_dir"
           python - <<'PY'
           import json
           from pathlib import Path
