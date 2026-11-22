@@ -122,6 +122,7 @@ def main() -> int:
         result = {
             "status": "FUTURES_REFERENCE_NOT_VERIFIED", "venue": "WEEX",
             "symbol": args.symbol, "error_type": type(exc).__name__,
+            "reason": str(exc) if isinstance(exc, ReferenceRejected) else "UPSTREAM_REQUEST_FAILED",
             "orders_enabled": False, "synthetic_data": False,
         }
         code = 1
