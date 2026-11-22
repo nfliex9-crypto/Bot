@@ -9,6 +9,7 @@ const {provider}=require("./provider.js");
 const c=require("./core.js");
 const weekly=require("./weekly-selector.js");
 const adaptive=require("./adaptive-risk.js");
+const intelligenceV2=require("../../brain/intelligence-v2.js");
 const regime=require("./regime-intelligence.js");
 function decrypt(cipher,key){
  if(!/^[0-9a-f]{64}$/i.test(key||""))throw Error("CLOUD_ENCRYPTION_KEY_REQUIRED");
@@ -251,6 +252,22 @@ async function runCloudCycle(sql,{now=Date.now(),env=process.env,fetcher=fetch,p
       row.error_code=clean(e?.message||"WEEKLY_REVIEW_FAILED");continue;
     }
     const signal=c.decide(symbol,m15,h1,now,"source_only",weeklyScore.policies);
+    // V2 read-only sidecar. Gives observable market context and a documented
+    // research score; this score NEVER selects, sizes, blocks or sends orders.
+    try{
+      const review=intelligenceV2.rank({m15,h1,signals:signal?[signal]:[],now,venue:"FUSION_MT5"});
+      row.intelligence_v2={
+        status:review.ready?"RESEARCH_OBSERVATION":"DATA_UNAVAILABLE",
+        version:review.version,regime:review.features.regime||null,
+        reason:review.reason,
+        score_basis:review.scoreBasis,
+        candidate_score:review.ranked[0]?.score??null,
+        evidence_source:review.ranked[0]?.source??null,
+        orderflow_status:review.ranked[0]?.orderflow.status??"NOT_PROVIDED",
+        execution_enabled:false
+      };
+    }catch(e){row.intelligence_v2={status:"REVIEW_UNAVAILABLE",
+      reason:clean(e.message),execution_enabled:false}}
     if(!signal){row.status="NO_VALID_CLOSED_BAR_SIGNAL";continue}
     row.signal_hash=c.keyFor(a.id,signal).slice(0,20);
     // Actual Sentinel brain research registry is consulted, but an
