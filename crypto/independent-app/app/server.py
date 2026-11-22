@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 from pathlib import Path
 import time
 
@@ -48,7 +49,8 @@ def status_for_dashboard(source: Path, now_ms: int) -> dict:
             trades = int(entry["trades_seen"])
         except (TypeError, ValueError, KeyError, OverflowError):
             continue
-        if not (0 <= age <= 15000 and 0 < bid < ask and last > 0 and trades > 0
+        if not (0 <= age <= 15000 and all(math.isfinite(v) for v in (bid, ask, last))
+                and 0 < bid < ask and last > 0 and trades > 0
                 and entry.get("verified_source") == "CCXT_PRO_WEEX_PUBLIC_FUTURES"):
             continue
         result["markets"][symbol] = {
