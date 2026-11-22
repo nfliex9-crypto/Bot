@@ -34,7 +34,7 @@ WEEX_SIM_API_SECRET
 WEEX_SIM_API_PASSPHRASE
 ```
 
-Use a **Read-only** WEEX key first. A regular WEEX-production key does not prove simulation authorization. The repo's `sentinel-crypto-demo` environment is optional for user convenience; to run its existing SIM read-only action job, create this Environment and put those secrets there, rather than under repository secrets. Alternatively, for initial local read-only checking, supply env vars to `python src/weex_demo_account.py` within your secure local shell.
+Use a **Read-only** WEEX key first. A regular WEEX-production key does not prove simulation authorization. The **standalone** workflow uses **Repository Actions secrets**, not the GitHub Environments page that was unavailable on mobile. For local checking, supply the variables in a secure local shell to `python src/weex_demo_account.py`; the script reads only the official WEEX Futures SIM balance endpoint.
 
 The private endpoint guard pins requests to `https://api-sim.weex.com`; **NO FUTURES DEMO ORDER EXECUTION is enabled**. Public Futures market-data monitoring is independent of account connection.
 
