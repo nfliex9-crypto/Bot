@@ -97,3 +97,76 @@ jobs:
           path: weex-perpetual-witness.json
           retention-days: 7
           if-no-files-found: warn
+
+  futures-reference:
+    name: Public WEEX Perpetual Last / Mark / Index / Funding / OI
+    needs: upstream-ccxt-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r crypto/futures-demo/requirements.txt
+      - name: Read authentic Futures contract reference values (no spot/keys)
+        shell: bash
+        run: |
+          python crypto/futures-demo/weex_futures_reference.py --symbol 'BTC/USDT:USDT' --out futures-reference.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("futures-reference.json").read_text())
+          assert d["status"]=="VERIFIED_PUBLIC_PERPETUAL_REFERENCE"
+          assert d["mark_price"]>0 and d["index_price"]>0 and d["last_futures_price"]>0
+          assert d["open_interest_contract_units"]>0 and not d["orders_enabled"]
+          assert d["uses_spot_price"] is False
+          PY
+      - name: Preserve reference prices with venue timestamps
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weex-public-futures-mark-index-funding-oi
+          path: futures-reference.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  futures-parquet:
+    name: Arrow Parquet capture of genuine WEEX BTC Perpetual L2 and tape
+    needs: upstream-ccxt-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r crypto/futures-demo/requirements.txt
+      - name: Collect from actual WEEX contract websocket, not the Spot book
+        shell: bash
+        run: |
+          python crypto/futures-demo/weex_futures_parquet.py --symbol 'BTC/USDT:USDT' --seconds 40 --out-dir "${{ runner.temp }}/weex-futures" | tee parquet-verification.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("parquet-verification.json").read_text().strip().splitlines()[-1])
+          assert d["status"]=="VERIFIED_WEEX_REAL_FUTURES_PARQUET"
+          assert d["book_rows"]>0 and d["trade_rows"]>0
+          assert not d["orders_enabled"] and not d["synthetic_market_data"]
+          PY
+      - name: Write SHA256 checksum for portable archive attestation
+        shell: bash
+        run: |
+          cd "${{ runner.temp }}/weex-futures"
+          sha256sum ./*.parquet ./*.manifest.json > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Upload authenticated-source market-data artifacts (no credentials)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weex-btc-perpetual-real-parquet
+          path: |
+            ${{ runner.temp }}/weex-futures/
+            parquet-verification.json
+          retention-days: 7
+          if-no-files-found: warn
